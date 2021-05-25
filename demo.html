@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8" />
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
+<title>CMGame Demo</title>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<link rel="stylesheet" href="css/cmgame.css" />
+</head>
+<body>
+<article id="cmLoading">
+	<h1>Loading...</h1>
+	<meter id="cmLoadingMeter" />
+</article>
+<article id="cmTitle">
+	<h1>My Game</h1>
+	<p class="cm-center-text">
+		Welcome to my game!
+	</p>
+	<p class="cm-center-text">
+		<label for="playBtn">
+			<button id="playBtn" title="Click to play" class="cm-play-button">
+				<div class="cm-play"></div>
+			</button>
+			<br/>
+			Play now
+		</label>
+	</p>
+</article>
+<div id="cmWrapper">
+	<canvas id="cmCanvas" width="640" height="480">
+		Nothing to see here...
+	</canvas>
+</div>
+
+<script src="js/cmgame.js"></script>
+<script>
+
+// Create the game
+var game = new CMGame({
+	startBtn: "#playBtn",
+	hideOnStart: ["#playBtn", "#cmTitle"],
+	graphScalar: 40,
+	tickDistance: 40
+});
+
+var shift = 0; // We'll use this later
+
+// Create a basic function, and add it to the game
+var parabola = new CMGame.Function(
+		game,
+		function(x) {
+			return Math.sin(x - shift) + 1;
+		}
+	);
+
+game.addFunction(parabola);
+
+// Add some animation by setting an onupdate function
+game.onupdate = function() {
+	shift -= 0.01;
+};
+
+// Add to the drawing by setting an ondraw function
+game.ondraw = function(ctx) { // ctx is the drawing "context"
+	ctx.fillStyle = CMGame.Color.ORANGE;
+	ctx.font = "20px Arial";
+	ctx.fillText("y = sin(x + " + shift.toFixed(2) + ")", 80, 50);
+};
+
+</script>
+</body>
+</html>
