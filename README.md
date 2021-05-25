@@ -45,7 +45,7 @@ Add a reference to the CMGame CSS file (in your HTML page's head) and the CMGame
 </html>
 ```
 
-For best performance, you can add your `<canvas>` element to the HTML body, and a wrapper `<div>` element containing it. Give `<canvas>` the id CMCanvas and the div the id CMWrapper. If you do not do this, the game will dynamically create those elements for you.
+For best performance, you can add your `<canvas>` element to the HTML body, and a wrapper `<div>` element containing it. Give `<canvas>` the id cmCanvas and the div the id cmWrapper. If you do not do this, the game will dynamically create those elements for you.
 
 In your custom script, you can initialize the game with one line of code:
 
@@ -97,7 +97,7 @@ type - A string describing the type of math game. Available options are "graph" 
 
 images - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path. E.g.,
 
-```
+```javascript
 var options = {
   images: {
     hero: "img/smiley.png",
@@ -111,7 +111,7 @@ game.images["hero"];
 
 audios - A plain JS object of audio files that may need preloading. You can define these similar to images, but they will be accessed later, using game.playSound(soundPath)
 
-```
+```javascript
 
 var soundPath = "audio/jump.wav";
 var options = {
@@ -157,10 +157,12 @@ pressElement: An HTML element (or CSS selector for that element) defining the el
 
 orientation - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
 
-// colors
 tickStyle - A color string for the Cartesian grid tick marks on the axes. Defaults to CMGame.Color.DARK_GRAY.
+
 xAxisStyle - A color string for the line defining the x-axis. Defaults to CMGame.Color.GRAY.
+
 yAxisStyle - A color string for the line defining the y-axis. Defaults to CMGame.Color.GRAY.
+
 gridStyle - A color string for the Cartesian grid graph lines. Defaults to CMGame.Color.LIGHT_GRAY.
 
 ignoreNumLock - A boolean, for keyboard-based games. true if you want numpad arrows to always register as direction (even when NumLock is on); false if you want NumLock to force those keys to register as numbers. Default is false.
@@ -169,38 +171,21 @@ multiTouch - A boolean; true if you want every touch to register a new event eve
 
 doodleOptions - A plain JS object defining whether the user can draw in the current game.
 
-  enabled - Whether or not user can current "doodle" on the game screen. Defaults to false.
-	lineWidth - Number of pixels wide these drawing lines should be.
-	strokeStyle - Color string used to draw the new doodle. Default is CMGame.Color.BLACK.
-	fillStyleAbove - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	fillStyleBelow - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	fillStyleLeft - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	fillStyleRight - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+doodleOptions.enabled - Whether or not user can current "doodle" on the game screen. Defaults to false.
 
+doodleOptions.lineWidth - Number of pixels wide these drawing lines should be.
 
-Numerous callbacks can be applied to the game, as discussed below. You can define these in the constructor, or (perhaps for cleaner code) define them after initialization, but before calling start():
+doodleOptions.strokeStyle - Color string used to draw the new doodle. Default is CMGame.Color.BLACK.
 
-onbeforestart
-onstart
-onbeforeupdate
-onupdate
-onbeforedraw
-ondraw
-oncleardraw
+doodleOptions.fillStyleAbove - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
 
-ontouchstart
-ontouchmove
-ontouchend
-onmousedown
-onmousemup
+doodleOptions.fillStyleBelow - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
 
-onkeydown(e)
-onkeyup(e)
-onpressstart(point)
-onpressmove(info)
-onpressend(point)
-onkeydown(e)
-onkeyup(e)
+doodleOptions.fillStyleLeft - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+
+doodleOptions.fillStyleRight - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+
+Numerous callbacks can be applied to the game, as discussed below. You can define these in the constructor, or (perhaps for cleaner code) define them after initialization, but before calling start().
 
 ## Callbacks
 
@@ -235,7 +220,9 @@ game.ondraw = (ctx) => {
 If you need these events to occur at a more precise time, you can use:
 
 `onbeforeupdate(frameCount)` - Occurs just before game's update()
+
 `onbeforedraw(ctx)` - Occurs just before game's draw()
+
 `oncleardraw(ctx)` - Occurs after previous screen clear but before current draw()
 
 For user interaction, you should use these callbacks:
@@ -257,6 +244,7 @@ game.onkeydown = (e) => {
 
 `onpressmove` - A combined callback for touchmove and mousemove IF mouse is currently pressed. Instead of the event, the only parameter is a plain JS object representing the point on the canvas (or pressElement) rather than the window, with some extra information:
 
+```
 x: The end point's x value
 y: The end point's y value
 oldX: The start point's x value
@@ -265,44 +253,223 @@ offset: {
   x: End point's x minus start's x
   y: End point's y minus start's y
 }
+```
+
+This can be used for example, to let the player guide their hero or object around the screen without having to tap directly on it:
+
+```javascript
+
+game.onpressmove = (point) {
+  hero.x += point.offset.x;
+  hero.y += point.offset.y;
+};
+
+```
 
 `onswipe` - Handles a swipe action either from a finger swipe, or from moving mouse while it is pressed. This handler takes a single argument, an instance of the CMSwipe class, from which you can access this information:
 
-  newX - The end point's x value
-  newY - The end point's y value
-  oldX- The start point's x value
-  oldY - The start point's y value
-  direction - A string indicating one of 4 general directions the swipe moved: "up", "down", "left" or "right"
-  direction8 - A string indicating one of 8 general directions the swipe moved: "right", "downright", "down", "downleft", "left", "upleft", "up", "upright"
+newX - The end point's x value
 
+newY - The end point's y value
+
+oldX- The start point's x value
+
+oldY - The start point's y value
+
+direction - A string indicating one of 4 general directions the swipe moved: "up", "down", "left" or "right"
+
+direction8 - A string indicating one of 8 general directions the swipe moved: "right", "downright", "down", "downleft", "left", "upleft", "up", "upright"
+
+```javascript
+
+game.onswipe = (swipe) => {
+  if(swipe.direction === "left") {
+    alert("How dare you swipe left on me!");
+  }
+}
+
+```
 
 If you require more control, you can also use the callbacks below. Each of these methods takes a single input- the event that triggered it.
 
-  ontouchstart
-  ontouchmove
-  ontouchend
-  onmousedown
-  onmousemove
-  onmouseup
-  onclick
-  ondblclick
-  onrightclick
+- ontouchstart
+- ontouchmove
+- ontouchend
+- onmousedown
+- onmousemove
+- onmouseup
+- onclick
+- ondblclick
+- onrightclick
 
 ## Adding Functions
 
-For a "graph" type game, you can add functions to the Cartesian grid screen. The most basic function takes 2 arguments: the game that will use the function, and a function defining the well... function.
+For a "graph" type game, you can add functions to the Cartesian grid screen using the static `CMGame.Function` class. The most basic function takes 2 arguments: the game that will use the function, and a function defining the well... function.
 
 ```javascript
 var func = new CMGame.Function(
-		game,
-		function(x) {
-			return Math.sin(x);
-		}
-	);
+  game,
+  function(x) {
+    return Math.sin(x) + 1;
+  }
+);
 
 game.addFunction(func);
+
+
+// Later, if you want to get rid of that function
+game.removeFunction(func);
 ```
 
+You can add multiple functions to the same game screen.
+
+Functions also take in an optional third parameter, defining options for the function, described below.
+
+### CMGame.Function Options
+
+type - A lowercase string defining the type of function. Can be "cartesian", "polar", "parametric", "xofy". Default is "cartesian".
+A "cartesian" function is as expected - inputs are represented on the x-axis, and outputs in vertical direction. "xofy" is the opposite. "polar" uses radians and distance from origin to describe points (generally "r" as a function of "theta"). And "parametric" defines both x and y from 0 up to some defined endpoint as functions of a third parameter (usually, t). These are defined in the same general way, except a parametric function must return an object with x and y values, instead of a single number.
+
+```javascript
+var cartesianFunc = new CMGame.Function(
+  game,
+  function(x) {
+    return Math.sin(x) + 1;
+  }
+);
+
+var xOfYFunc = new CMGame.Function(
+  game,
+  function(y) {
+    return Math.sin(y) + 1; // Defined in same way, but now will move up vertically
+  },
+  {
+    type: "xofy"
+  }
+);
+
+var xOfYFunc = new CMGame.Function(
+  game,
+  function(theta) {
+    return Math.sin(theta) + 1;
+  },
+  {
+    type: "polar"
+  }
+);
+
+var xOfYFunc = new CMGame.Function(
+  game,
+  function(t) {
+    return {
+      x: Math.sin(t) + 1,
+      y: Math.cos(t)
+    };
+  },
+  {
+    type: "parametric"
+  }
+);
+
+```
+
+strokeStyle - The color (string) to draw the curve with. Default is black.
+
+lineWidth - How many pixels wide the curve lines should be. Default is 1.
+
+fillStyleBelow - A color string to fill in below the curve (defined differently based on graph's type). Default is transparent.
+
+fillStyleAbove - A color string to fill in above the curve (defined differently based on graph's type). Default is transparent.
+
+static - A boolean that should only be set to true if you know the graph will not change while it is drawn. This is an optimization and lets game save the drawing internally to resuse. Default is false.
+
+onupdate - A callback called after this functions update() method. Defaults to an empty function.
+
+ondraw - A callback called after this functions draw() method, taking in the game's drawing context as the only parameter. Defaults to an empty function.
+
+start - Real values used to define a starting point for this graph, rather than displaying entire graph on screen. Some values are ignored based on function type. Values are: x, y, r, theta, t
+
+end - Real values used to define a ending point for this graph, rather than displaying entire graph on screen. Some values are ignored based on function type. Values are: x, y, r, theta, t
+
+velocity - A plain JS object defining how animations will move in this graph
+
+velocity.animationTime - A number that can used by the dev for timing various actions
+
+velocity.start - A plain JS object defining the velocity at which to move each variables within this function's `start` object (see `start` parameter above)
+
+velocity.end - A plain JS object defining the velocity at which to move each variables within this function's `end` object (see `end` parameter above)
+
+
+## Building a Venn Diagram
+
+If you define your game's "type" to be "venn" then the game will build a Venn Diagram. Initiate your game as usual, but set type to "venn". Then define the number of sets that will be in your diagram with `game.setNumberOfSets`.
+
+```javascript
+
+let game = new CMGame({
+  type: "venn"
+});
+
+game.setNumberOfSets(2);
+
+```
+
+The sets (VennSet class) are stored as a Map named vennSets using usual naming conventions ("A", "B", "C" for the circle sets, and "U" for the universe). When a Venn Diagram is created, all regions (VennRegion class) are accounted for and stored as a Map named vennRegions. These are stored with the Roman numeral naming convention. Venn sets and regions each have a "containsPoint" method that can be used to detect if a player has clicked/tapped there.
+
+```javascript
+
+let game = new CMGame({
+  type: "venn"
+});
+
+game.setNumberOfSets(2);
+
+let region1 = game.vennRegions.get("I");
+region1.filled = true;
+region1.fillStyle = "blue";
+
+let setA = game.vennSets.get("A");
+
+game.onpressstart = (point) {
+  if( setA.containsPoint(point) )
+    alert("You touched my A!");
+};
+
+```
+
+## Graph Theory
+
+If your game's "type" is set to "graphtheory" you can define the indiviual vertices (i.e., nodes or dots) and edges (i.e., lines) with the classes CMVertex and CMEdge, respectively.
+
+```
+let game = new CMGame({
+  type: "graphtheory"
+});
+
+// Arguments: current game, x, y, radius, color, and an option object defining a label
+let v1 = new CMVertex(game, 200, 100, 50, "rgba(255, 165, 0, 1)", {
+	text: "v1",
+	x: 300,
+	y: 100
+});
+
+let v2 = new CMVertex(game, 200, 100, 50, "rgba(255, 165, 0, 1)", {
+	text: "v1",
+	x: 300,
+	y: 100
+});
+
+// In general, edges connect two vertices
+// Arguments: current game, first vertex, other vertex, line width, line color, label object (similar to CMVertex), directed
+let e1 = new CMEdge(game, v1, v2, 20, "orange", {}, true);
+
+// If CMEdge is "directed" it will point with an arrow from v1 to v2. Otherwise it will just connect them with a line.
+
+game.addVertex( v1 );
+game.addVertex( v2 );
+game.addEdge( e1 );
+
+```
 
 ## License
 
