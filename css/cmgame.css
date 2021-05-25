@@ -1,0 +1,541 @@
+@import url(https://fonts.googleapis.com/css?family=Open+Sans);
+
+/**
+ * Note: the above may cause a slight
+ * performance hit on page load speed.
+ * If this is a concern, remove the line above,
+ * and use a <link> tag within your HTML
+ * file's <head>, as below:
+ *
+ * <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css' crossorigin />
+ */
+
+@-webkit-keyframes cm-intro-fading {
+	0% {
+		opacity: 1.0;
+	}
+
+	100% {
+		opacity: 0.0;
+	}
+}
+
+@keyframes cm-intro-fading {
+	0% {
+		opacity: 1.0;
+	}
+
+	100% {
+		opacity: 0.0;
+	}
+}
+
+@-webkit-keyframes cm-toast-fading {
+	0% {
+		opacity: 0.0;
+	}
+
+	10% {
+		opacity: 1.0;
+	}
+
+	75% {
+		opacity: 1.0;
+	}
+
+	100% {
+		opacity: 0.0;
+	}
+}
+
+@keyframes cm-toast-fading {
+	0% {
+		opacity: 0.0;
+	}
+
+	10% {
+		opacity: 1.0;
+	}
+
+	75% {
+		opacity: 1.0;
+	}
+
+	100% {
+		opacity: 0.0;
+	}
+}
+
+.cm-toast {
+	z-index: 500;
+	background-color: rgba(150, 50, 150, 0.85);
+	color: rgb(243, 254, 254);
+	position: fixed;
+	top: 6.7vh;
+	left: calc(50% - 25vh);
+	border-radius: 5.3vh;
+	min-height: 6vmin;
+	font-size: 4vmin;
+	line-height: 6vmin;
+	text-align: center;
+	padding: 4px 15px;
+	box-sizing: border-box;
+}
+
+#cmToast {
+	display: none;
+	opacity: 0.0;
+
+	-webkit-animation-name: cm-toast-fading;
+	-webkit-animation-duration: 4s;
+	-webkit-animation-timing-function: ease-in;
+
+	animation-name: cm-toast-fading;
+	animation-duration: 4s;
+	animation-timing-function: ease-in;
+}
+
+* {
+	font-family: 'Open Sans', Arial, sans-serif;
+
+	-webkit-touch-callout: none;
+	-webkit-text-size-adjust: none;
+	touch-callout: none;
+	text-size-adjust: none;
+}
+
+body, canvas, div {
+	-moz-outline-style: none;
+
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
+	-khtml-user-select: none;
+
+	-webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+
+	outline: none;
+	outline-style: none;
+
+	user-select: none;
+	tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+.cm-intro-fade {
+	-webkit-animation-name: cm-intro-fading;
+	-webkit-animation-duration: 0.5s;
+	-webkit-animation-iteration-count: 1;
+	-webkit-animation-timing-function: ease-in;
+	-webkit-animation-delay: 1s;
+	-webkit-animation-fill-mode: forwards;
+
+	animation-name: cm-intro-fading;
+	animation-duration: 0.5s;
+	animation-iteration-count: 1;
+	animation-timing-function: ease-in;
+	animation-delay: 1s;
+	animation-fill-mode: forwards;
+}
+
+#cmLoading {
+	position: absolute;
+	left: 0;
+	top: 0;
+
+	border: 1px solid gray;
+
+	background: rgb(33, 33, 33);
+	color: rgb(250, 250, 250);
+	text-align: center;
+
+	/* Use a standard font, rather than relying on preloading before splash */
+	font-family: Arial, sans-serif;
+    z-index: 1000;
+    font-size: 2vmin;
+    padding-left: 0;
+    left: 0;
+    width: 100vw;
+    height: calc(100vh - 100vh / 2 + 2vmin * 6);
+	overflow: hidden;
+    padding-top: calc(100vh / 2 - 2vmin * 6);
+}
+
+html {
+	background: rgb(0, 15, 33);
+}
+
+html, body {
+
+	/* Page should fill the screen for appropriate size detection */
+	min-width: 100vw;
+	min-height: 100vh;
+	overflow: hidden;
+
+	-webkit-perspective: 5000px;
+	perspective: 5000px;
+}
+
+body {
+	margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .cm-center-text {
+	text-align: center;
+}
+
+#cmWrapper {
+	position: absolute;
+	left: calc(100vw / 2 - 640px / 2);
+	top: 18px;
+	width: 640px;
+	height: 480px;
+
+	-webkit-transform-origin: top left;
+	transform-origin: top left;
+
+	box-shadow: 1px 1px 10px 5.5px rgba(0, 0, 0, 0.75);
+
+	/* Allow click on canvas, just not containing wrapper */
+	pointer-events: none;
+}
+
+#cmBackgroundCanvas {
+	width: 640px;
+	height: 480px;
+	position: absolute;
+	top: 0;
+	left: 0;
+
+	touch-action: none;
+
+	-webkit-transform: translate3d(0, 0, 0);
+	transform: translate3d(0, 0, 0);
+}
+
+#cmCanvas {
+	width: 640px;
+	height: 480px;
+	position: absolute;
+	top: 0;
+	left: 0;
+
+	/* Attempt to "trick" browser into using faster 3D GPU */
+	-webkit-transform: translate3d(0, 0, 0);
+	transform: translate3d(0, 0, 0);
+
+	/* Allow click on canvas, just not containing wrapper */
+	pointer-events: auto;
+
+	/* iOS Safari does not support touch-action: none; */
+	touch-action: manipulation;
+	touch-action: none;
+}
+
+/* Low CSS specificity, so it is easy to override */
+canvas {
+	background: rgb(255, 255, 255);
+}
+
+.cm-start {
+	/* Consider some light animation to draw attention */
+}
+
+#cmTitle {
+	z-index: 900;
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100vw;
+	height: 100vh;
+	background: rgb(158, 158, 158);
+	background: rgb(255, 255, 255);
+}
+
+/**
+ * Tutorial for styling your own play button can be found here:
+ * https://css-tricks.com/making-pure-css-playpause-button/
+ */
+.cm-play-button {
+	box-sizing: border-box;
+	width: 128px;
+	height: 66px;
+	border-radius: 4px;
+	padding: 16px 48px 16px 51px;
+	background: rgb(0, 168, 153);
+	border-color: rgb(0, 235, 0);
+	box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.35);
+}
+
+.cm-play-button.no-border {
+	border: none;
+	padding: 16px 42px 16px 54px;
+}
+
+/* Give text label some breathing room */
+label .cm-play-button {
+	margin-bottom: 5px;	
+}
+
+.cm-play-button:hover {
+	background: rgb(0, 210, 200);
+	border-color: rgb(235, 235, 0);
+}
+
+.cm-play {
+	box-sizing: border-box;
+	width: 32px;
+	height: 32px;
+	border-style: solid;
+	border-width: 16px 0 16px 32px;
+	border-color: transparent transparent transparent rgb(250, 250, 250);
+}
+
+.cm-variable {
+	font-style: italic;
+	font-family: Times New Roman, serif;
+}
+
+.cm-indent {
+	text-indent: .5em;
+}
+
+.cm-fuschia {
+	background-color: rgb(253, 13, 136);
+}
+ 
+.cm-magenta {
+	background-color: rgb(228, 0, 228);
+}
+ 
+.cm-pink {
+	background-color: rgb(254, 3, 133);
+}
+ 
+.cm-red {
+	background-color: rgb(250, 0, 92);
+}
+ 
+.cm-dark_red {
+	background-color: rgb(133, 33, 33);
+}
+ 
+.cm-orange {
+	background-color: rgb(254, 137, 39);
+}
+ 
+.cm-yellow {
+	background-color: rgb(255, 245, 10);
+}
+ 
+.cm-light_green {
+	background-color: rgb(0, 240, 0);
+}
+ 
+.cm-green {
+	background-color: rgb(0, 185, 0);
+}
+ 
+.cm-dark_green {
+	background-color: rgb(0, 136, 0);
+}
+ 
+.cm-light_blue {
+	background-color: rgb(0, 250, 235);
+}
+
+.cm-sky_blue {
+	background-color: rgb(142, 227, 252);
+}
+ 
+.cm-blue {
+	background-color: rgb(1, 97, 251);
+}
+ 
+.cm-blue_green {
+	background-color: rgb(0, 168, 153);
+}
+ 
+.cm-violet {
+	background-color: rgb(185, 51, 158);
+}
+ 
+.cm-purple {
+	background-color: rgb(128, 0, 128);
+}
+ 
+.cm-brown {
+	background-color: rgb(121, 74, 25);
+}
+ 
+.cm-tan {
+	background-color: rgb(242, 245, 235);
+}
+ 
+.cm-white {
+	background-color: rgb(255, 255, 255);
+}
+ 
+.cm-almost_white {
+	background-color: rgb(250, 250, 250);
+}
+ 
+.cm-black {
+	background-color: rgb(0, 0, 0);
+}
+ 
+.cm-almost_black {
+	background-color: rgb(15, 23, 33);
+}
+ 
+.cm-gray {
+	background-color: rgb(158, 158, 158);
+}
+ 
+.cm-light_gray {
+	background-color: rgb(205, 205, 205);
+}
+ 
+.cm-dark_gray {
+	background-color: rgb(58, 58, 58);
+}
+ 
+.cm-translucent_white {
+	background-color: rgba(255, 255, 255, 0.85);
+}
+
+.cm-translucent_black {
+	background-color: rgba(0, 0, 0, 0.85);
+}
+
+.cm-transparent: {
+	background-color: rgba(0, 0, 0, 0);
+}
+
+.cm-text-fuschia {
+	color: rgb(253, 13, 136);
+}
+ 
+.cm-text-magenta {
+	color: rgb(228, 0, 228);
+}
+ 
+.cm-text-pink {
+	color: rgb(254, 3, 133);
+}
+ 
+.cm-text-red {
+	color: rgb(250, 0, 92);
+}
+ 
+.cm-text-dark_red {
+	color: rgb(133, 33, 33);
+}
+ 
+.cm-text-orange {
+	color: rgb(254, 137, 39);
+}
+ 
+.cm-text-yellow {
+	color: rgb(255, 245, 10);
+}
+ 
+.cm-text-light_green {
+	color: rgb(0, 240, 0);
+}
+ 
+.cm-text-green {
+	color: rgb(0, 185, 0);
+}
+ 
+.cm-text-dark_green {
+	color: rgb(0, 136, 0);
+}
+ 
+.cm-text-light_blue {
+	color: rgb(0, 250, 235);
+}
+
+.cm-text-sky_blue {
+	color: rgb(142, 227, 252);
+}
+
+.cm-text-blue {
+	color: rgb(1, 97, 251);
+}
+ 
+.cm-text-blue_green {
+	color: rgb(0, 168, 153);
+}
+ 
+.cm-text-violet {
+	color: rgb(185, 51, 158);
+}
+ 
+.cm-text-purple {
+	color: rgb(128, 0, 128);
+}
+ 
+.cm-text-brown {
+	color: rgb(121, 74, 25);
+}
+ 
+.cm-text-tan {
+	color: rgb(242, 245, 235);
+}
+ 
+.cm-text-white {
+	color: rgb(255, 255, 255);
+}
+ 
+.cm-text-almost_white {
+	color: rgb(250, 250, 250);
+}
+ 
+.cm-text-black {
+	color: rgb(0, 0, 0);
+}
+ 
+.cm-text-almost_black {
+	color: rgb(15, 23, 33);
+}
+ 
+.cm-text-gray {
+	color: rgb(158, 158, 158);
+}
+ 
+.cm-text-light_gray {
+	color: rgb(205, 205, 205);
+}
+ 
+.cm-text-dark_gray {
+	color: rgb(58, 58, 58);
+}
+ 
+.cm-text-translucent_white {
+	color: rgba(255, 255, 255, 0.85);
+}
+
+.cm-text-translucent_black {
+	color: rgba(0, 0, 0, 0.85);
+}
+
+.cm-text-transparent: {
+	color: rgba(0, 0, 0, 0);
+}
+
+/* Hide the parentheses that are just used to format MathJax square roots */
+.mj-parens-override mjx-c.mjx-c28::before,
+.mj-parens-override mjx-c.mjx-c29::before {
+	content: "" !important;
+	padding: 0.75em .21em 0.15em 0;
+}
+
+.mj-parens-override mjx-c.mjx-c221A::before {
+    padding: 0.9em 0.523em 0.2em 0;
+}
+
+/* You are still using IE??? */
+/* Anyway, from: https://timkadlec.com/2012/10/ie10-snap-mode-and-responsive-design/ */
+@-ms-viewport {
+	width: device-width;
+}
