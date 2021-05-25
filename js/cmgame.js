@@ -936,7 +936,7 @@ class CMSwipe {
 		this.oldX = oldX;
 		this.oldY = oldY;
 
-		this.direction = this.getDirection(oldX, oldY, newX, newY); // "left", "up", etc.
+		this.direction = this.getDirection(oldX, oldY, newX, newY); // "left", "up", "down", "right"
 		this.direction8 = this.getDirection8(oldX, oldY, newX, newY); // "left", "up", "upleft", "downright" , etc.
 
 		// These are for tracking ALL recorded swipes, even consecutive ones in the same direction
@@ -1070,9 +1070,14 @@ class CMGame {
 			onbeforedraw: CMGame.noop,
 			ondraw: CMGame.noop,
 			oncleardraw: CMGame.noop,
-			ontouchstart: CMGame.noop,
-			ontouchmove: CMGame.noop,
-			ontouchend: CMGame.noop,
+
+			onkeydown: CMGame.noop,
+			onkeyup: CMGame.noop,
+
+			onpressstart: CMGame.noop,
+			onpressmove: CMGame.noop,
+			onpressend: CMGame.noop,
+			onswipe: CMGame.noop,
 			onkeydown: CMGame.noop,
 			onkeyup: CMGame.noop,
 
@@ -1091,9 +1096,6 @@ class CMGame {
 			backgroundCanvas: null,
 
 			pressElement: null,
-
-			doubleBuffer: true, // Not an option
-			orientation: window.screen.orientation.type,
 
 			// colors
 			tickStyle: "",
@@ -1644,7 +1646,7 @@ class CMGame {
 			this.vennRegions = new Map(); // VennRegion
 
 			this.setNumberOfSets(opts.numSets || 0, opts.variation || 0);
-			
+
 			/** Updates game state in current frame*/
 			this.update = function() {
 				this.onbeforeupdate(this.frameCount);
@@ -1797,6 +1799,10 @@ class CMGame {
 				this[key] = opts[key].bind(self);
 			}
 		}
+
+		if(typeof opts.onload === "function") {
+			opts.onload();
+		}
 	}
 
 	/**
@@ -1806,17 +1812,29 @@ class CMGame {
 	 * complicated, you may wish to draw it into
 	 * the canvas with the canvas context, to
 	 * ensure it is included in the screenshots.
-	 * @param {HTMLImageElement} [outputImage] - An
+	 * Returns a promise, resolving with an object with "image"
+	 * property set to an output <img> element (if defined) and
+	 * a "src" property set to the captured image source string.
+	 * @param {object} [option{}] - A plain JS object of options (if desired)
+	 * @param {string} [options.filename="cmgscreenshot.png"] - The desired file name for the download
+	 * @param {HTMLImageElement|string} [output="download"] - An image element to display
+	 *   the screenshot if desired, or "download" to just download, or anything else to do nothing
+	 * @returns {Promise}
 	 */
-	takeScreenshot(outputImage) {
+	takeScreenshot(options={}) {
+
+		// Grab immediate snapshot as string, rather than risk delay due to processing below
+		let dataURL = this.canvas.toDataURL(), // Pull frame from screen canvas (not offscreen)
+			self = this,
+			downloadImg = new Image(),
+			canvasDataImg,
+			canvasDataUrl,
+			opts = {
+				filename: options.filename || "cmgscreenshot.png",
+				output: options.output || "download"
+			};
 
 		return new Promise(function(resolve, reject) {
-			// Grab immediate snapshot as string, rather than risk delay due to processing below
-			let dataURL = this.canvas.toDataURL(), // Pull frame from screen canvas (not offscreen)
-				self = this,
-				downloadImg = new Image(),
-				canvasDataImg,
-				canvasDataUrl;
 
 			downloadImg.onload = function() {
 
@@ -1894,13 +1912,23 @@ class CMGame {
 
 						canvasDataUrl = self.screenshotCanvas.toDataURL();
 						self.screenshotLink.href = canvasDataUrl;
-						self.screenshotLink.click();
-						
-						canvasDataImg = new Image();
+						self.screenshotLink.download = opts.filename;
+
+						if(opts.output === "download") {
+							self.screenshotLink.click();
+						}
+
+						if(opts.output instanceof HTMLImageElement) {
+							canvasDataImg = opts.output;
+						}
+						else {
+							canvasDataImg = new Image();
+						}
 
 						canvasDataImg.onload = () => {
 							resolve({
-								image: canvasDataImg
+								image: canvasDataImg,
+								src: canvasDataImg.src
 							});
 						};
 
@@ -1926,16 +1954,27 @@ class CMGame {
 
 				canvasDataUrl = self.screenshotCanvas.toDataURL();
 				self.screenshotLink.href = canvasDataUrl;
-				self.screenshotLink.click();
+				self.screenshotLink.download = opts.filename;
 
-				canvasDataImg = new Image();
+				if(opts.output === "download") {
+					self.screenshotLink.click();
+				}
+
+				if(opts.output instanceof HTMLImageElement) {
+					canvasDataImg = opts.output;
+				}
+				else {
+					canvasDataImg = new Image();
+				}
+
 				canvasDataImg.onload = () => {
 					resolve({
-						image: canvasDataImg
+						image: canvasDataImg,
+						src: canvasDataImg.src
 					});
 				};
 
-				canvasDataImg.src = canvas.dataUrl;
+				canvasDataImg.src = canvasDataUrl;
 			};
 
 			// Load original screenshot and trigger the onload event
@@ -1955,7 +1994,10 @@ class CMGame {
 	 * Also note that support may vary, so this is
 	 * mainly for devs to save game demo videos,
 	 * say for advertising.
-	 * @param {number|object} [options] - A plain JS object of options. If undefined,
+	 * Returns a Promise, resolving with an object with "video"
+	 * property set to an output <video> element (if defined) and
+	 * a "src" property set to the captured video source string.
+	 * @param {number|object} [options={}] - A plain JS object of options. If undefined,
 	 *   defaults are used. If a number, defaults are used except for duration, which is
 	 *   set to that number.
 	 * @param {number} [options.start=0] - Number of milliseconds to wait before starting capture
@@ -1966,8 +2008,9 @@ class CMGame {
 	 * @param {string|Video} [output] Option for handling. "download"  to download immediately, "none"
 	 *   to do nothing (e.g., if dev wants to wait for Promise), or an HTMLVideo element whose source will
 	 *   be set to the output video once available.
+	 * @returns {Promise}
 	 */
-	takeScreenVideo(options) {
+	takeScreenVideo(options={}) {
 		let self = this;
 
 		let opts = {
@@ -2035,51 +2078,63 @@ class CMGame {
 			}
 		}
 
-		let stream = this.canvas.captureStream(opts.fps);
-		let recordedChunks = [];
+		return new Promise(function(resolve, reject) {
 
-		/**
-		 * Only webm seems to be supported for the initial stream -
-		 * requested mimeType will be used for the output Blob
-		 */
-		let streamOptions = { mimeType: "video/webm; codecs=vp9" };
-		let mediaRecorder = new MediaRecorder(stream, streamOptions);
+			let stream = self.canvas.captureStream(opts.fps);
+			let recordedChunks = [];
 
-		setTimeout(() => {
-			mediaRecorder.ondataavailable = function(e) {
-				if (e.data.size > 0) {
-					recordedChunks.push(e.data);
-				}
-			};
-
-			mediaRecorder.onstop = function() {
-				let blob = new Blob(recordedChunks, {
-					type: opts.mimeType // "video/mp4", etc.
-				});
-
-				recordedChunks = []; // clear out
-
-				let videoUrl = URL.createObjectURL(blob);
-
-				if(opts.output instanceof HTMLVideoElement) {
-					opts.output.src = videoUrl;
-				}
-				else
-				if(opts.output === "download") {
-					self.screenVideoLink.href = videoUrl;
-					self.screenVideoLink.download = opts.filename;
-					self.screenVideoLink.click();
-				}
-
-				window.URL.revokeObjectURL(videoUrl); // garbage collection
-			};
-
-			mediaRecorder.start();
+			/**
+			 * Only webm seems to be supported for the initial stream -
+			 * requested mimeType will be used for the output Blob
+			 */
+			let streamOptions = { mimeType: "video/webm; codecs=vp9" };
+			let mediaRecorder = new MediaRecorder(stream, streamOptions);
 
 			setTimeout(() => {
-				mediaRecorder.stop();
-			}, opts.duration); // Stop recording only after requested time
-		}, opts.start); // Start recording only after requested time
+				mediaRecorder.ondataavailable = function(e) {
+					if (e.data.size > 0) {
+						recordedChunks.push(e.data);
+					}
+				};
+
+				mediaRecorder.onstop = function() {
+					let blob = new Blob(recordedChunks, {
+						type: opts.mimeType // "video/mp4", etc.
+					});
+
+					recordedChunks = []; // clear out
+
+					let videoUrl = URL.createObjectURL(blob);
+					let resolvedObj = {
+						video: null,
+						src: ""
+					};
+
+					if(opts.output instanceof HTMLVideoElement) {
+						opts.output.src = videoUrl;
+						resolvedObj.video = opts.output;
+						resolvedObj.src = opts.output.src;
+					}
+					else
+					if(opts.output === "download") {
+						self.screenVideoLink.href = videoUrl;
+						self.screenVideoLink.download = opts.filename;
+						resolvedObj.video = null;
+						resolvedObj.src = self.screenVideoLink.href;
+						self.screenVideoLink.click();
+					}
+
+					window.URL.revokeObjectURL(videoUrl); // garbage collection
+					resolve(resolvedObj);
+				};
+
+				mediaRecorder.start();
+
+				setTimeout(() => {
+					mediaRecorder.stop();
+				}, opts.duration); // Stop recording only after requested time
+			}, opts.start); // Start recording only after requested time
+		});
 	}
 
 	/**
@@ -2091,12 +2146,24 @@ class CMGame {
 			return;
 		}
 
-		for(let str of this.hideOnStart) {
-			document.querySelector(str).style.display = "none";
+		if(typeof this.onbeforestart === "function") {
+			this.onbeforestart();
+		}
+
+		for(let item of this.hideOnStart) {
+			if(typeof item === "object")
+				elm.style.display = "none";
+			else
+			if(typeof item === "string")
+				document.querySelector(item).style.display = "none";
 		}
 
 		this.started = true;
 		this.animFrameId = requestNextFrame(self.runCycle);
+
+		if(typeof this.onstart === "function") {
+			this.onstart();
+		}
 
 		return this;
 	}
@@ -5763,7 +5830,7 @@ CMGame.Function = class {
 	 * @param {string} [opts.fillStyleBelow] color for area below graph curve
 	 * @param {string} [opts.fillStyleAbove] color for area above graph curve
 	 * @param {string} [opts.lineWidth] line width for the graph curve
-	 * @param {string} [opts.name] Convenience, e.g., for drawing name to 
+	 * @param {string} [opts.name] Convenience, e.g., for drawing name to screen
 	 * @param {boolean} [opts.static] true if you know the graph will not change
 	 * @param {object} [opts.start] Object defining real number start values for x, t, etc.
 	 * @param {object} [opts.end] Object defining real number end values for x, t, etc.
@@ -5827,11 +5894,15 @@ CMGame.Function = class {
 		}
 
 		this.velocity = {
+			/**
+			// There is currently no need for these values...
 			t: 0,
 			x: 0,
 			y: 0,
 			r: 0,
 			theta: 0,
+			*/
+
 			animationTime: 0, // If not animated, no need to build this variable
 
 			start: {t: 0, x: 0, y: 0, r: 0, theta: 0},
@@ -7349,7 +7420,7 @@ class CMEdge extends CMGame.Sprite {
 	 * @param {string} [label.fillStyle=CMGame.Color.BLACK] - Color to draw the label with
 	 */
 	constructor(game, vertex1=null, vertex2=null, lineWidth=1,
-			fillStyle=CMGame.Color.BLACK, label, directed=false, weight) {
+			fillStyle=CMGame.Color.BLACK, label={}, directed=false, weight) {
 
 		super(game, 0, 0, lineWidth, "line", fillStyle, "none", 0, true);
 
