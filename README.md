@@ -2,7 +2,7 @@
 
 A user-friendly web-based math game engine. The target audience for this game engine is math enthusiasts with little to no web programming experience, who want to easily build math-based games, web apps, displays, etc.
 
-This engine was initially built for my site https://collegemathgames.com, but is available free for use, under the MIT License.
+This engine was initially built for the site https://collegemathgames.com, but is available free for use, under the MIT License.
 
 ## What Does It Do?
 
@@ -145,7 +145,7 @@ hideOnStart - An array of HTML elements (or CSS selectors defining each) to be h
 
 tickDistance - How many pixels apart x-axis (and y-axis) tick marks are from each other. Default is 20.
 
-graphScalar - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0).
+graphScalar - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
 
 soundOn - A boolean: true to allow sound effects to play, false to mute them. Defaults to false.
 
@@ -566,12 +566,18 @@ var ball = new CMGame.Sprite(
   20,
   "circle",
   "yellow",
-  ["bounce", "none", "bounce", "none"] // will bounce of top and bottom, but keep going on the sides - handle those situations in game.onupdate
+  ["bounce", "none", "bounce", "none"] // will bounce of top and bottom, but keep going on the left/right sides - handle those situations in game.onupdate
 );
 
 game.onupdate = function() {
   if(ball.x > game.width) {
-    console.log("point!");
+    console.log("Point for computer!");
+
+    // Now reset the ball, or start next round, or end game, etc.
+  }
+  else
+  if(ball.x < 0) {
+    console.log("Point for player!");
 
     // Now reset the ball, or start next round, or end game, etc.
   }
@@ -636,7 +642,9 @@ CMGame.noop - Empty function (essentially a placeholder). Does nothing.
 
 CMGame.PIXELS_FOR_SWIPE - This is set to how many pixels you think should be moved across before a "swipe" is registered. Currently set as 5. If you lower this it may cause performance issues due to constant processing.
 
-CMGame.showToast("Achievement completed!"); // Show a brief pop-up style message to the user without blocking UI thread. With a single arguments, this detects expected length based on the input's length, and fades out accordingly. For more control, you can use up to 3 more arguments:
+CMGame.FPS - The frame rate for games made with CMGame. Defaults to roughly 60 FPS (frames per second), the standard browser drawing speed. If modified, will change your game's speed instantly, though it is better practice to control speed within the game (e.g., with sprite velocity values).
+
+CMGame.showToast("Achievement completed!"); // Show a brief pop-up style message (called "toasts" in many games and apps) to the user without blocking UI thread. With a single arguments, this detects expected length based on the input's length, and fades out accordingly. For more control, you can use up to 3 more arguments:
 
 // arguments: string message, number of milliseconds to wait before showing, number of milliseconds to show the message, function to perform after fade completes
 CMGame.showToast("Achievement, completed!", 2000, 5000, function() { console.log("toast faded"); });
