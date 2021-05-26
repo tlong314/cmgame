@@ -25,7 +25,7 @@ Among other things, this engine handles:
 
 ## Getting Started
 
-Add a reference to the CMGame CSS file (in your HTML page's head) and the CMGame JS file (preferably at the end of your HTML's body block).
+After downloading this library from github, add a reference to the CMGame CSS file (in your HTML page's head) and the CMGame JS file (preferably at the end of your HTML's body block).
 
 ```html
 <!doctype html>
@@ -45,7 +45,7 @@ Add a reference to the CMGame CSS file (in your HTML page's head) and the CMGame
 </html>
 ```
 
-For best performance, you can add your `<canvas>` element to the HTML body, and a wrapper `<div>` element containing it. Give `<canvas>` the id cmCanvas and the div the id cmWrapper. If you do not do this, the game will dynamically create those elements for you.
+For best performance, you can add your `<canvas>` element to the HTML body, and a wrapper `<div>` element containing it. Give `<canvas>` the id "cmCanvas" and the `<div>` the id "cmWrapper". If you do not do this, the game will dynamically create those elements for you.
 
 In your custom script, you can initialize the game with one line of code:
 
@@ -127,6 +127,16 @@ game.playSound(soundPath);
 // or
 game.playSound( audios.sound1 );
 
+// pausing...
+game.pauseSound(soundPath);
+game.pauseSound( audios.sound1 );
+
+// stopping...
+game.stopSound(soundPath);
+game.stopSound( audios.sound1 );
+
+// Note: there ar similar "Music" methods (playMusic, pauseMusic, stopMusic), and the only real difference is that whether these play will be dependent on your game's settings for keeping sound effects on/off, and keeping music on/off
+
 ```
 
 onload - A function to call when the game's constructor has completed setup. Thus this only occurs as a constructor option, and is never used again in game's lifecycle.
@@ -140,6 +150,8 @@ graphScalar - How much real numbers are scaled into the number of pixels on scre
 soundOn - A boolean: true to allow sound effects to play, false to mute them. Defaults to false.
 
 musicOn - A boolean: true to allow music (generally longer sound files) to play, false to mute them. Defaults to false.
+
+saveName - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke saveState() or loadState() methods this value is never used)
 
 frameCap - During each animation cycle, the game stores an internal `frameCount` variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this `frameCap` to some positive integer, because the default is Infinity.
 
@@ -412,10 +424,9 @@ velocity - A plain JS object defining how animations will move in this graph
 
 velocity.animationTime - A number that can used by the dev for timing various actions
 
-velocity.start - A plain JS object defining the velocity at which to move each variables within this function's `start` object (see `start` parameter above)
+velocity.start - A plain JS object defining the velocity at which to move each variable within this function's `start` object (see `start` parameter above)
 
-velocity.end - A plain JS object defining the velocity at which to move each variables within this function's `end` object (see `end` parameter above)
-
+velocity.end - A plain JS object defining the velocity at which to move each variable within this function's `end` object (see `end` parameter above)
 
 ## Building a Venn Diagram
 
@@ -490,6 +501,11 @@ game.addVertex( v1 );
 game.addVertex( v2 );
 game.addEdge( e1 );
 
+// To remove later, you can use:
+game.removeVertex( v1 );
+game.removeVertex( v2 );
+game.removeEdge( e1 );
+
 ```
 
 ## Sprites
@@ -499,21 +515,21 @@ One fundamental concept of game programming is sprites. These are in-game object
 ```javascript
 
 // sprites are automatically added to game upon creation
-var laserBeam = new CMGame.Sprite(
+var boxes = new CMGame.Sprite(
   game,
   100,
   150,
+  100,
   20,
-  20,
-  // Can override draw function if preferred
-  function(ctx) {
-    ctx.fillStyle = "cyan";
-    game.drawLine(0, 0, this.x, this.y);
+  function(ctx) { // Can override sprite's draw function if preferred
+    ctx.fillStyle = "brown";
+    game.fillRect(this.x, this.y, this.width, this.height);
+    game.fillRect(this.x + 80, this.y, this.width, this.height);
   }
 );
 
 // to remove this sprite later, you can use:
-laserBeam.destroy();
+boxes.destroy();
 
 ```
 
@@ -571,11 +587,11 @@ omitFromSprites - A boolean. Mainly used internally for extending the sprite cla
 
 Besides the callbacks described above, there are various methods built into the CMGame prototype, used for converting mathematical points or values, drawing canvas text with more control, reconciling real numbers with their on-screen representations, and managing basic gameplay.
 
-Some basic gameplay methods for a created game with sprite's sprite1 and sprite2:
+Some basic gameplay methods for a created CMGame instance named 'game':
 
 ```javascript
 
-game.start(); // start the game
+game.start(); // start the game. Should only ever be called once. Use game.pause()/game.unpause() to pause/stop and restart gameplay.
 
 game.pause(); // pause the game
 
@@ -586,9 +602,216 @@ if( game.areColliding(sprite1, sprite2) ) {
   game.playSound( "audio/collision.wav" ); // play a sound file
 }
 
+// Check distance of 2 points (objects with x and y number coordinates defined)
+game.distance( point1, point2 );
+
 game.takeScreenshot(); // take a screenshot of current screen and download it
 
 game.takeScreenVideo(3000); // take video of current screen for next 3 seconds and download it
+
+// Saves the current game details (an object you provide) to current browser. Object should be JSON-compliant; primitives (strings, numbers) are your safest options.
+// If you provided a saveName option in game constructor, this is saved using that key. Otherwise a new one is generated.
+game.saveState({
+  score: 200,
+  highScore: 1000,
+  name: "Jenny"
+});
+
+// Returns a game's saved state object from current browser
+// If you provided a saveName option in game constructor, this looks for saved game state under that name. Otherwise an empty object {} is returned.
+game.loadState();
+
+// Let player start drawing on screen
+game.startDoodle();
+
+// No longer let player start drawing on screen
+game.stopDoodle();
+
+// Erase all doodles from screen
+game.clearDoodles();
+
+// static
+
+CMGame.noop - Empty function (essentially a placeholder). Does nothing.
+
+CMGame.PIXELS_FOR_SWIPE - This is set to how many pixels you think should be moved across before a "swipe" is registered. Currently set as 5. If you lower this it may cause performance issues due to constant processing.
+
+CMGame.showToast("Achievement completed!"); // Show a brief pop-up style message to the user without blocking UI thread. With a single arguments, this detects expected length based on the input's length, and fades out accordingly. For more control, you can use up to 3 more arguments:
+
+// arguments: string message, number of milliseconds to wait before showing, number of milliseconds to show the message, function to perform after fade completes
+CMGame.showToast("Achievement, completed!", 2000, 5000, function() { console.log("toast faded"); });
+
+// If you wnat to show multiple messages without worrying about all the details, use showToasts with an array of strings, an an optional second parameter for delay in milliseconds before showing first message:
+CMGame.showToasts(["Achievement Completed!", "Trophy Earned!", "All Trophies Collected"], 2000);
+
+```
+
+Some methods for working with arrays, objects, and Map instances:
+
+```javascript
+
+CMGame.pickFrom( arr ); // Randomly picks an element from the input (an array, Map instance, or object)
+CMGame.pluckFrom( arr ); // Randomly picks an element from the input (an array, Map instance, or object) and REMOVES that item from the input
+CMGame.shuffle( arr ); // Randomly shuffles the input, which is an array
+CMGame.last( arr ); // Gets last element of the array (index at array.length - 1)
+CMGame.isPrimitiveSubArray
+
+// Clears out input object, which can be an array, Map instance, or object, and returns the emptied item.
+//Can also take multiple arguments: (CMGame.clearAll( myArr, myArr2, myObj, myMap);
+CMGame.clearAll( arr );
+
+```
+
+Some math conversion helper functions:
+
+```javascript
+
+// Built into prototype:
+
+game.fromPolar( 2, Math.PI / 2 ); // polar to Cartesian coordinates
+game.toPolar( {x: 2, y: 3} ); // Cartesian to polar coordinates
+
+game.fromBinary( "1001" ); // binary string to positive integer
+game.toBinary( 15 ); // positive integer to binary string
+
+game.toRadians( 90 ); // degrees to radians
+game.toDegrees( Math.PI / 2 ); // radians to degrees
+
+game.degreesToSlope( 45 ); // degrees to slope of line from origin to this degree point on unit circle
+game.radiansToSlope( Math.PI / 4 ); // radians to slope of line from origin to this radian point on unit circle
+
+game.slopeToDegrees( 1 ); // inverse function of game.degreesToSlope
+game.slopeToRadians( 1 ); // inverse function of game.radiansToSlope
+
+game.roundSmall( 0.00001 ); // convert tiny numbers to 0 (threshold is Number.EPSILON). Useful when dealing with polar coordinates, Math.PI, etc.
+
+// Static math methods (not including static classes):
+CMGame.factorial( 5 ); // Returns factorial of nonnegative integar n, so n!; i.e., that number times every positive integer less than it (and returns 1 for input of 0).
+CMGame.P( 6, 4 ); // Takes permutation formula of the given inputs (in this example, "six permute four")
+CMGame.C( 6, 4 ); // Takes combination formula of the given inputs (in this example, "six choose four")
+CMGame.mean(2, 8, 4); // Takes the mean average of any list of numbers
+CMGame.sum( (x) => 1/x, 1, Infinity); // Adds a list of number inputs, or if first coordinate is a function attempts to add the values like a sigma sum. If present, second coordinate represents the starting index, and third represents the ending index. If third parameter is infinite and partial sums become insignificantly different, assumes convegence and returns the latest partial sum rather than continuing the infinite loop.
+
+// Static variables added to Math object for convenience:
+
+Math.TAU // 2 * pi. Convenience for drawing arcs/ellipses and for polar calculations
+Math.SQRT3 // Square root of 3. Convenience for unit circle, etc.
+Math.SQRT5 // Square root of 5.
+Math.PHI // Golden ratio. Convenience for drawing complex patterns.
+
+```
+
+Some other helpful functions for working with canvas coordinates:
+
+```javascript
+
+game.getSlope( point1, point2 ); // Gets slope between 2 points - if vertical may return Infinity or -Infinity
+game.getFiniteSlope( point1, point2 ); // Similar to getSlope, but returns undefined for vertical lines
+game.midpoint( point1, point2 ); // Returns the point lying halfway between these two (input can be canvas or real point)
+
+game.xToScreen( 2.5 ); // converts real # to the pixel where it is represented horizontally on the current game grid
+game.xToReal( 300 ); // converts x-coordinate from canvas to what real number it currently represents
+
+game.yToScreen( 4.1 ); // converts real # to the pixel where it is represented vertically on the current game grid
+game.yToReal( 200 ); // converts y-coordinate from canvas to what real number it currently represents
+
+game.toScreen( {x: 2.5, y: 4.1 } ); // Converts real point to its current pixel representation point on the screen
+game.toReal({x: 300, y: 200}); // Converts canvas point to what real point it currently represents
+
+```
+
+You can perform canvas drawing as usual in your sprites' drawRule argument, or the game's ondraw(ctx) method, using the usual canvas context methods. This engine provides some additional methods to make drawing a little easier:
+
+```javascript
+
+// These assume the current game's drawing context will be used, so no need to pass it in as an argument
+
+// If you need to optimize, use ctx.lineTo methods and save stroke until path is complete. If not, here is a convenience method, similar to Java's drawLine.
+game.drawLine( x1, y1, x2, y2 );
+
+// Or you can pass in 2 point's or point-like objects (e.g., to draw a line from one circle's center to another's). These use context's current line width and strokeStyle.
+game.drawLine( point1, point2 );
+
+// rotating images can be confusing, and a lot of code. CMGame provides a drawRotatedImage method that takes in similar arguments to canvas context drawImage method, but with a final argument added as thenumber of radians to rotate by (counterclockwise) around the drawn image's center
+
+game.drawRotatedImage(img, Math.PI / 4); // draws image rotated about it center by pi/4 radians
+game.drawRotatedImage(img, 100, 200, Math.PI / 4); // draws image at point (100, 200), but rotated about the image center
+game.drawRotatedImage(img, 100, 200, 80, 40, Math.PI / 4); // draws image as width 80 and height 40 at point (100, 200), but rotated about the drawn image's center
+game.drawRotatedImage(img, 0, 0, 100, 50, 100, 200, 80, 40, Math.PI / 4); // draws image from source rectangle (0, 0, 100, 50) to destination (100, 200, 80, 40), but rotated about the drawn image's center
+
+// Draw multiple strings together with varying fonts and colors.
+// First argument is list of fonts to use. If list of text strings is longer, this will cycle back around when reaching last font.
+// Second argument is list of text strings to write. First string is written in first font, second in second font, etc.
+// Third argument: the x position to start writing the first string
+// Fourth argument: the y position to write the strings
+// Fifth argument: optional. A JS object of options:
+//   fill (boolean - true to use fillText, false otherwise. default is true);
+//   stroke (boolean - true to use strokeText, false otherwise. default is false);
+//   fillStyles - An array of colors to use with fillText on corresponding text strings. Cycles around similar to font array.
+//   strokeStyles - An array of colors to use with strokeText on corresponding text strings. Cycles around similar to font array.
+// Note: this returns the x value where the list of strings ends on the canvas.
+game.drawStrings( ["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"] , 200, 100, { fillStyles: ["pink", "blue"] });
+
+// Similar to game.drawStrings, but only calculates the expected width of the strings if they are drawn in the given fonts
+game.measureStrings(["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"]);
+
+// Similar to game.drawStrings, but centers around the provided (x, y) point and allows two more options:
+//   centerVertically - A boolean; if true, will try and center the text vertically around the point (x, y)
+//   angle - An angle in radians to rotate the entire string around if desired
+// As with drawStrings, this returns an x value for the end of the drawn strings (however, this assumes they were not rotated)
+game.drawStringsCentered( ["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"] , 200, 100, { fillStyles: ["pink", "blue"] )
+
+// Fills a circle of radius 20 around canvas point (200, 100)
+game.fillOval(200, 100, 20);
+
+// Fills an ellipse/oval that would be contained in the rectangle with top left point (200, 100), width 20, and height 40
+game.fillOval(200, 100, 20, 40);
+
+game.strokeOval is similar to game.fillOval (but only draws the outline)
+
+// Draws a rectangle with top left corner (400, 200), width 80, height 60, with rounded corners of radius 8
+game.fillRoundedRect(400, 200, 80, 60, 8);
+
+game.strokeRoundedRect is similar to game.fillRoundedRect (but only draws the outline)
+
+// Setting ctx font
+
+ctx.font = game.font.MONO; // Gets monospace font (if available) of current font size
+ctx.font = game.font.SANS_SERIF; // Gets sans-serif font of current font size
+ctx.font = game.font.SERIF; // Gets serif font of current font size
+ctx.font = game.font.VARIABLE; // Gets expected font for variables (italic, serif) of current font size
+
+// Since canvas scaling is automated and may result in text becoming too small, you can get an appropriate font size relative to current scale
+ctx.font = game.font.rel(12) + "px Arial"; // If current screen has canvas scaled to half its starting size, then this value becomes "24px Arial".
+
+```
+
+## Random values
+
+Random values are very useful in creating games. This engine provides a CMRandom class that can be used to access various random values when needed. Many of these, like CMRandom.value, create a random value on access, so do not require any function invocation.
+
+```javascript
+
+CMRandom.color; // Returns a random color from our pre-defined palette
+CMRandom.grayscale; // Returns a random color for a black and white palette (black, white, various grays)
+CMRandom.colorscale; // Returns a random color from pre-defined palette EXCEPT those in "grayscale" (black, white, various grays)
+
+CMRandom.value; // Returns a random float, similar to Random.value in Unity
+CMRandom.radian; // Returns a random float between 0 (inclusive) and 2 * pi (exclusive)
+CMRandom.degree; // Returns a random integer between 0 (inclusive) and 360 (exclusive)
+CMRandom.sign; // Randomly returns 1 or -1
+
+// range can return a value within a range. If both arguments are integers, returns an integer less than the second argument; similar to Unity's Random.Range method.
+CMRandom.range(-40, 80); // Returns a random integer between -40 (inclusive) and 80 (exclusive)
+CMRandom.range(-40, 80.1); // Returns a random float between -40 (inclusive) and 80.1 (inclusive)
+
+// nonzero is same method as range, but will never return 0
+CMRandom.nonzero(-40, 80);
+
+// With an instance of CMRandom, you can also use two Java-based methods to produce random integers or booleans
+let random = new CMRandom();
+random.nextInt(); // returns new integer, similar to Java's nextInt() method of the Random class
+random.nextBoolean(); // returns new integer, similar to Java's nextBoolean() method of the Random class
 
 ```
 
