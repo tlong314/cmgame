@@ -794,6 +794,28 @@ ctx.font = game.font.rel(12) + "px Arial"; // If current screen has canvas scale
 
 ```
 
+While drawing, you may want to refer to the predefined modern color palette, with CMGame.Color. This has many constant values represented by the color name in all caps. Color names are as expected, with multiple words being separated by an underscore (_).
+
+```javascript
+
+ctx.fillStyle = CMGame.Color.BLUE;
+
+```
+
+For constistency, it is best to use CMGame.Color.TRANSPARENT rather than "transparent", "rgba(0, 0, 0, 0)", etc. This way the game can reliably check for transparent values before wasting resources on drawing.
+
+If you have HTML elements that you want to use the same color palette, you can add corresponding classes, all lowercase, replacing CMGame.Color with .cm- to use the color as a background, or .cm-text- to use the color as the font color.
+
+```html
+
+<div class="cm-dark_red">Welcome!</div>
+
+<span class="cm-text-dark_red">Are you ready?</span>
+
+<div class="cm-green cm-text-white">Let's go!</div>
+
+```
+
 ## Random values
 
 Random values are very useful in creating games. This engine provides a CMRandom class that can be used to access various random values when needed. Many of these, like CMRandom.value, create a random value on access, so do not require any function invocation.
