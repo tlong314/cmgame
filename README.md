@@ -462,7 +462,7 @@ game.onpressstart = (point) {
 
 If your game's "type" is set to "graphtheory" you can define the indiviual vertices (i.e., nodes or dots) and edges (i.e., lines) with the classes CMVertex and CMEdge, respectively.
 
-```
+```javascript
 let game = new CMGame({
   type: "graphtheory"
 });
