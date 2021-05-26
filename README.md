@@ -185,11 +185,26 @@ doodleOptions.fillStyleLeft - Color to (try and) fill to the left of the drawn l
 
 doodleOptions.fillStyleRight - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
 
+```javascript
+
+// Creates a new game that lets user draw with finger or mouse (while pressing mouse button down)
+var game = new CMGame({
+  doodleOptions: {
+    enabled: true,
+    strokeStyle: "green",
+    lineWidth: 5
+  }
+});
+
+game.start(); // Game is started, now try drawing!
+
+```
+
 Numerous callbacks can be applied to the game, as discussed below. You can define these in the constructor, or (perhaps for cleaner code) define them after initialization, but before calling start().
 
 ## Callbacks
 
-Multiple callbacks can be added to the game. Two of the most useful are `onupdate`, `ondraw`. While the engine handles the "update and draw" cycle internally, you can add logic on top of what happens in these instances. `onupdate` occurs immediately after game's update() method, and `ondraw` is called immediately after the game's `draw` method.
+Multiple callbacks can be added to the game. Two of the most useful are `onupdate` and `ondraw`. While the engine handles the "update and draw" cycle internally, you can add logic on top of what happens in these instances. `onupdate` occurs immediately after game's update() method, and `ondraw` is called immediately after the game's `draw` method.
 
 ```javascript
 
@@ -224,6 +239,8 @@ If you need these events to occur at a more precise time, you can use:
 `onbeforedraw(ctx)` - Occurs just before game's draw()
 
 `oncleardraw(ctx)` - Occurs after previous screen clear but before current draw()
+
+### Player-triggered Events
 
 For user interaction, you should use these callbacks:
 
@@ -402,7 +419,7 @@ velocity.end - A plain JS object defining the velocity at which to move each var
 
 ## Building a Venn Diagram
 
-If you define your game's "type" to be "venn" then the game will build a Venn Diagram. Initiate your game as usual, but set type to "venn". Then define the number of sets that will be in your diagram with `game.setNumberOfSets`.
+If you define your game's "type" to be "venn" then the game will build a Venn Diagram. Initiate your game as usual, but set type to "venn". Then define the number of sets that will be in your diagram with `game.setNumberOfSets`. This method also takes an optional second parameter defining which "variation" of a certain Venn Diagram to use. The variation is 0 (the "usual" diagram) by default, 1 for a "subsets" diagram, 2 for a different (non-subset) view.
 
 ```javascript
 
@@ -410,7 +427,11 @@ let game = new CMGame({
   type: "venn"
 });
 
+// Creates a normal 2-set Venn Diagram
 game.setNumberOfSets(2);
+
+// Creats a 2-set Venn Diagram with A as a subset of B
+// game.setNumberOfSets(2, 2);
 
 ```
 
@@ -468,6 +489,106 @@ let e1 = new CMEdge(game, v1, v2, 20, "orange", {}, true);
 game.addVertex( v1 );
 game.addVertex( v2 );
 game.addEdge( e1 );
+
+```
+
+## Sprites
+
+One fundamental concept of game programming is sprites. These are in-game objects with some visual representation, which may be an image or shape, etc.
+
+```javascript
+
+// sprites are automatically added to game upon creation
+var laserBeam = new CMGame.Sprite(
+  game,
+  100,
+  150,
+  20,
+  20,
+  // Can override draw function if preferred
+  function(ctx) {
+    ctx.fillStyle = "cyan";
+    game.drawLine(0, 0, this.x, this.y);
+  }
+);
+
+// to remove this sprite later, you can use:
+laserBeam.destroy();
+
+```
+
+The constructor takes these arguments, in order (after the first 5, all other arguments are optional):
+
+game - The current game
+
+x - The sprite's starting x value. If a rectangle (the default shape) this is its top left corner's x value. If a circle it is the circle's center's x value.
+
+y - The sprite's starting y value. If a rectangle (the default shape) this is its top left corner's y value. If a circle it is the circle's center's y value.
+
+widthOrRadius - A number used as the rectangle's width, as the radius if it is a circle, or as the line width if it is a line (see heightOrCircle below)
+
+heightOrCircle - A number representing the sprite's height if it is a rectangle; or the string "circle" or "line" describing what shape this actually is
+
+drawRule - An argument describing how this sprite's drawing is handled. If drawRule is an `<img>` element then that image will be drawn at this sprite's rectangular coordinates. If it is a color string, then this sprite's inferred shape will be drawn in that color. If it is a function, then that function will replace the sprite's default draw operations (note: the function should take one parameter, the game's drawing context).
+
+boundingRule - A string description of how to handle this sprite's collision with the 4 sides of the canvas. Options for this string are:
+
+- "none" - do nothing
+- "bounce" - bounces off the walls (think Breakout, or the top/bottom sides of Pong)
+- "wraparound" - moves sprite to the opposite side of the screen (think Asteroids)
+- "clip" - Pushes object back just enough to keep it entirely within the game canvas
+- "destroy" - Removes the sprite from the game
+
+If you need different results based on which side is being hit, you can send an array in instead of a single string. The array should have 4 strings (each being one of the options above), written in clockwise order from the top. For example, this is how you might handle the ball in a Pong clone:
+
+```javascript
+
+var ball = new CMGame.Sprite(
+  game,
+  200,
+  100,
+  20,
+  "circle",
+  "yellow",
+  ["bounce", "none", "bounce", "none"] // will bounce of top and bottom, but keep going on the sides - handle those situations in game.onupdate
+);
+
+game.onupdate = function() {
+  if(ball.x > game.width) {
+    console.log("point!");
+
+    // Now reset the ball, or start next round, or end game, etc.
+  }
+};
+
+```
+
+layer - The "drawing layer" on which to draw the sprite. If you have very specific requirements about which sprites should be drawn first, you can define this to any number for your sprites. They will be drawn in the order you have set, with lower numbers drawn first.
+
+omitFromSprites - A boolean. Mainly used internally for extending the sprite class. Lets us manage extended classes separately from when most game sprites are updated or drawn.
+
+## CMGame Methods
+
+Besides the callbacks described above, there are various methods built into the CMGame prototype, used for converting mathematical points or values, drawing canvas text with more control, reconciling real numbers with their on-screen representations, and managing basic gameplay.
+
+Some basic gameplay methods for a created game with sprite's sprite1 and sprite2:
+
+```javascript
+
+game.start(); // start the game
+
+game.pause(); // pause the game
+
+game.unpause(); // unpause the game
+
+// Check if two items are colliding
+if( game.areColliding(sprite1, sprite2) ) {
+  game.playSound( "audio/collision.wav" ); // play a sound file
+}
+
+game.takeScreenshot(); // take a screenshot of current screen and download it
+
+game.takeScreenVideo(3000); // take video of current screen for next 3 seconds and download it
 
 ```
 
