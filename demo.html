@@ -47,14 +47,14 @@ var game = new CMGame({
 var shift = 0; // We'll use this later
 
 // Create a basic function, and add it to the game
-var parabola = new CMGame.Function(
+var basicFunc = new CMGame.Function(
 		game,
 		function(x) {
 			return Math.sin(x - shift) + 1;
 		}
 	);
 
-game.addFunction(parabola);
+game.addFunction(basicFunc);
 
 // Add some animation by setting an onupdate function
 game.onupdate = function() {
