@@ -468,15 +468,15 @@ let game = new CMGame({
 });
 
 // Arguments: current game, x, y, radius, color, and an option object defining a label
-let v1 = new CMVertex(game, 200, 100, 50, "rgba(255, 165, 0, 1)", {
+let v1 = new CMVertex(game, 200, 100, 50, "rgb(255, 165, 0)", {
 	text: "v1",
-	x: 300,
+	x: 280,
 	y: 100
 });
 
-let v2 = new CMVertex(game, 200, 100, 50, "rgba(255, 165, 0, 1)", {
+let v2 = new CMVertex(game, 300, 100, 50, "rgb(255, 165, 0)", {
 	text: "v1",
-	x: 300,
+	x: 380,
 	y: 100
 });
 
