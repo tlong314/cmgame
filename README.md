@@ -589,6 +589,53 @@ layer - The "drawing layer" on which to draw the sprite. If you have very specif
 
 omitFromSprites - A boolean. Mainly used internally for extending the sprite class. Lets us manage extended classes separately from when most game sprites are updated or drawn.
 
+### Sprite methods
+
+When making mobile-driven or desktop games, it can be useful to detect whether the user has clicked/tapped on a sprite. The sprite's "containsPoint" method can help detect this.
+
+```javascript
+sprite.containsPoint({ x: 200, y: 150 }); // Returns true if canvas point (200, 150) lies inside this sprite. Sprite should have a defined path, like a rectangle or circle.
+sprite.containsPoint(200, 150); // Same as above
+```
+
+Once a sprite is created, you can set its constant movement (velocity). The velocity is a point with x, y, and z coordinates. z is generally set to 0, but it is available in case you want to use it.
+
+```
+sprite.velocity.x = 2; // Makes sprite move 2 pixels to the right per frame
+
+sprite.velocity.y = -4; // Makes sprite move 4 pixels up the screen per frame (remember, pixel drawing values are reversed vertically, with y=0 being at the top)
+```
+
+A very useful tool that makes use of a few we have created is a sprite's setPath method. It can give you a lot of control over your sprite's movement. You can use it to set the sprite's velocity all at once, via a point object or an array. Or, for more interesting patterns, you can set it to a CMGame.Function instance (generally one that is animated).
+
+```javascript
+sprite.setPath({
+  x: 2,
+  y: 1,
+  z: 0 // providing a z value is optional
+});
+
+sprite.setPath([2, 1, 0]); // Again, last coordinate is optional
+
+var path = new CMGame.Function(
+  game,
+  function(theta) { return Math.sin(theta) },
+  {
+    type: "polar",
+    strokeStyle: CMGame.Color.TRANSPARENT // Don't show path sprite is following
+  }
+});
+
+sprite.setPath( path );
+```
+
+Occasionally we only need to access the sprite's center point (rather than the top/left (x, y) of a rectangle, say). You can access this with the .center property. Rather than a method, this is only determined when  necessary (when accessed).
+
+```javascript
+// Returns a point with an x value and y value representing the sprite's center point on the canvas
+var centerPoint = sprite.center;
+```
+
 ## CMGame Methods
 
 Besides the callbacks described above, there are various methods built into the CMGame prototype, used for converting mathematical points or values, drawing canvas text with more control, reconciling real numbers with their on-screen representations, and managing basic gameplay.
