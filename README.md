@@ -151,7 +151,7 @@ soundOn - A boolean: true to allow sound effects to play, false to mute them. De
 
 musicOn - A boolean: true to allow music (generally longer sound files) to play, false to mute them. Defaults to false.
 
-saveName - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke saveState() or loadState() methods this value is never used)
+saveName - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke save() or load() methods this value is never used)
 
 frameCap - During each animation cycle, the game stores an internal `frameCount` variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this `frameCap` to some positive integer, because the default is Infinity.
 
@@ -291,6 +291,17 @@ This can be used for example, to let the player guide their hero or object aroun
 game.onpressmove = (point) {
   hero.x += point.offset.x;
   hero.y += point.offset.y;
+};
+
+```
+
+Or to let the user drag the entire graph around to look at a specific area. Note this code will become buggy if performed while zoom is not 100%.
+
+```javascript
+
+game.onpressmove = (point) {
+  game.origin.x += point.offset.x;
+  game.origin.y += point.offset.y;
 };
 
 ```
@@ -469,7 +480,7 @@ game.onpressstart = (point) {
 
 ```
 
-## Graph Theory
+## Building a Graph Theory Graph
 
 If your game's "type" is set to "graphtheory" you can define the indiviual vertices (i.e., nodes or dots) and edges (i.e., lines) with the classes CMVertex and CMEdge, respectively.
 
@@ -514,22 +525,24 @@ One fundamental concept of game programming is sprites. These are in-game object
 
 ```javascript
 
-// sprites are automatically added to game upon creation
+// Create the sprite, and you can add to the game when ready
 var boxes = new CMGame.Sprite(
   game,
   100,
   150,
   100,
   20,
-  function(ctx) { // Can override sprite's draw function if preferred
+  function(ctx) { // You can override sprite's draw function if preferred
     ctx.fillStyle = "brown";
     game.fillRect(this.x, this.y, this.width, this.height);
     game.fillRect(this.x + 80, this.y, this.width, this.height);
   }
 );
 
+game.addSprite( boxes );
+
 // to remove this sprite later, you can use:
-boxes.destroy();
+game.removeSprite( boxes );
 
 ```
 
@@ -662,17 +675,41 @@ game.takeScreenshot(); // take a screenshot of current screen and download it
 
 game.takeScreenVideo(3000); // take video of current screen for next 3 seconds and download it
 
-// Saves the current game details (an object you provide) to current browser. Object should be JSON-compliant; primitives (strings, numbers) are your safest options.
+// Zooms to 90% of normal view. Do not change origin while game is zoomed in/out. (Still a little buggy in such a case.)
+game.zoom(0.9);
+
+// Saves the current game details (an object you provide) to current browser.
+// Object should be JSON-compliant; primitives (strings, numbers) are your safest options. Avoid null values and functions.
 // If you provided a saveName option in game constructor, this is saved using that key. Otherwise a new one is generated.
-game.saveState({
+game.save({
   score: 200,
   highScore: 1000,
   name: "Jenny"
 });
 
+// If you provide a save name directly as a first argument, that overrides the name you provided in the constructor.
+// This is useful if you want the player to name their own files.
+game.save("Jen314", {
+  score: 200,
+  highScore: 1000,
+  name: "Tim"
+});
+
+// Calling with no arguments generates a new save name and stores game's this.state object. Can be retrieved with game.load() with no arguments.
+game.save();
+
 // Returns a game's saved state object from current browser
-// If you provided a saveName option in game constructor, this looks for saved game state under that name. Otherwise an empty object {} is returned.
-game.loadState();
+// If you provided a saveName option in game constructor, this looks for saved game state under that name.
+// If none was provided, this looks for the last save fitting the internally created save name syntax.
+// If nothing is found an empty object {} is returned.
+game.load();
+
+// If a game was saved under a specific name, you can retrieve it directly.
+game.load("Jen314");
+
+/**
+ * Player can draw!
+ */
 
 // Let player start drawing on screen
 game.startDoodle();
@@ -683,16 +720,21 @@ game.stopDoodle();
 // Erase all doodles from screen
 game.clearDoodles();
 
-// static
+// static values and methods
 
 CMGame.noop - Empty function (essentially a placeholder). Does nothing.
 
 CMGame.PIXELS_FOR_SWIPE - This is set to how many pixels you think should be moved across before a "swipe" is registered. Currently set as 5. If you lower this it may cause performance issues due to constant processing.
 
+CMGame.SAVE_PREFIX - A string used internally to generate unique save names. Never change this after a game has already been released/published.
+
 CMGame.FPS - The frame rate for games made with CMGame. Defaults to roughly 60 FPS (frames per second), the standard browser drawing speed. If modified, will change your game's speed instantly, though it is better practice to control speed within the game (e.g., with sprite velocity values).
 
-CMGame.showToast("Achievement completed!"); // Show a brief pop-up style message (called "toasts" in many games and apps) to the user without blocking UI thread. With a single arguments, this detects expected length based on the input's length, and fades out accordingly. For more control, you can use up to 3 more arguments:
+// Show a brief pop-up style message (called "toasts" in many games and apps) to the user without blocking UI thread.
+// With a single arguments, this detects expected length based on the input's length, and fades out accordingly.
+CMGame.showToast("Achievement completed!");
 
+// For more control, you can use up to 3 more arguments:
 // arguments: string message, number of milliseconds to wait before showing, number of milliseconds to show the message, function to perform after fade completes
 CMGame.showToast("Achievement, completed!", 2000, 5000, function() { console.log("toast faded"); });
 
@@ -708,7 +750,7 @@ Some methods for working with arrays, objects, and Map instances:
 CMGame.pickFrom( arr ); // Randomly picks an element from the input (an array, Map instance, or object)
 CMGame.pluckFrom( arr ); // Randomly picks an element from the input (an array, Map instance, or object) and REMOVES that item from the input
 CMGame.shuffle( arr ); // Randomly shuffles the input, which is an array
-CMGame.last( arr ); // Gets last element of the array (index at array.length - 1)
+CMGame.last( arr ); // Gets last element of the array (i.e., elemment index at array.length - 1)
 CMGame.isPrimitiveSubArray
 
 // Clears out input object, which can be an array, Map instance, or object, and returns the emptied item.
