@@ -259,7 +259,7 @@ const CMSound = (function() {
  * or access various properties using
  * static getters.
  *
- * CMRandom.value; // will be a random float
+ * CMRandom.value; // will be a random float, similar to Random.value in Unity
  * CMRandom.color; // will be a random color from our predefined colors
  *
  * let random = new CMRandom();
@@ -528,7 +528,7 @@ class CMPoint {
 	 * this one's coordinates (NOT the same
 	 * as determining if they are equal
 	 * as JavaScript objects).
-	 * @param {object|null} otherPoint - A CMPoint instance
+	 * @param {object|null} otherPoint - A CMPoint instance or similar
 	 * @returns {boolean}
 	 */
 	isPoint(otherPoint) {
@@ -538,7 +538,25 @@ class CMPoint {
 
 		return (this.x === otherPoint.x &&
 			this.y === otherPoint.y &&
-			this.z === otherPoint.z);
+			(this.z === otherPoint.z ||
+				(this.z === 0 && typeof otherPoint.z === "undefined")));
+	}
+
+	/**
+	 * Returns true if given point is essentially
+	 * the same point after accounting for possible
+	 * computer rounding errors with float values.
+	 * @param {object} otherPoint - A CMPoint instance or similar
+	 * @returns {boolean}
+	 */
+	isAlmost(otherPoint) {
+		let otherZ = typeof otherPoint.z === "undefined" ? 0 : otherPoint.z
+
+		return (
+			this.game.roundSmall( this.x - otherPoint.x ) &&
+			this.game.roundSmall( this.y - otherPoint.y ) &&
+			this.game.roundSmall( this.z - otherZ )
+		);
 	}
 }
 
@@ -560,6 +578,12 @@ class CMImageLoad extends Image {
 	constructor(imageSrc) {
 		super();
 		numImagesToLoad++;
+
+		let progress = document.getElementById("cmLoadingProgress");
+		if(progress !==  null) {
+			progress.setAttribute("max", numImagesToLoad + numAudiosToLoad + 1); // +1 for domLoaded
+		}
+
 		this.onload = registerImageLoad;
 		this.src = imageSrc;
 	}
@@ -574,6 +598,12 @@ class CMAudioLoad extends Audio {
 	constructor(audioSrc) {
 		super();
 		numAudiosToLoad++;
+
+		let progress = document.getElementById("cmLoadingProgress");
+		if(progress !==  null) {
+			progress.setAttribute("max", numImagesToLoad + numAudiosToLoad + 1); // +1 for domLoaded
+		}
+
 		this.oncanplaythrough = registerAudioLoad;
 		this.src = audioSrc;
 		this.load();
@@ -588,16 +618,16 @@ class CMAudioLoad extends Audio {
 			extensionless.lastIndexOf("/") + 1
 		);
 
-		cmAudioMap.set(keyString, this);
+		cmAudioMap.set(keyString, this);		
 		CMSound.load(audioSrc);
 	}
 }
 
-/** Create "loading" animation of intro meter */
-const incrementLoadingMeter = () => {
-	let meter = document.getElementById("cmLoadingMeter");
-	if(meter !==  null) {
-		meter.value = parseInt(meter.value) + 1;
+/** Create "loading" animation of intro progress bar */
+const incrementLoadingProgress = () => {
+	let progress = document.getElementById("cmLoadingProgress");
+	if(progress !==  null) {
+		progress.value = parseInt(progress.value) + 1;
 	}
 };
 
@@ -605,8 +635,9 @@ const incrementLoadingMeter = () => {
  * Check if all items have been loaded, then start page
  */
 const initializeIfReady = () => {	
-	incrementLoadingMeter();
+	incrementLoadingProgress();
 
+	// If progress bar exists, this condition is same as progress.value == progress.max
 	if(numImagesLoaded === numImagesToLoad &&
 			numAudiosLoaded === numAudiosToLoad &&
 			domLoaded) {
@@ -1165,7 +1196,7 @@ class CMGame {
 		this.soundOn = opts.soundOn || false;
 		this.musicOn = opts.musicOn || false;
 		this.orientation = opts.orientation || null;
-		this.saveName = opts.saveName || this.generateSaveName();
+		this.saveName = opts.saveName || "";
 		this.state = {};
 
 		this.multiTouch = !!opts.multiTouch;
@@ -1374,15 +1405,33 @@ class CMGame {
 		this.offscreenCanvas.width = Math.floor(this.canvas.width * this.devicePixelRatio);
 		this.offscreenCanvas.height = Math.floor(this.canvas.height * this.devicePixelRatio);
 
-		this.origin = opts.origin || {
-			x: this.originByRatio[0] * this.width,
-			y: this.originByRatio[1] * this.height
-		};
+		// store origin an center as CMPoints in case we wish to check for instance this.origin.isPoint( this.center );
+		this.origin = null;
+		if(Array.isArray(opts.origin)) {
+			this.origin = new CMPoint(
+				opts.origin[0],
+				opts.origin[1],
+				0);
+		}
+		else
+		if(typeof opts.origin === "object") {
+			this.origin = new CMPoint(
+				opts.origin.x,
+				opts.origin.y,
+				0
+			);
+		}
+		else { // No origin specified directly
+			this.origin = new CMPoint(
+				this.originByRatio[0] * this.width,
+				this.originByRatio[1] * this.height
+			);
+		}
 
-		this.center = {
-			x: .5 * this.width,
-			y: .5 * this.height
-		};
+		this.center = new CMPoint(
+			.5 * this.width,
+			.5 * this.height
+		);
 
 		/** Dev may want to allow context menu for downloading screenshot */
 		if(!opts.allowContextMenu) {
@@ -1778,6 +1827,15 @@ class CMGame {
 		this.doodles = [];
 		this.currentDoodle = null;
 
+		// Store some zoom information for returning to unzoomed window
+		this.zoomLevel = 1; // Use percentages as decimals
+		this.unzoomedGraphScalar = this.graphScalar;
+		this.unzoomedTickDistance = this.tickDistance;
+		this.unzoomedOrigin = new CMPoint(
+			this.origin.x,
+			this.origin.y
+		);
+
 		// This allows dev to enter handlers directly into the CMGame constructor
 		let eventKeys = [
 			"onbeforestart",
@@ -2016,7 +2074,7 @@ class CMGame {
 		let opts = {
 			start: 0,
 			duration: 5000,
-			fps: this.FPS,
+			fps: CMGame.FPS,
 			mimeType: "video/mp4", // video/mp4 or video/webm, etc.
 			filename: "cmgscreenvideo.mp4", // Better choice, as mimeType will be inferred
 			output: "download" // set to "download", "none", or a <video> element, or use returned Promise data
@@ -2302,7 +2360,7 @@ class CMGame {
 		if(this.tickStyle && this.tickStyle !== CMGame.Color.TRANSPARENT) {
 			ctx.strokeStyle = this.tickStyle;
 
-			let halfTickLength = 5; // .25 * this.tickDistance;
+			let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
 
 			// vertical lines, center to left
 			for(let i = this.origin.x - this.tickDistance; i > 0; i -= this.tickDistance) {
@@ -2356,7 +2414,6 @@ class CMGame {
 
 		this.currentDoodle = new CMDoodle(this, opts);
 		this.doodles.push(this.currentDoodle);
-
 		return this;
 	}
 
@@ -2365,7 +2422,6 @@ class CMGame {
 	 */
 	stopDoodle() {
 		this.currentDoodle = null;
-
 		return this;
 	}
 
@@ -2393,23 +2449,57 @@ class CMGame {
 	 */
 	addFunction(/* CMGame.Function */ cmgFunc) {
 		this.functions.push(cmgFunc);
-
 		return this;
 	}
 
 	/**
-	 * Remove one of our added drawable
+	 * Removes one of our added drawable
 	 * functions (CMGame.Function) from the
 	 * game. Note: you should always store
 	 * added functions in a variable if they are
 	 * to be removed later. This way you can
 	 * assure the same function reference is
 	 * being called here.
+	 *
+	 * This does not destroy the function, only removes it
+	 * from game's update/draw calls. You can add the
+	 * function again later if desired.
+	 *
 	 * @param {object} cmgFunc - The CMGame.Function instance to remove
 	 */
 	removeFunction(/* CMGame.Function */ cmgFunc) {
 		this.functions.splice(this.functions.indexOf(cmgFunc), 1);
-		
+		return this;
+	}
+
+	/**
+	 * Adds a sprite to the game, and sorts the sprites
+	 * based on preferences for drawing order
+	 * @param {object} sprite - The sprite to add
+	 */
+	addSprite(/* CMGame.Sprite */ sprite) {
+		this.sprites.push(sprite);
+		this.sprites.sort((a, b) => a.layer - b.layer);
+		return this;
+	}
+
+	/**
+	 * Removes one of our added sprites
+	 * (CMGame.Sprite) from the
+	 * game. Note: you should always store
+	 * added sprites in a variable if they are
+	 * to be removed later. This way you can
+	 * assure the same sprite reference is
+	 * being called here.
+	 *
+	 * This does not destroy the sprite, only removes it
+	 * from game's update/draw calls. You can add the
+	 * sprite again later if desired.
+	 *
+	 * @param {object} sprite - The CMGame.Sprite instance to remove
+	 */
+	removeSprite(/* CMGame.Sprite */ sprite) {
+		this.sprites.splice(this.sprites.indexOf(sprite), 1);
 		return this;
 	}
 
@@ -2595,46 +2685,96 @@ class CMGame {
 	}
 
 	/**
-	 * Creates a unique save ID
+	 * Creates a unique save ID, for when one
+	 * has not been defined.
+	 * @returns {string}
 	 */
 	generateSaveName() {
 		let saveIdx = 0;
-		while(localStorage.getItem("cmgamesave_" + saveIdx) !== null) {
+		while(localStorage.getItem(CMGame.SAVE_PREFIX + saveIdx) !== null) {
 			saveIdx++;
 		}
 
-		this.saveName = "cmgamesave_" + saveIdx;
-		return this.saveName;
+		return CMGame.SAVE_PREFIX + saveIdx;
 	}
 
 	/**
 	 * Save information about current game
 	 * to current browser.
-	 * @param {object} [state] - Object in JSON format, with
-	 *   primitive vals (defaults to game's `state` object)
+	 * @param {string|object} [saveName] - The filename to save for the given state object, Or
+	 *   the state object to save. If a string is provided, it will be used as the save name (the
+	 *   key in localStorage). If this is an object, it is saved under the game's this.saveName
+	 *   string. If no arguments are provided, the game's this.state is saved under its
+	 *   this.saveName.
+	 * @param {object} [state] - A JS object (which can be converted to JSON format, so
+	 *   prefer primitive values). If not provided, and first argument is not an object,
+	 *   this method saves the game's this.state.
 	 */
-	saveState(state) {
+	save(saveName, state) {
+		let nameToSave = "",
+			stateToSave = {};
+
+		switch(typeof saveName) {
+			case "string":
+				nameToSave = saveName;
+				if(typeof state === "object") {
+					stateToSave = state;
+				}
+				else {
+					stateToSave = this.state;
+				}
+				break;
+			case "object":
+				stateToSave = saveName;
+				nameToSave = this.saveName;
+				break;
+			default: // no arguments provided
+				nameToSave = this.saveName;
+				stateToSave = this.state;
+				break;
+		}
+
 		try {
-			localStorage.setItem(this.saveName, JSON.stringify(state || this.state));
+			console.log("Saving game data under name: " + nameToRetrieve);
+			localStorage.setItem(nameToSave, JSON.stringify(stateToSave));
 		}
 		catch(e) {
-			console.log("Error thrown during localStorage save. Possible security issue.");
+			console.log("Error thrown during localStorage save. Possible security issue, e.g., when testing save on local directory.");
 		}
 	}
 
 	/**
 	 * Loads saved information about current game from
 	 * current browser, and returns for convenience
+	 * @param {string} [saveName] - A specific save filename to try and retrieve. If
+	 *   not present, attempts to retrieve file stored in game's this.saveName.
 	 * @returns {object}
 	 */
-	loadState() {
+	load(saveName) {
 		let loadedStateString = null;
+		let nameToRetrieve = "";
+
+		if(typeof saveName === "string") {
+			nameToRetrieve = saveName;
+		}
+		else
+		if(this.saveName) {
+			nameToRetrieve = this.saveName;
+		}
+		else { // No saveName is set, or is an  empty string. See if any data is stored elsewhere
+			nameToRetrieve = this.generateSaveName();
+
+			if(nameToRetrieve.replace(CMGame.SAVE_PREFIX, "") !== "0") { // generated save file exists
+				nameToRetrieve = CMGame.SAVE_PREFIX + (parseInt( nameToRetrieve.replace(CMGame.SAVE_PREFIX, "") ) - 1);
+			}
+		}
 
 		try {
-			loadedStateString = localStorage.getItem(this.saveName);
+			console.log("Loading game data under name: " + nameToRetrieve);
+			loadedStateString = localStorage.getItem(nameToRetrieve);
 		}
 		catch(e) {
-			console.log("Error thrown during localStorage save. Possible security issue.");
+			console.log("Error thrown during localStorage save. Possible security issue, e.g., when testing save on local directory.");
 		}
 		
 		if(loadedStateString !== null) {
@@ -3434,7 +3574,6 @@ class CMGame {
 							 (circleDistance.y - .5 * rect.height)**2;
 
 		let intersecting = (cornerDistance_sq <= (circle.r**2));
-		console.log(intersecting);
 		return intersecting;
 	}
 
@@ -3443,9 +3582,11 @@ class CMGame {
 	 * Parameters start with usual drawImage
 	 * parameters for CanvasRenderingContext2D,
 	 * and follow with one options object.
+	 * @param {object} image - The image (Image instance, <img> element, etc.) to be rotated
 	 * @param {object|number} opts - Drawing options. If just
 	 *   a number is entered, this will be taken as the
-	 *   angle and the rotation will rotate about the image center
+	 *   angle and the rotation will rotate about the image center.
+	 *   This is reserved as an object for future option considerations.
 	 * @param {number} opts.angle - The angle in radians to rotate
 	 */
 	drawRotatedImage() {
@@ -3765,7 +3906,7 @@ class CMGame {
 	 * reset its current time to 0.
 	 * @param {string} soundId - a registered string identifying the sound file
 	 */
-	pauseMusic(soundId) {
+	stopMusic(soundId) {
 		CMSound.stop(soundId).then(CMGame.noop, () => {
 			try {
 				cmAudioMap.get(soundId).pause();
@@ -3775,6 +3916,41 @@ class CMGame {
 				console.log("Error pausing sound.");
 			}
 		});
+	}
+
+	/**
+	 * Zooms in on "graph" type game. Note: this
+	 * becomes buggy when changing the game's origin
+	 * while zoomed in/out.
+	 * @param {number} newScale - Number representing percentage of original picture (e.g. 0.2 for 50%)
+	 */
+	zoom(newScale) {
+
+		if(typeof newScale !== "number" || newScale <= 0 || !Number.isFinite(newScale) || Number.isNaN(newScale)) {
+			console.error("zoom() must take a positive integer or float value as its argument. Set to 1 for 100%.");
+			return;
+		}
+
+		this.zoomLevel = newScale;
+
+		this.graphScalar = this.unzoomedGraphScalar / this.zoomLevel;
+		this.tickDistance = this.unzoomedTickDistance / this.zoomLevel;
+
+		if(this.zoomLevel === 1) {
+			this.origin.x = this.unzoomedOrigin.x;
+			this.origin.y = this.unzoomedOrigin.y;
+		}
+		else {
+			this.origin.x = this.center.x + (this.unzoomedOrigin.x - this.center.x) / this.zoomLevel;
+			this.origin.y = this.center.y + (this.unzoomedOrigin.y - this.center.y) / this.zoomLevel;
+		}
+
+		for(let func of this.functions) {
+			func.updateBoundsOnResize(this.zoomLevel);
+		}
+
+		if(this.paused)
+			this.draw();
 	}
 
 	/**
@@ -4695,6 +4871,9 @@ document.addEventListener("readystatechange",
  */
 CMGame.PIXELS_FOR_SWIPE = 5;
 
+// This is used to store/retrieve game data. Do not change this for the same game.
+CMGame.SAVE_PREFIX = "cmgamesave_";
+
 // Create some setters/getters in an IIFE to keep initial variables private
 (function() {
 
@@ -5050,9 +5229,9 @@ CMGame.Sprite = class {
 	 * @param {number} y - The starting top value, or center y if circular
 	 * @param {number} widthOrRadius - The starting width value, or radius if circular
 	 * @param {number|string} heightOrCircle - The starting height value, or "circle" if circular, or "line"
-	 * @param {number|string|function} drawRule - An image or default color string or 
+	 * @param {object|string|function} drawRule - An image or default color string or 
 	 *   draw function (taking game's drawing context as its sole parameter). Default is null.
-	 * @param {string} boundingRule - How to handle collision with screen edge
+	 * @param {string} [boundingRule="none"] - How to handle collision with screen edge
 	 *   "wraparound": object appears on other side of screen once completely off screen
 	 *   "bounce": object bounces away from wall with same momentum
 	 *   "clip": object is pushed back so that it just rests on the wall
@@ -5143,10 +5322,14 @@ CMGame.Sprite = class {
 		this.ondraw = CMGame.noop;
 
 		this.layer = layer;
+
+		/**
+		// @deprecated Use addSprite() instead
 		if(!omitFromSprites) {
 			this.game.sprites.push(this);
 			this.game.sprites.sort((a, b) => a.layer - b.layer);
 		}
+		*/
 
 		this.onscreen = false;		
 		if(this.x > this.game.width ||
@@ -5202,7 +5385,10 @@ CMGame.Sprite = class {
 		}());
 	}
 
-	/** Removes this sprite from current game */
+	/**
+	 * Removes this sprite from current game
+	 * @deprecated - use game.removeSprite instead
+	 */
 	destroy() {
 		this.game.sprites
 				.splice(this.game.sprites.indexOf(this), 1);
@@ -5659,7 +5845,7 @@ Object.defineProperty(CMGame.Sprite.prototype, "center", {
 		if(this.shape === "line") {
 			return CMGame.midpoint(this.start, this.end);
 		}
-		else {
+		else { // "circle"
 			return new CMPoint(
 				this.x,
 				this.y
@@ -6084,7 +6270,7 @@ CMGame.Function = class {
 	 * @param {number} oldScalar - graphScalar before the change
 	 */
 	updateBoundsOnResize(oldScalar) {
-		if(this.game.origin.x + (oldScalar * this.start.x) === 0) {
+		if(this.game.origin.x - (oldScalar * this.start.x) === 0) {
 			this.start.x = -(this.game.origin.x / this.game.graphScalar);
 		}
 
@@ -6261,7 +6447,7 @@ CMGame.Function = class {
 	 * as an optimization.
 	 * @param {CanvasRenderingContext2D} ctx - The game's drawing context
 	 */
-	drawGraphPath(ctx) {
+	drawGraphPath(ctx=this.game.offscreenCtx) {
 		if(this.pathBelow) {
 			ctx.fillStyle = this.fillStyleBelow;
 			ctx.fill(this.pathBelow);
@@ -7398,7 +7584,7 @@ class CMVertex extends CMGame.Sprite {
 
 /** A class to manage graph theory "edges" */
 class CMEdge extends CMGame.Sprite {
-	
+
 	/**
 	 * Creates a CMEdge instance. Note that in standard
 	 * graph theory, every edge is defined by two vertices.
@@ -7686,7 +7872,7 @@ class CMEdge extends CMGame.Sprite {
 /**
  * But wait! There's more...
  */
- 
+
 /** A class to quickly create n-gons for 2D space */
 class CMnGon extends CMGame.Sprite {
 	/**
