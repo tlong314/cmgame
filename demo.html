@@ -4,18 +4,21 @@
 <meta charset="utf-8" />
 <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
 <title>CMGame Demo</title>
-<meta name="apple-mobile-web-app-capable" content="yes" />
 <link rel="stylesheet" href="css/cmgame.css" />
 </head>
 <body>
-<article id="cmLoading">
+
+<!-- A very simple progress bar -->
+<div id="cmLoading">
 	<h1>Loading...</h1>
-	<meter id="cmLoadingMeter" />
-</article>
-<article id="cmTitle">
-	<h1>My Game</h1>
-	<p class="cm-center-text">
-		Welcome to my game!
+	<progress id="cmLoadingProgress" title="Loaded resources"></progress>
+</div>
+
+<div id="cmTitle" class="cm-text-almost_black">
+	<h1 class="cm-text-almost_black">CMGame Demo</h1>
+	<p>
+		Welcome to a simple demo of CMGame Engine. This draws the function
+		<i class="cm-variable">y</i> = sin(<i class="cm-variable">x</i>) + 1, animating it from left to right.
 	</p>
 	<p class="cm-center-text">
 		<label for="playBtn">
@@ -26,9 +29,9 @@
 			Play now
 		</label>
 	</p>
-</article>
+</div>
 <div id="cmWrapper">
-	<canvas id="cmCanvas" width="640" height="480">
+	<canvas id="cmCanvas" width="640" height="480" class="cm-shadow-black">
 		Nothing to see here...
 	</canvas>
 </div>
@@ -44,28 +47,38 @@ var game = new CMGame({
 	tickDistance: 40
 });
 
-var shift = 0; // We'll use this later
+// These options add some color and animation to the graph
+var options = {
+	strokeStyle: CMGame.Color.ORANGE, // Use built in "orange" color
+	start: {
+		x: -8 // Initially, graph will start at x=-8 (-8 here is the "real" number, not canvas pixel)
+	},
+	end: {
+		x: -8 // Initially, graph will end at x=-8
+	},
+	velocity: {
+		end: {
+			x: .05 // On each frame, the graph's "end" x will increase by .05 (as a real number, not .05 pixels)
+		}
+	}
+};
 
 // Create a basic function, and add it to the game
 var basicFunc = new CMGame.Function(
 		game,
 		function(x) {
-			return Math.sin(x - shift) + 1;
-		}
+			return Math.sin(x) + 1;
+		},
+		options // Remove this to just see a basic graph
 	);
 
 game.addFunction(basicFunc);
-
-// Add some animation by setting an onupdate function
-game.onupdate = function() {
-	shift -= 0.01;
-};
 
 // Add to the drawing by setting an ondraw function
 game.ondraw = function(ctx) { // ctx is the drawing "context"
 	ctx.fillStyle = CMGame.Color.ORANGE;
 	ctx.font = "20px Arial";
-	ctx.fillText("y = sin(x + " + shift.toFixed(2) + ")", 80, 50);
+	ctx.fillText("y = sin(x) + 1", 80, 1.5 * game.graphScalar);
 };
 
 </script>
