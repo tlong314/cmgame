@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en-US" class="cm-gradient-dark">
+<head>
+<meta charset="utf-8" />
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
+<title>CMGame Demo</title>
+<link rel="stylesheet" href="css/cmgame.css" />
+</head>
+<body>
+
+<div id="cmLoading" class="cm-almost_black">
+	<h1 class="cm-text-white">Loading...</h1>
+	<progress id="cmLoadingProgress" title="Loaded resources" value="0" max="0" class="cm-small-shadow-almost_white"></progress>
+	<p>
+		<span class="cm-text-white">Powered by CMGame Engine</span>
+		<br/>
+		<a href="https://github.com/tlong314/cmgame" class="cm-text-white">github.com/tlong314/cmgame</a>
+	</p>
+</div>
+
+<div id="cmTitle" class="cm-dark_gray cm-text-almost_white">
+	<h1>CMGame Demo 2</h1>
+	<p class="cm-center-text">
+		<i>Welcome to another CMGame Engine demo!</i>
+	</p>
+	<p>
+		This one displays normal functions and "x of y" functions,
+		all dynamically defined, and a zoom effect around the origin.
+	</p>
+	<p class="cm-center-text">
+		<label for="playBtn">
+			<button id="playBtn" title="Click to play" class="cm-play-button">
+				<div class="cm-play"></div>
+			</button>
+			<br/>
+			Click to watch demo
+		</label>
+	</p>
+</div>
+
+<div id="cmWrapper">
+	<canvas id="cmCanvas" width="640" height="480" class="cm-shadow-almost_black">
+		Nothing to see here...
+	</canvas>
+</div>
+
+<script src="js/cmgame.js"></script>
+<script>
+
+// Create the game
+var game = new CMGame({
+	startBtn: "#playBtn",
+	hideOnStart: ["#playBtn", "#cmTitle"],
+	graphScalar: 40,
+	tickDistance: 40
+});
+
+var shift = 0; // We'll use this later
+
+// Create a basic function, and add it to the game
+var basicFunc = new CMGame.Function(
+		game,
+		function(x) {
+			return Math.sin(x - 9 * shift);
+		},
+		{
+			lineWidth: 2
+		}
+	);
+
+game.addFunction(basicFunc);
+
+// Create a basic function, and add it to the game
+var basicFunc2 = new CMGame.Function(
+		game,
+		function(x) {
+			return Math.cos(x + 20 * shift);
+		},
+		{
+			strokeStyle: CMGame.Color.PURPLE,
+			lineWidth: 2
+		}
+	);
+
+game.addFunction(basicFunc2);
+
+// Create a basic function, and add it to the game
+var basicFunc3 = new CMGame.Function(
+		game,
+		function(y) {
+			return Math.sin(y - 9 * shift);
+		},
+		{
+			type: "xofy",
+			strokeStyle: CMGame.Color.DARK_RED,
+			lineWidth: 2
+		}
+	);
+
+game.addFunction(basicFunc3);
+
+// Create a basic function, and add it to the game
+var basicFunc4 = new CMGame.Function(
+		game,
+		function(y) {
+			return Math.cos(y + 20 * shift);
+		},
+		{
+			type: "xofy",
+			strokeStyle: CMGame.Color.BLUE,
+			lineWidth: 2
+		}
+	);
+
+game.addFunction(basicFunc4);
+
+let latestZoom = 1;
+let scaleChange = 1/1.001;
+
+// Add some animation by setting an onupdate function
+game.onupdate = function() {
+	shift -= 0.01; // Change the position of the wave functions
+
+	latestZoom *= scaleChange;
+	game.zoom( latestZoom );
+
+	if(latestZoom <= .25) {
+		scaleChange = 1.001;
+	}
+	else
+	if(latestZoom >= .75) {
+		scaleChange = 1 / 1.001;
+	}
+};
+</script>
+</body>
+</html>
