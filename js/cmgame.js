@@ -1,8 +1,8 @@
 /**
  * CMGame
  *
- * An engine for building games inspired
- * by college math. Built for use on the website
+ * A JS engine for games inspired by college math.
+ * Built for use on the website
  *
  *     collegemathgames.com
  *
@@ -5288,26 +5288,21 @@ CMGame.Sprite = class {
 	 * @param {boolean} omitFromSprites=false - true if you do not want engine to manage
 	 *   (this is primarily for extended classes, like VennRegion)
 	 */
-	constructor(game, x, y, widthOrRadius, heightOrCircle,
-			drawRule=null, boundingRule="none", layer=0, omitFromSprites=false) {
+	constructor(game, x, y, widthOrRadius, heightOrCircle, drawRule=null, boundingRule="none", layer=0, omitFromSprites=false) {
 
 		this.game = game;
 		this.x = x;
 		this.y = y;
-		this.boundingRule = boundingRule;
+
+		// Do not override this - it is used with Object.defineProperty. Override boundingRule instead.
+		this.boundingRulePrivate = boundingRule;
+
 		this.boundingRuleTop = "none";
 		this.boundingRuleRight = "none";
 		this.boundingRuleBottom = "none";
 		this.boundingRuleLeft = "none";
 
-		if(Array.isArray(this.boundingRule)) {
-			[this.boundingRuleTop, this.boundingRuleRight,
-				this.boundingRuleBottom, this.boundingRuleLeft] = this.boundingRule;
-		}
-		else {
-			[this.boundingRuleTop, this.boundingRuleRight,
-				this.boundingRuleBottom, this.boundingRuleLeft] = new Array(4).fill(this.boundingRule);
-		}
+		this.boundingRule = boundingRule;
 
 		this.shape;
 		this.width;
@@ -5905,7 +5900,13 @@ Object.defineProperty(CMGame.Sprite.prototype, "center", {
  */
 Object.defineProperty(CMGame.Sprite.prototype, "boundingRule", {
 
+	get() {
+		return this.boundingRulePrivate;
+	},
+
 	set(newRule) {
+		this.boundingRulePrivate = newRule;
+
 		if(Array.isArray(newRule)) {
 			[this.boundingRuleTop, this.boundingRuleRight,
 				this.boundingRuleBottom, this.boundingRuleLeft] = newRule;
