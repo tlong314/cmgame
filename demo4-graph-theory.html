@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8" />
+<meta name='viewport' content='width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0' />
+<title>CMGame Demo 4</title>
+<link type="text/css" rel="stylesheet" href="css/cmgame.min.css" />
+</head>
+<body>
+<article id="cmLoading">
+	<h1>Loading...</h1>
+	<progress id="cmLoadingProgress" title="Loaded resources"></progress>
+</article>
+<article id="cmTitle">
+	<h1>CMGame Demo 4</h1>
+	<h2>Graph Theory</h2>
+	<p class="cm-center-text">
+		CMGame Engine can be used to create games with vertices
+		and edges, as used in graph theory.
+	</p>
+	<p class="cm-center-text">
+		<label for="playBtn">
+			<button id="playBtn" title="Click to play" class="cm-play-button">
+				<div class="cm-play"></div>
+			</button>
+			<br/>
+			Try now
+		</label>
+	</p>
+</article>
+<div id="cmWrapper">
+	<canvas id="cmCanvas" width="640" height="480" class="cm-shadow-almost_black">
+		This browser does not support required assets
+	</canvas>
+</div>
+<script src="js/cmgame.min.js"></script>
+<script>
+
+// Create the game
+const game = new CMGame({
+	startBtn: "#playBtn",
+	type: "graphtheory",
+	hideOnStart: ["#playBtn", "#cmTitle"]
+});
+
+// Create a new vertex, define
+let v1 = new CMVertex(game, 200, 100, 50, CMGame.Color.ORANGE, {
+	text: "v1",
+	x: 250,
+	y: 175
+});
+
+// Add to the game
+game.addVertex( v1 );
+
+// Vertices are still "sprites" so follow similar rules, like moving with velocity
+v1.velocity.y = 0.75;
+v1.boundingRule = "bounce";
+
+// Make label move with it
+v1.onupdate = () => {
+	v1.label.x += v1.velocity.x;
+	v1.label.y += v1.velocity.y;
+};
+
+// Create and add a second vertex
+let v2 = new CMVertex(game, 400, 180, 50, CMGame.Color.ORANGE, {
+	text: "v2",
+	x: 450,
+	y: 255
+});
+
+game.addVertex( v2 );
+
+// Create and add an edge. With 2 vertices defined, edge position is defined by those vertices.
+// The "directed" option is set to true, so will point in direction you enter v1 and v2 here.
+let e1 = new CMEdge(game, v1, v2, 20, CMGame.Color.ORANGE, {}, true);
+game.addEdge( e1 );
+
+// Try clicking on or pressing the vertices or edges
+let pressedText = "Click on something!";
+
+game.onpressstart = (point) => {
+	if(v1.containsPoint(point)) {
+		pressedText = "v1 clicked";
+	}
+	else
+	if(v2.containsPoint(point)) {
+		pressedText = "v2 clicked";
+	}
+	else
+	if(e1.containsPoint(point)) {
+		pressedText = "edge clicked";
+	}
+
+	if(point.x < 180 && point.y > game.height - 100) {
+		e1.changeDirection();
+	}
+};
+
+// Draw text onto game
+game.ondraw = (ctx) => {
+
+	ctx.font = "24px Arial";
+	game.drawStringsCentered([ctx.font], [pressedText], 120, 120, {
+		fillStyle: CMGame.Color.ALMOST_BLACK,
+		angle: -Math.PI / 4
+	});
+
+	ctx.fillStyle = CMGame.Color.LIGHT_GRAY;
+	ctx.fillText("Click to here to", 5, game.height - 50);
+	ctx.fillText("change direction", 5, game.height - 25);
+};
+
+</script>
+</body>
+</html>

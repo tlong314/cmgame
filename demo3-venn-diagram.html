@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8" />
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
+<title>CMVenn Demo 3</title>
+<link type="text/css" rel="stylesheet" href="css/cmgame.min.css" />
+</head>
+<body>
+<article id="cmLoading">
+	<h1>Loading...</h1>
+	<progress id="cmLoadingProgress" title="Loaded resources"></progress>
+</article>
+<article id="cmTitle">
+	<h1>CMGame Demo 3</h1>
+	<h2>Venn Diagrams</h2>
+	<p class="cm-center-text">
+		CMGame Engine can be used to easily create standard
+		Venn Diagrams.
+	</p>
+	<p class="cm-center-text">
+		<label for="playBtn">
+			<button id="playBtn" title="Click to play" class="cm-play-button">
+				<div class="cm-play"></div>
+			</button>
+			<br/>
+			Try now
+		</label>
+	</p>
+</article>
+<div id="cmWrapper">
+	<canvas id="cmCanvas" width="640" height="480" class="cm-small-shadow-black">
+		This browser does not support required assets
+	</canvas>
+	<br/>
+	<span>Click any region!</span>
+</div>
+<script src="js/cmgame.min.js"></script>
+<script>
+
+// Let's name our game as vennDiagram for clarity
+let vennDiagram = new CMGame({
+	startBtn: "#playBtn",
+	type: "venn",
+	hideOnStart: ["#playBtn", "#cmTitle"]
+});
+
+// Make it a 3-set Venn Diagram, of variation 2 (upside down triangle)
+vennDiagram.setNumberOfSets(3, 2);
+
+// Handle all clicks/taps
+vennDiagram.onpressstart = function(e) {
+
+	// toggle a region's "filled" property when clicked/tapped
+	for(let [id, region] of vennDiagram.vennRegions) {
+		if(region.containsPoint(e)) {
+			region.filled = !region.filled;
+		}
+	}
+};
+
+// Draw instructions: "Click any region!"
+vennDiagram.ondraw = function(ctx) {
+	ctx.font = vennDiagram.font.rel(16) + "px Arial"; // Will render at 16px even if canvas is scaled down on small screen
+	ctx.fillText("Click any region!", 5, vennDiagram.height - 50);
+};
+
+</script>
+</html>

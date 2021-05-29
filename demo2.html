@@ -3,8 +3,24 @@
 <head>
 <meta charset="utf-8" />
 <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
-<title>CMGame Demo</title>
-<link rel="stylesheet" href="css/cmgame.css" />
+<title>CMGame Demo 2</title>
+<link rel="stylesheet" href="css/cmgame.min.css" />
+<style>
+
+#cmWrapper button {
+	position: absolute;
+	top: calc(100% + 15px)
+}
+
+#pngBtn {
+	left: 20px;
+}
+
+#videoBtn {
+	right: 20px;
+}
+
+</style>
 </head>
 <body>
 
@@ -39,26 +55,50 @@
 </div>
 
 <div id="cmWrapper">
-	<canvas id="cmCanvas" width="640" height="480" class="cm-shadow-almost_black">
+	<canvas id="cmCanvas" class="cm-shadow-almost_black" width="640" height="480">
 		Nothing to see here...
 	</canvas>
+	<br/>
+	<button id="pngBtn">PNG</button>
+	<button id="videoBtn">3sec Video</button>
 </div>
 
-<script src="js/cmgame.js"></script>
+<script src="js/cmgame.min.js"></script>
 <script>
 
 // Create the game
-var game = new CMGame({
+const game = new CMGame({
 	startBtn: "#playBtn",
 	hideOnStart: ["#playBtn", "#cmTitle"],
 	graphScalar: 40,
 	tickDistance: 40
 });
 
-var shift = 0; // We'll use this later
+// Remember to use an onload handler (or CMGame.onpageload) before trying to bind events to HTML elements
+CMGame.onpageload = () => {
+	console.log("Page and DOM elements loaded");
+
+	document.getElementById("pngBtn").addEventListener("click", function(e) {
+		e.preventDefault();
+		game.takeScreenshot();
+	}, false);
+
+	// We'll disabled the video button until done recording
+	document.getElementById("videoBtn").addEventListener("click", function(e) {
+		e.preventDefault();
+		document.getElementById("videoBtn").disabled = true;
+
+		game.takeScreenVideo(3100).then(() => {
+			document.getElementById("videoBtn").disabled = false;
+		});
+
+	}, false);
+};
+
+let shift = 0; // We'll use this later
 
 // Create a basic function, and add it to the game
-var basicFunc = new CMGame.Function(
+const basicFunc = new CMGame.Function(
 		game,
 		function(x) {
 			return Math.sin(x - 9 * shift);
@@ -71,7 +111,7 @@ var basicFunc = new CMGame.Function(
 game.addFunction(basicFunc);
 
 // Create a basic function, and add it to the game
-var basicFunc2 = new CMGame.Function(
+const basicFunc2 = new CMGame.Function(
 		game,
 		function(x) {
 			return Math.cos(x + 20 * shift);
@@ -84,8 +124,7 @@ var basicFunc2 = new CMGame.Function(
 
 game.addFunction(basicFunc2);
 
-// Create a basic function, and add it to the game
-var basicFunc3 = new CMGame.Function(
+const basicFunc3 = new CMGame.Function(
 		game,
 		function(y) {
 			return Math.sin(y - 9 * shift);
@@ -100,7 +139,7 @@ var basicFunc3 = new CMGame.Function(
 game.addFunction(basicFunc3);
 
 // Create a basic function, and add it to the game
-var basicFunc4 = new CMGame.Function(
+const basicFunc4 = new CMGame.Function(
 		game,
 		function(y) {
 			return Math.cos(y + 20 * shift);
@@ -118,7 +157,7 @@ let latestZoom = 1;
 let scaleChange = 1/1.001;
 
 // Add some animation by setting an onupdate function
-game.onupdate = function() {
+game.onupdate = () => {
 	shift -= 0.01; // Change the position of the wave functions
 
 	latestZoom *= scaleChange;
@@ -130,6 +169,20 @@ game.onupdate = function() {
 	else
 	if(latestZoom >= .75) {
 		scaleChange = 1 / 1.001;
+	}
+};
+
+/**
+ * Unlike screenshots, videos won't take the extra time to "guess" a
+ * background on each frame if canvas background is transparent.
+ * You can provide a rule to draw a background (in this case just
+ * filling with white) just before drawing other elements in current
+ * frame.
+ */
+game.onbeforedraw = (ctx) => {
+	if(game.recordingVideo) {
+		ctx.fillStyle = CMGame.Color.WHITE;
+		ctx.fillRect(0, 0, game.width, game.height);
 	}
 };
 </script>
