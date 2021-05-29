@@ -75,7 +75,24 @@ var game = new CMGame(options);
 
 ```
 
-## Options
+The main focus of this engine is working with function graphs on the Cartesian plane. As described further below, you can create a function and add it to the game after the game has been defined. The code below creates a game with default options, starts the game immediately, then adds the function graph sin(x) + 1 to the game.
+
+```javascript
+var game = new CMGame().start();
+
+var func = new CMGame.Function(
+  game,
+  function(x) {
+    return Math.sin(x) + 1;
+  }
+);
+
+game.addFunction(func);
+```
+
+The section "Adding Functions" below describes the various options that can be defined for an added function.
+
+## CMGame Constructor Options
 
 As discussed above, we can pass in various options when creating our game. These are described below.
 
