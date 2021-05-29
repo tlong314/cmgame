@@ -1077,71 +1077,6 @@ class CMSwipe {
 /** Manages game objects and processes */
 class CMGame {
 	constructor(opts={}) {
-		/**
-		defaults = {
-			startBtn: null,
-			fullscreen: false,
-			enterFullscreenBtn: null,
-			exitFullscreenBtn: null,
-			screenshotBtn: null,
-			toggleSoundBtn: null,
-			toggleMusicBtn: null,
-
-			type: null, // "venn" "graphtheory"
-			images: {},
-			audios: {},
-
-			onload: CMGame.noop,
-
-			// Can override after instantiating
-			onbeforestart: CMGame.noop,
-			onstart: CMGame.noop,
-			onbeforeupdate: CMGame.noop,
-			onupdate: CMGame.noop,
-			onbeforedraw: CMGame.noop,
-			ondraw: CMGame.noop,
-			oncleardraw: CMGame.noop,
-
-			onkeydown: CMGame.noop,
-			onkeyup: CMGame.noop,
-
-			onpressstart: CMGame.noop,
-			onpressmove: CMGame.noop,
-			onpressend: CMGame.noop,
-			onswipe: CMGame.noop,
-			onkeydown: CMGame.noop,
-			onkeyup: CMGame.noop,
-
-			hideOnStart: [],
-			
-			originByRatio: null, // array
-			tickDistance: 20,
-			graphScalar: 20,
-			soundOn: false,
-			musicOn: false,
-			frameCap: Infinity,
-			origin: null,
-
-			wrapper: null,
-			canvas: null,
-			backgroundCanvas: null,
-
-			pressElement: null,
-
-			// colors
-			tickStyle: "",
-			xAxisStyle: "",
-			yAxisStyle: "",
-			gridStyle: "",
-
-			ignoreNumLock: false,
-
-			multiTouch: false,
-
-			doodleOptions: {}
-		};
-		*/
-
 		let self = this;
 		this.images = {};
 		this.audios = {};
@@ -1175,7 +1110,7 @@ class CMGame {
 					'<link rel="stylesheet" href="js/cmgame/css/cmgame.css" />\n\n');
 			}
 		}
-		
+
 		/**
 		 * Again, for complete noobs. Attempts to create
 		 * standard "mobile-first" meta tag for the viewport,
@@ -1428,10 +1363,10 @@ class CMGame {
 			);
 		}
 
-		this.center = new CMPoint(
+		this.center = Object.freeze(new CMPoint(
 			.5 * this.width,
 			.5 * this.height
-		);
+		));
 
 		/** Dev may want to allow context menu for downloading screenshot */
 		if(!opts.allowContextMenu) {
@@ -1662,12 +1597,11 @@ class CMGame {
 		// For devs who just want the engine, no math drawing
 		if(this.type === "none") {
 			this.draw = function(ctx=this.offscreenCtx) {
-				this.onbeforedraw(ctx);
 				ctx.clearRect(0, 0,
 					this.offscreenCanvas.width,
 					this.offscreenCanvas.height);
 
-				this.oncleardraw(ctx);
+				this.onbeforedraw(ctx);
 
 				// Removed all built-in math drawing logic from here
 
@@ -1721,12 +1655,11 @@ class CMGame {
 			}
 
 			this.draw = function(ctx=this.offscreenCtx) {
-				this.onbeforedraw(ctx);
 				ctx.clearRect(0, 0,
 					this.offscreenCanvas.width,
 					this.offscreenCanvas.height);
 
-				this.oncleardraw(ctx);
+				this.onbeforedraw(ctx);
 
 				// Removed all built-in graph drawing logic from here
 				for(let [id, vregion] of this.vennRegions) {
@@ -1787,12 +1720,11 @@ class CMGame {
 			}
 
 			this.draw = function(ctx=this.offscreenCtx) {
-				this.onbeforedraw(ctx);
 				ctx.clearRect(0, 0,
 					this.offscreenCanvas.width,
 					this.offscreenCanvas.height);
 
-				this.oncleardraw(ctx);
+				this.onbeforedraw(ctx);
 
 				for(let edge of this.edges) {
 					edge.draw(ctx);
@@ -1844,7 +1776,7 @@ class CMGame {
 			"onupdate",
 			"onbeforedraw",
 			"ondraw",
-			"oncleardraw",
+			// "oncleardraw", // @deprecated
 			"ontouchstart",
 			"ontouchmove",
 			"ontouchend",
@@ -1860,6 +1792,34 @@ class CMGame {
 
 		if(typeof opts.onload === "function") {
 			opts.onload();
+		}
+
+		this.screenshotCanvas = null;
+		this.screenshotCtx = null;
+		this.screenVideoCanvas = null;
+		this.screenVideoCtx = null;
+		this.recordingVideo = false;
+		this.screenVideoDetails = null;
+
+		// Base output calculations on ideal MP4 resolution of 1920x1080
+		let videoWidthScalar = 1920 / this.width;
+		let videoHeightScalar = 1080 / this.height;
+
+		if(videoWidthScalar > videoHeightScalar) {
+			this.screenVideoDetails = {
+				x: Math.max((1920 - this.width * videoHeightScalar) / 2, 0),
+				y: Math.max((1080 - this.height * videoHeightScalar) / 2, 0),
+				width: this.width * videoHeightScalar,
+				height: this.height * videoHeightScalar
+			};
+		}
+		else {
+			this.screenVideoDetails = {
+				x: Math.max((1920 - this.width * videoWidthScalar) / 2, 0),
+				y: Math.max((1080 - this.height * videoWidthScalar) / 2, 0),
+				width: this.width * videoWidthScalar,
+				height: this.height * videoWidthScalar
+			};
 		}
 	}
 
@@ -2048,13 +2008,14 @@ class CMGame {
 	 * stream only comes from the output canvas.
 	 * Thus, to use this method, you should draw
 	 * your desired background directly onto the 
-	 * canvas, e.g., with game.oncleardraw.
+	 * canvas, e.g., with game.onbeforedraw.
 	 * Also note that support may vary, so this is
 	 * mainly for devs to save game demo videos,
 	 * say for advertising.
-	 * Returns a Promise, resolving with an object with "video"
-	 * property set to an output <video> element (if defined) and
-	 * a "src" property set to the captured video source string.
+	 * Returns a Promise, resolving (after video stops recording)
+	 * with an object with "video" property set to an output <video>
+	 * element (if defined) and a "src" property set to the captured
+	 * video source string.
 	 * @param {number|object} [options={}] - A plain JS object of options. If undefined,
 	 *   defaults are used. If a number, defaults are used except for duration, which is
 	 *   set to that number.
@@ -2063,18 +2024,23 @@ class CMGame {
 	 * @param {number} [options.fps=this.FPS] - Desired frame rate for capture (default's to game's rate)
 	 * @param {number} [options.mimeType="video/mp4"] - Desired mimeType for the
 	 *   output video. If not present, will be inferred from options.filename (the preferred option)
-	 * @param {string|Video} [output] Option for handling. "download"  to download immediately, "none"
+	 * @param {string|Video} [options.output] Option for handling. "download"  to download immediately, "none"
 	 *   to do nothing (e.g., if dev wants to wait for Promise), or an HTMLVideo element whose source will
 	 *   be set to the output video once available.
 	 * @returns {Promise}
 	 */
 	takeScreenVideo(options={}) {
+		if(this.recordingVideo) {
+			console.error("Cannot record multiple videos simultaneously");
+			return;
+		}
+
 		let self = this;
 
 		let opts = {
 			start: 0,
 			duration: 5000,
-			fps: CMGame.FPS,
+			fps: Math.round(CMGame.FPS),
 			mimeType: "video/mp4", // video/mp4 or video/webm, etc.
 			filename: "cmgscreenvideo.mp4", // Better choice, as mimeType will be inferred
 			output: "download" // set to "download", "none", or a <video> element, or use returned Promise data
@@ -2136,21 +2102,34 @@ class CMGame {
 			}
 		}
 
+		if(!this.screenVideoCanvas) {
+			this.screenVideoCanvas = document.createElement("canvas");
+
+			// Aim for resolution of 1920x1080 for ideal MP4 output
+			this.screenVideoCanvas.width = 1920;
+			this.screenVideoCanvas.height = 1080;
+			this.screenVideoCanvas.style.width = 1920 + "px";
+			this.screenVideoCanvas.style.height = 1080 + "px";
+
+			this.screenVideoCtx = this.screenVideoCanvas.getContext("2d", {alpha: false});
+		}
+
 		return new Promise(function(resolve, reject) {
 
-			let stream = self.canvas.captureStream(opts.fps);
+			let stream = self.screenVideoCanvas.captureStream(opts.fps);
 			let recordedChunks = [];
 
 			/**
 			 * Only webm seems to be supported for the initial stream -
 			 * requested mimeType will be used for the output Blob
 			 */
-			let streamOptions = { mimeType: "video/webm; codecs=vp9" };
-			let mediaRecorder = new MediaRecorder(stream, streamOptions);
+			//let streamOptions = { mimeType: "video/webm; codecs=vp9" };
+			//let mediaRecorder = new MediaRecorder(stream, streamOptions);
+			let mediaRecorder = new MediaRecorder(stream);
 
 			setTimeout(() => {
 				mediaRecorder.ondataavailable = function(e) {
-					if (e.data.size > 0) {
+					if(e.data.size > 0) {
 						recordedChunks.push(e.data);
 					}
 				};
@@ -2186,11 +2165,16 @@ class CMGame {
 					resolve(resolvedObj);
 				};
 
-				mediaRecorder.start();
+				// Don't start counting duration until recording starts
+				mediaRecorder.onstart = () => {
+					setTimeout(() => {
+						mediaRecorder.stop();
+						self.recordingVideo = false;
+					}, opts.duration); // Stop recording only after requested time
+				};
 
-				setTimeout(() => {
-					mediaRecorder.stop();
-				}, opts.duration); // Stop recording only after requested time
+				mediaRecorder.start();
+				self.recordingVideo = true;
 			}, opts.start); // Start recording only after requested time
 		});
 	}
@@ -2252,8 +2236,11 @@ class CMGame {
 	/** These are meant to be overridden */
 	onbeforeupdate(frameCount) {} // Occurs just before game's update()
 	onupdate(frameCount) {} // Occurs just after game's update()
-	onbeforedraw(ctx) {} // Occurs just before game's draw()
-	oncleardraw(ctx) {} // Occurs after previous screen clear but before current draw()
+	onbeforedraw(ctx) {} // Occurs just before game's draw(), but after previous screen was cleared
+
+	// @deprecated - This was drawn after screen clear before current draw (onbefore draw was drawn before screen clear)
+	// oncleardraw(ctx) {} // Occurs after previous screen clear but before current draw()
+
 	ondraw(ctx) {} // Occurs just after game's draw()
 	onswipe(/* CMSwipe */ cmSwipe) {} // Triggered by significant mousemove or touchmove
 
@@ -2301,14 +2288,13 @@ class CMGame {
 	}
 
 	/**
-	 * Draws screen in current frame
+	 * Draws game screen in current frame
 	 * @param {CanvasRenderingContext2D} ctx - The drawing context
 	 */
 	draw(ctx=this.offscreenCtx) {
-		this.onbeforedraw(ctx);
 		ctx.clearRect(0, 0,
 			this.offscreenCanvas.width, this.offscreenCanvas.height);
-		this.oncleardraw(ctx);
+		this.onbeforedraw(ctx);
 
 		// Background grid
 		if(this.gridStyle && this.gridStyle !== CMGame.Color.TRANSPARENT) {
@@ -2400,6 +2386,14 @@ class CMGame {
 		}
 
 		this.ondraw(ctx);
+
+		if(this.recordingVideo) {
+			this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+				this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+
+			this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+				this.screenVideoDetails.width, this.screenVideoDetails.height);
+		}
 	}
 
 	/**
@@ -3587,7 +3581,7 @@ class CMGame {
 	 *   a number is entered, this will be taken as the
 	 *   angle and the rotation will rotate about the image center.
 	 *   This is reserved as an object for future option considerations.
-	 * @param {number} opts.angle - The angle in radians to rotate
+	 * @param {number} opts.angle - The angle in radians to rotate (clockwise, from viewer's perspective)
 	 */
 	drawRotatedImage() {
 		let numArgs = arguments.length; // 4, 6, or 10, with options
@@ -3639,9 +3633,15 @@ class CMGame {
 	 *	  ["2", "&pi;", " - checked"],
 	 *   200, 100);
 	 *
-	 * @param {string[]} fonts - The list of fonts to use in order
+	 * @param {string[]|string} fonts - The list of fonts to use in order
 	 *   (cycles back to beginning of strings.length > fonts.length)
-	 * @param {string[]} strings - The strings to write in order
+	 *   or a single font being used foor all strings. If a single font string
+	 *   is provided, it is read as a single-element array. If a falsy value
+	 *   or empty string is provided, game's current font is used.
+	 * @param {string[]|string} strings - The strings to write in order
+	 *   or a single string being drawn. If a single string is provided,
+	 *   it is interpreted as a single-element array (ctx.fillText might
+	 *   be more appropriate in this case).
 	 * @param {number} x - The starting x position of the full string
 	 * @param {number} y - The y position of the full string
 	 * @param {object} [options={}] - An object of options
@@ -3664,16 +3664,37 @@ class CMGame {
 			opts[key] = (typeof options[key] !== "undefined") ? options[key] : defaults[key]
 		}
 
-		if(opts.fillStyles.length === 0) {
+		if(typeof opts.fillStyles === "string") {
+			opts.fillStyles = [opts.fillStyles];
+		}
+		else
+		if(!opts.fillStyles || opts.fillStyles.length === 0) {
 			opts.fillStyles = [this.offscreenCtx.fillStyle];
 		}
 
-		if(opts.strokeStyles.length === 0) {
+		if(typeof opts.strokeStyles === "string") {
+			opts.strokeStyles = [opts.strokeStyles];
+		}
+		else
+		if(!opts.strokeStyles || opts.strokeStyles.length === 0) {
 			opts.strokeStyles = [this.offscreenCtx.strokeStyle];
 		}
 
 		if(typeof opts.colors !== "undefined") {
 			console.warn("\"colors\" is not a valid option for drawStrings(). Use \"fillStyles\" or \"strokeStyles\" instead.");
+		}
+
+		if(typeof fonts === "string") {
+			fonts = [fonts];
+		}
+
+		if(typeof strings === "string") {
+			strings = [strings];
+		}
+
+		if(!fonts || fonts.length === 0) {
+			fonts = [this.offscreenCtx.font];
+			numFonts = 1;
 		}
 
 		let numFonts = fonts.length;
@@ -3705,11 +3726,24 @@ class CMGame {
 	 * dev may want the full string width before hand.
 	 * This method calculates that measurement without
 	 * drawing to the screen. No x or y required.
-	 * @param {string[]} fonts - Array of the fonts to use in order (cycles if > strings.length)
-	 * @param {string[]} strings - Array of the strings to write in order
+	 * @param {string[]|string} fonts - Array of the fonts to use in order (cycles if > strings.length);
+	 *   or single string with font to use. If null (or falsy value) is provided, will use game's current font.
+	 * @param {string[]|string} strings - Array of the strings to write in order. Or
+	 *   a single string that is being measured.
 	 * @returns {number} The total string width as if drawn
 	 */
 	measureStrings(fonts, strings) {
+		if(typeof fonts === "string") {
+			fonts = [fonts];
+		}
+		else
+		if(!fonts || fonts.length === 0) {
+			fonts = [this.offscreenCtx.font];
+		}
+
+		if(typeof strings === "string") {
+			strings = [strings];
+		}
 
 		let numFonts = fonts.length;
 		let numStrings = strings.length;
@@ -3736,7 +3770,7 @@ class CMGame {
 	 * @param {boolean} [options.stroke=false] Will use strokeText if true
 	 * @param {boolean} [options.fillStyles[]] An array of colors, gradients, etc. to fill with
 	 * @param {boolean} [options.strokeStyles[]] An array of colors, gradients, etc. to stroke with
-	 * @param {number} [options.angle=0] An angle (radians) to rotate by
+	 * @param {number} [options.angle=0] An angle (radians) to rotate by (clockwise, from viewer's perspective)
 	 * @param {number} [options.centerVertically=true] If true uses textBaseline="middle"
 	 * @returns {number} The ending x of the complete centered string, as if not rotated
 	 */
@@ -3759,13 +3793,22 @@ class CMGame {
 		let fonts = Array.isArray(fontsArg) ? fontsArg: [fontsArg];
 		let strings = Array.isArray(stringsArg) ? stringsArg: [stringsArg];
 
-		if(opts.fillStyles.length === 0) {
+		if(typeof opts.fillStyles === "string") {
+			opts.fillStyles = [opts.fillStyles];
+		}
+		else
+		if(!opts.fillStyles || opts.fillStyles.length === 0) {
 			opts.fillStyles = [this.offscreenCtx.fillStyle];
 		}
 
-		if(opts.strokeStyles.length === 0) {
+		if(typeof opts.strokeStyles === "string") {
+			opts.strokeStyles = [opts.strokeStyles];
+		}
+		else
+		if(!opts.strokeStyles || opts.strokeStyles.length === 0) {
 			opts.strokeStyles = [this.offscreenCtx.strokeStyle];
 		}
+
 
 		let numFonts = fonts.length;
 		let numStrings = strings.length;
@@ -7882,7 +7925,7 @@ class CMnGon extends CMGame.Sprite {
 	 * @param {number} x - The screen x for this shape's center
 	 * @param {number} y - The screen y for this shape's center
 	 * @param {number} radius - The radius from center to each corner
-	 * @param {number} rotation - Number in radians to rotate by
+	 * @param {number} rotation - Number in radians to rotate by (clockwise, from viewer's perspective)
 	 * @param {string} [fillStyle=CMGame.Color.BLACK] - The color to fill this shape with
 	 * @param {string} [strokeStyle=CMGame.Color.TRANSPARENT] - The color to draw this outline with
 	 * @param {number} [lineWidth=1] How thick the outline should be
@@ -7960,6 +8003,7 @@ class CMnGon extends CMGame.Sprite {
 			pointToCheck = pointOrX;
 		}
 
-		return this.game.ctx.isPointInPath(this.path, pointToCheck.x, pointToCheck.y);
+		return this.game.ctx.isPointInPath(
+			this.path, pointToCheck.x, pointToCheck.y);
 	}
 }
