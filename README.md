@@ -92,6 +92,8 @@ game.addFunction(func);
 
 The section "Adding Functions" below describes the various options that can be defined for an added function.
 
+Instead of building your own project, you can of course open one of the demo HTML files and modify it. If you have no experience with HTML, CSS, or JavaScript, demo5-minimal-code.html is the smallest file that will show you everything you need for a very basic demo. If you have some basic knowledge, demo.html and the other examples will give you an idea of how this engine works.
+
 ## CMGame Constructor Options
 
 As discussed above, we can pass in various options when creating our game. These are described below.
@@ -115,6 +117,7 @@ type - A string describing the type of math game. Available options are "graph" 
 images - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path. E.g.,
 
 ```javascript
+
 var options = {
   images: {
     hero: "img/smiley.png",
@@ -124,35 +127,67 @@ var options = {
 
 // access later:
 game.images["hero"];
+
 ```
 
-audios - A plain JS object of audio files that may need preloading. You can define these similar to images, but they will be accessed later, using game.playSound(soundPath)
+You can also pass these in as an array. In that case, each image can be accessed later either by its index in that initial array, or by its filename without the extension or path.
 
 ```javascript
 
-var soundPath = "audio/jump.wav";
+var options = {
+  images: ["img/smiley.png", "img/frowny.png"]
+};
+
+// access later:
+game.images["smiley"];
+
+// ... or:
+game.images[0];
+
+```
+
+audios - A plain JS object of audio files that may need preloading. You can define these similar to images, by providing your string identifier in an object, or by listing the full file paths in an array, but you reference them using CMGame methods rather than accessing directly game.playSound(soundPath). This allows us internally to load the best playback option for the current environment.
+
+```javascript
+
 var options = {
   audios: {
-    sound1: soundPath,
-    sound2: "audio/buzz.wav" // can save the path as above, or define it directly
+    "laser": "audio/laser_beam.mp3",
+    "theme": "audio/happy_fun_time.wav"
   }
 };
 
 // access later:
-game.playSound(soundPath);
+game.playSound("laser");
 
-// or
-game.playSound( audios.sound1 );
 
 // pausing...
-game.pauseSound(soundPath);
-game.pauseSound( audios.sound1 );
+game.pauseSound("laser");
 
 // stopping...
-game.stopSound(soundPath);
-game.stopSound( audios.sound1 );
+game.stopSound("laser");
 
-// Note: there ar similar "Music" methods (playMusic, pauseMusic, stopMusic), and the only real difference is that whether these play will be dependent on your game's settings for keeping sound effects on/off, and keeping music on/off
+// Note: there ar similar "Music" methods, though we treat these as separate:
+// Helps us keep our resources separate.
+// Whether these play will be dependent on your game's settings for keeping sound effects on/off (soundOn boolean), and keeping music on/off (musicOn boolean).
+// Music is set to loop, while sounds are not.
+
+game.playMusic("theme");
+game.pauseMusic("theme");
+game.stopMusic("theme");
+
+```
+
+Similar to images, audios can be passed in as an array if you want to just reference them by filename, though you should still use the CMGame methods to reference them.
+
+```javascript
+
+var options = {
+  audios: ["audio/laser_beam.mp3", "audio/happy_fun_time.wav"]
+};
+
+// access later:
+game.playSound("laser_beam");
 
 ```
 
@@ -164,9 +199,9 @@ tickDistance - How many pixels apart x-axis (and y-axis) tick marks are from eac
 
 graphScalar - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
 
-soundOn - A boolean: true to allow sound effects to play, false to mute them. Defaults to false.
+soundOn - A boolean: true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 
-musicOn - A boolean: true to allow music (generally longer sound files) to play, false to mute them. Defaults to false.
+musicOn - A boolean: true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 
 saveName - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke save() or load() methods this value is never used)
 
@@ -619,7 +654,7 @@ layer - The "drawing layer" on which to draw the sprite. If you have very specif
 
 omitFromSprites - A boolean. Mainly used internally for extending the sprite class. Lets us manage extended classes separately from when most game sprites are updated or drawn.
 
-### Sprite methods
+### Sprite Properties and Methods
 
 When making mobile-driven or desktop games, it can be useful to detect whether the user has clicked/tapped on a sprite. The sprite's "containsPoint" method can help detect this.
 
@@ -636,7 +671,20 @@ sprite.velocity.x = 2; // Makes sprite move 2 pixels to the right per frame
 sprite.velocity.y = -4; // Makes sprite move 4 pixels up the screen per frame (remember, pixel drawing values are reversed vertically, with y=0 being at the top)
 ```
 
-A very useful tool that makes use of a few we have created is a sprite's setPath method. It can give you a lot of control over your sprite's movement. You can use it to set the sprite's velocity all at once, via a point object or an array. Or, for more interesting patterns, you can set it to a CMGame.Function instance (generally one that is animated).
+For more complex mechanics, each sprite also has an "acceleration" property, that is a point with x, y, and z coordinates, all defaulting to 0.
+
+```
+sprite.velocity.y = 10; // Start out moving 10 pixels per frame
+sprite.acceleration.y = -1; // on each frame, we will slow down by 1 pixel per frame (i.e., in the next frame sprite.velocity.x will be 9).
+
+// You may want to stop reducing velocity once it hits zero, e.g., to end a character's jump animation.
+if(sprite.velocity.y === 0) {
+  sprite.acceleration.y = 0;
+}
+
+```
+
+A very useful tool that makes use of a few others is a sprite's setPath method. It can give you a lot of control over your sprite's movement. You can use it to set the sprite's velocity all at once, via a point object or an array. Or, for more interesting patterns, you can set it to a CMGame.Function instance (generally one that is animated).
 
 ```javascript
 sprite.setPath({
