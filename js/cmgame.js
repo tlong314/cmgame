@@ -1,39 +1,13 @@
 /**
- * CMGame
+ * CMGame Engine
  *
  * A JS engine for games inspired by college math.
- * Built for use on the website
- *
- *     collegemathgames.com
- *
+ * Built for use on the website collegemathgames.com,
  * but also available to use, free, under the MIT license.
- * Among other things, this engine handles:
- *
- * - Automatically scaling canvas to current page size via
- *     CSS transforms, while maintaining aspect ratio
- * - Preloading, processing, and playing audio (even in iOS).
- * - Managing splash screen, including loading meter
- * - Automatic double-buffering with an offscreen canvas.
- * - Advanced canvas text drawing, such as
- *     drawing a sentence with multiple fonts.
- * - Standard engine features, such as managing sprite velocity and position,
- *     collision detection, and asset preloading
- * - Extra engine features for 2D games, such as determining sprite's
- *     response to reaching a screen boundary, or using a math function to
- *     define a sprite's path
- * - Randomized variables: integers, floats, colors
- * - Other minor code optimizations
- * - starting/pausing/unpausing gameplay
- * - Dynamically changing frame rate (FPS)
- * - Game screenshots (if backgrounds are not drawn to screen, background is "guessed")
- * - Game videos (e.g., for promotion)
- * - Overcoming various iOS/Android annoyances (playing audio,
- *      preventing double-click zoom, preventing haptic feedback on long press)
- * - Providing a predefined modern color palette
- * - Allowing dynamic drawing from the user
  *
  * @author Tim S. Long, PhD
  * @copyright 2021 Tim S. Long, PhD
+ * @license MIT
  */
 
 "use strict";
@@ -50,6 +24,12 @@ window.cancelNextFrame = window.cancelAnimationFrame;
 
 // For minimal code, we let user omit <body> tag
 window.documentBodyElm = document.body || document.documentElement;
+
+if(!document.body) {
+	console.warn("Some event handlers may not register without HTML tags present. " +
+		"If you need touch/mouse events, provide either " +
+		"a <body> tag or a <canvas> tag in your HTML.");
+}
 
 /**
  * Manage web audio logic, overcoming iOS bug
@@ -92,6 +72,7 @@ const CMSound = (function() {
 
     const _af_buffers = new Map(),
         _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
     let _isUnlocked = false;
 
     /**
@@ -218,7 +199,7 @@ const CMSound = (function() {
 			sourceNodes[sfxFile].buffer = _af_buffers.get(sfxFile);
             sourceNodes[sfxFile].connect(_audioCtx.destination);
             sourceNodes[sfxFile].start();
-			return;
+			return sourceNodes[sfxFile];
 		}
 
         return load(sfxFile).then((audioBuffer) => {
@@ -247,7 +228,7 @@ const CMSound = (function() {
 		},
 		load: load,
 		loop: function(src) {
-			play(src, true);
+			return play(src, true);
 		}
 	};
 }());
@@ -568,9 +549,7 @@ let domLoaded = false,
 	numAudiosToLoad = 0,
 	numAudiosLoaded = 0,
 	numImagesToLoad = 0,
-	numImagesLoaded = 0,
-	soundsInitialized = null,
-	cmAudioMap = new Map();
+	numImagesLoaded = 0;
 
 // Extend Image class to manage preloading
 class CMImageLoad extends Image {
@@ -597,8 +576,14 @@ class CMAudioLoad extends Audio {
 	/**
 	 * Creates a CMAudioLoad instance
 	 * @param {string} audioSrc - The audio file's location
+	 * @param {string} [preferredName|null] - A key the dev can use to call this
+	 *   resource, e.g., game.playSound("guns"); rather than
+	 *   game.playSound("audio/shots_2R3t.wav");
+	 *   If not provided, the filename (without extension or path) is used,
+	 *   e.g., "shots_2R3t" for the example above.
+	 * @param {object} game - The current CMGame instance using this audio
 	 */
-	constructor(audioSrc) {
+	constructor(audioSrc, preferredName, game) {
 		super();
 		numAudiosToLoad++;
 
@@ -611,17 +596,13 @@ class CMAudioLoad extends Audio {
 		this.src = audioSrc;
 		this.load();
 
-		// Clip off ".wav", ".mp3", etc. - use unique file names
-		let extensionless = audioSrc.substr(
-			audioSrc.lastIndexOf(".")
-		);
+		let keyString = CMGame.trimFilename(audioSrc);
 
-		// Clip off path before filename (e.g., "http://mysite.com/media/audio/")
-		let keyString = extensionless.substr(
-			extensionless.lastIndexOf("/") + 1
-		);
+		if(typeof preferredName === "string")
+			game.audioMap.set(preferredName, this);
+		else // preferredName and game are the same argument
+			game.audioMap.set(keyString, this);
 
-		cmAudioMap.set(keyString, this);		
 		CMSound.load(audioSrc);
 	}
 }
@@ -1081,15 +1062,38 @@ class CMSwipe {
 class CMGame {
 	constructor(opts={}) {
 		let self = this;
-		this.images = {};
-		this.audios = {};
 
-		for(let src in opts.images) {
-			this.images[src] = new CMImageLoad(opts.images[src]);
+		this.images = {};
+		this.audios = {}; // Used internally as a fallback when `fetch` won't happen
+		this.audioMap = new Map(); // Main audio object; used for best performance
+
+		if(Array.isArray(opts.images)) {
+			for(let i = 0; i < opts.images.length; i++) {
+				let keyString = CMGame.trimFilename( opts.images[i] );
+
+				// Allow dev to access item by clipped filename or index in their array
+				this.images[i] = this.images[keyString] =
+						new CMImageLoad(opts.images[i]);
+			}
+		}
+		else {
+			for(let key in opts.images) {
+				this.images[key] = new CMImageLoad(opts.images[key]);
+			}
 		}
 
-		for(let src in opts.audios) {
-			this.audios[src] = new CMAudioLoad(opts.audios[src]);
+		// Note: this.audios is mainly used internally. Use playAudio(), etc.
+		if(Array.isArray(opts.audios)) {
+			for(let i = 0; i < opts.audios.length; i++) {
+				let keyString = CMGame.trimFilename( opts.audios[i] );
+				this.audios[i] = this.audios[keyString] =
+						new CMAudioLoad(opts.audios[i], null, this);
+			}
+		}
+		else {
+			for(let key in opts.audios) {
+				this.audios[key] = new CMAudioLoad(opts.audios[key], key, this);
+			}
 		}
 
 		/**
@@ -1131,6 +1135,7 @@ class CMGame {
 				'<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0" />\n\n');
 		}
 
+		// Note: even after setting sound and music on, will not play until user interaction with page
 		this.soundOn = opts.soundOn || false;
 		this.musicOn = opts.musicOn || false;
 		this.orientation = opts.orientation || null;
@@ -1505,23 +1510,10 @@ class CMGame {
 			}
 		}
 
-		this.startBtn.addEventListener("click", ((e) => {
+		this.startBtn.addEventListener("click", e => {
 			e.preventDefault();
-
-			if(!soundsInitialized) {
-				let audioPath = "audio/";
-				let sounds = [];
-
-				for(let id in this.audios) {
-					sounds.push({
-						id: id,
-						src: audios[id].src.replace(audioPath, "")
-					});
-				}
-			}
-
 			self.start();
-		}).bind(this), false);
+		}, false);
 
 		this.enterFullscreenBtn = null;
 		this.exitFullscreenBtn = null;
@@ -2757,11 +2749,12 @@ class CMGame {
 		}
 
 		try {
-			console.log("Saving game data under name: " + nameToRetrieve);
 			localStorage.setItem(nameToSave, JSON.stringify(stateToSave));
+			console.log("Saving game data under name: %c" + nameToSave,
+				"font-weight: bold; font-size: large; color: white; background-color: rgb(1, 97, 251); display: inline-block; border-radius: 4px; padding: 3px 5px;");	
 		}
 		catch(e) {
-			console.log("Error thrown during localStorage save. Possible security issue, e.g., when testing save on local directory.");
+			console.error("Error thrown during localStorage save. Possible security issue, e.g., when testing save on local directory.");
 		}
 	}
 
@@ -2786,19 +2779,22 @@ class CMGame {
 		else { // No saveName is set, or is an  empty string. See if any data is stored elsewhere
 			nameToRetrieve = this.generateSaveName();
 
-			if(nameToRetrieve.replace(CMGame.SAVE_PREFIX, "") !== "0") { // generated save file exists
-				nameToRetrieve = CMGame.SAVE_PREFIX + (parseInt( nameToRetrieve.replace(CMGame.SAVE_PREFIX, "") ) - 1);
+			// Generated save name has index "0" only if no indexed files exist yet
+			if(nameToRetrieve.replace(CMGame.SAVE_PREFIX, "") !== "0") { // Gasp! File DOES exist!
+				nameToRetrieve = CMGame.SAVE_PREFIX +
+					(parseInt( nameToRetrieve.replace(CMGame.SAVE_PREFIX, "") ) - 1);
 			}
 		}
 
 		try {
-			console.log("Loading game data under name: " + nameToRetrieve);
 			loadedStateString = localStorage.getItem(nameToRetrieve);
+			console.log("Loading game data saved under name: %c" + nameToRetrieve,
+				"font-weight: bold; font-size: large; color: white; background-color: rgb(1, 97, 251); display: inline-block; border-radius: 4px; padding: 3px 5px;");
 		}
 		catch(e) {
-			console.log("Error thrown during localStorage save. Possible security issue, e.g., when testing save on local directory.");
+			console.error("Error thrown during localStorage load. Possible security issue, e.g., when testing save on local directory.");
 		}
-		
+
 		if(loadedStateString !== null) {
 			this.state = JSON.parse(loadedStateString);
 			return this.state;
@@ -2992,26 +2988,6 @@ class CMGame {
 			0];
 
 		this.mouseStateString = this.mouseState.join("");
-
-		/*
-		switch(e.button) {
-			case 0: // Main button (left click)
-				this.leftMousePressed = true;
-				break;
-			case 1: // Auxiliary button (wheel)
-				this.middleMousePressed = true;
-				break;
-			case 2: // Secondary (right-click) button
-				this.rightMousePressed = true;
-				break;
-			case 3: // Browser-back button
-				break;
-			case 4: // Browser-forward button
-				break;
-			default: {} // Unknown
-		}
-		*/
-
 		this.onmousedown(e);
 
 		// Account CSS transform scaling
@@ -3032,6 +3008,7 @@ class CMGame {
 	 * @param {number} y - The point's (float) y position
 	 */
 	pressStart(x, y) {
+		
 		if(this.latestPoint === null) {
 			this.latestPoint = {
 				x: x,
@@ -3291,27 +3268,6 @@ class CMGame {
 			0];
 
 		this.mouseStateString = this.mouseState.join("");
-
-		/**
-		// Abandoned in preference of mouseState
-		switch(e.button) {
-			case 0: // Main button (left click)
-				this.leftMousePressed = false;
-				break;
-			case 1: // Auxiliary button (wheel)
-				this.middleMousePressed = false;
-				break;
-			case 2: // Secondary (right-click) button
-				this.rightMousePressed = false;
-				break;
-			case 3: // Browser-back button
-				break;
-			case 4: // Browser-forward button
-				break;
-			default: {} // Unknown
-		}
-		*/
-
 		this.onmouseup(e);
 
 		this.pressEnd(
@@ -3892,14 +3848,15 @@ class CMGame {
 			return;
 		}
 
-		CMSound.play(soundId).then(CMGame.noop, () => {
+		let self = this;
+		CMSound.play(soundId).then(CMGame.noop, function() {
 
+			// CMSound not working (e.g., when testing locally), default to normal Audio()
 			try {
-				// SoundJS not working or not loaded, default to normal Audio()
-				cmAudioMap.get(soundId).play();
+				self.audioMap.get(soundId).play();
 			}
 			catch(e) {
-				console.log(`Error playing sound ${soundId}.
+				console.error(`Error playing sound ${soundId}.
 					Check that all files are loaded.`);
 			}
 		});
@@ -3912,13 +3869,14 @@ class CMGame {
 	 * @param {string} soundId - a registered string identifying the sound file
 	 */
 	stopSound(soundId) {
+		let self = this;
 		CMSound.stop(soundId).then(CMGame.noop, () => {
 			try {
-				cmAudioMap.get(soundId).pause();
-				cmAudioMap.get(soundId).currentTime = 0;
+				self.audioMap.get(soundId).pause();
+				self.audioMap.get(soundId).currentTime = 0;
 			}
 			catch(e) {
-				console.log("Error pausing sound.");
+				console.error("Error pausing sound " + soundId);
 			}
 		});
 	}
@@ -3929,13 +3887,14 @@ class CMGame {
 	 * @param {string} soundId - a registered string identifying the sound file
 	 */
 	pauseSound(soundId) {
+		let self = this;
 		CMSound.stop(soundId).then(CMGame.noop, () => {
 			try {
-				cmAudioMap.get(soundId).pause();
-				cmAudioMap.get(soundId).currentTime = 0;
+				self.audioMap.get(soundId).pause();
+				self.audioMap.get(soundId).currentTime = 0;
 			}
 			catch(e) {
-				console.log("Error pausing sound.");
+				console.error("Error pausing sound " + soundId);
 			}
 		});
 	}
@@ -3951,13 +3910,16 @@ class CMGame {
 			return;
 		}
 
+		let self = this;
 		CMSound.loop(soundId).then(CMGame.noop, () => {
+
+			// CMSound not working (e.g., when testing locally), default to normal Audio()
 			try {
-				cmAudioMap.get(soundId).loop = true;
-				cmAudioMap.get(soundId).play();
+				self.audioMap.get(soundId).loop = true;
+				self.audioMap.get(soundId).play();
 			}
 			catch(e) {
-				console.log(`Error playing sound ${soundId}.
+				console.error(`Error playing sound ${soundId}.
 					Check that all files are loaded.`);
 			}
 		});
@@ -3968,12 +3930,13 @@ class CMGame {
 	 * @param {string} soundId - a registered string identifying the sound file
 	 */
 	pauseMusic(soundId) {
+		let self = this;
 		CMSound.pause(soundId).then(CMGame.noop, () => {
 			try {
-				cmAudioMap.get(soundId).pause();
+				self.audioMap.get(soundId).pause();
 			}
 			catch(e) {
-				console.log("Error pausing sound.");
+				console.error("Error pausing sound " + soundId);
 			}
 		});
 	}
@@ -3984,13 +3947,14 @@ class CMGame {
 	 * @param {string} soundId - a registered string identifying the sound file
 	 */
 	stopMusic(soundId) {
+		let self = this;
 		CMSound.stop(soundId).then(CMGame.noop, () => {
 			try {
-				cmAudioMap.get(soundId).pause();
-				cmAudioMap.get(soundId).currentTime = 0;
+				self.audioMap.get(soundId).pause();
+				self.audioMap.get(soundId).currentTime = 0;
 			}
 			catch(e) {
-				console.log("Error pausing sound.");
+				console.error("Error pausing sound " + soundId);
 			}
 		});
 	}
@@ -4005,7 +3969,7 @@ class CMGame {
 
 		if(typeof newScale !== "number" || newScale <= 0 || !Number.isFinite(newScale) || Number.isNaN(newScale)) {
 			console.error("zoom() must take a positive integer or float value as its argument. Set to 1 for 100%.");
-			return;
+			return this;
 		}
 
 		this.zoomLevel = newScale;
@@ -4028,6 +3992,8 @@ class CMGame {
 
 		if(this.paused)
 			this.draw();
+
+		return this;
 	}
 
 	/**
@@ -4737,7 +4703,7 @@ class CMGame {
 				canLock = this.orientationLock.call(window.screen, orientationChoice || "landscape");
 			}
 		} catch(e) {
-			console.log("Cannot lock orientation");
+			console.warn("Cannot lock orientation on this device");
 		}
 	}
 
@@ -4909,6 +4875,29 @@ CMGame.isPrimitiveSubArray = (subArr, bigArr) => {
 
 // Empty function. Static so can be used as placeholder before page load
 CMGame.noop = () => { /* noop */ };
+
+/**
+ * A convenience method, mostly used internally,
+ * for getting a filename without file extension
+ * or preceding path. Used, e.g., for assigning
+ * a key string to a given resource.
+ * @param {string} filename - The file path
+ * @returns {string}
+ */
+CMGame.trimFilename = (filename) => {
+
+	// Clip off ".gif", ".wav", etc.
+	let extensionless = filename.substr(0,
+		filename.lastIndexOf(".")
+	);
+
+	// Clip off entire path before filename (e.g., "http://mysite.com/media/img/")
+	let trimmedString = extensionless.substr(
+		extensionless.lastIndexOf("/") + 1
+	);
+
+	return trimmedString;
+}
 
 // Static so user can set it before creating CMGame instance
 CMGame.onpageload = CMGame.noop;
@@ -6825,7 +6814,23 @@ CMGame.Function = class {
 				return "below";
 			}
 			else {
-				console.log(`Point (${point.x}, ${point.y}) is outside canvas`);
+				let pointXStyle = "color: rgb(225, 225, 0)";
+				let pointYStyle = "color: rgb(225, 225, 0)";
+
+				if(point.x < 0 || point.x > canvas.width) {
+					pointXStyle = "color: rgb(255, 95, 95)";
+				}
+
+				if(point.y < 0 || point.y > canvas.height) {
+					pointYStyle = "color: rgb(255, 95, 95)";
+				}
+
+				console.log(`Point (%c${point.x}%c, %c${point.y}%c) is outside canvas`,
+					pointXStyle,
+					"color: default",
+					pointYStyle,
+					"color: default");
+
 				return "unknown";
 			}
 		}
