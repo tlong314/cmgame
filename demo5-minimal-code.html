@@ -1,21 +1,10 @@
 <!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<link rel="stylesheet" href="css/cmgame.min.css" />
-</head>
-<body>
-<script src="js/cmgame.min.js"></script>
+<script src="js/cmgame.js"></script>
 <script>
 let game = new CMGame().start()
 
 // Creates a CMGame function named "f", whose math "function" is f(x) = x + 1
-let f = new CMGame.Function(
-	game,
-	x => x + 1
-)
+let f = new CMGame.Function(game, x => x + 1)
 
 game.addFunction( f )
 </script>
-</body>
-</html>
