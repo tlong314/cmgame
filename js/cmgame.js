@@ -48,6 +48,9 @@ Math.PHI = Math.PHI || .5 * (1 + Math.SQRT5); // Golden ratio
 window.requestNextFrame = window.requestAnimationFrame;
 window.cancelNextFrame = window.cancelAnimationFrame;
 
+// For minimal code, we let user omit <body> tag
+window.documentBodyElm = document.body || document.documentElement;
+
 /**
  * Manage web audio logic, overcoming iOS bug
  * that seems to prevent web audio playing,
@@ -1232,7 +1235,7 @@ class CMGame {
 		if(!this.wrapper) {
 			this.wrapper = document.createElement("div");
 			this.wrapper.setAttribute("id", "cmWrapper");
-			document.body.appendChild(this.wrapper);
+			documentBodyElm.appendChild(this.wrapper);
 		}
 
 		this.canvas = null;
@@ -1266,6 +1269,7 @@ class CMGame {
 			this.canvas = document.createElement("canvas");
 			opts.width = opts.width || 640;
 			opts.height = opts.height || 480;
+			this.canvas.classList.add("cm-shadow-almost_black");
 		}
 
 		if(!this.canvas.hasAttribute("id")) {
@@ -1576,7 +1580,7 @@ class CMGame {
 		this.screenshotLink.href = "";
 		this.screenshotLink.download = "cmgscreenshot.png";
 		this.screenshotLink.style.display = "none";
-		document.body.appendChild(this.screenshotLink);
+		documentBodyElm.appendChild(this.screenshotLink);
 
 		this.screenshotBtn = null;
 		if(opts.screenshotBtn) {
@@ -1592,7 +1596,7 @@ class CMGame {
 		this.screenVideoLink.href = "";
 		this.screenVideoLink.download = "cmgscreenvideo.mp4";
 		this.screenVideoLink.style.display = "none";
-		document.body.appendChild(this.screenVideoLink);
+		documentBodyElm.appendChild(this.screenVideoLink);
 
 		// For devs who just want the engine, no math drawing
 		if(this.type === "none") {
@@ -1821,6 +1825,30 @@ class CMGame {
 				height: this.height * videoWidthScalar
 			};
 		}
+	}
+
+	/**
+	 * Provides a "relative" pixel amount based on
+	 * current screen scale. E.g., if you want an
+	 * image to always display as 40 x 80 pixels,
+	 * and be positioned 10 pixels from top of canvas
+	 * and 20 pixels from left of canvas,
+	 * no matter what size our canvas appears,
+	 * use game.drawImage(10, 20, game.rel(40), game.rel(80))
+	 * @param {number|object} pxForScale1 - The number of pixels this would be,
+	 *   (or a point with x and y pixel values) if the canvas was at scale 1.
+	 *   In other words, this represents the "desired output size" in pixels,
+	 *   or the "desired output point" with x, y in pixels.
+	 * @returns {number|object} Output is same type as input
+	 */
+	rel(pxForScale1) {
+		if(typeof pxForScale1 === "number")
+			return pxForScale1 / self.screenScalar;
+		else // Assume a point with x, y values
+			return {
+				x: pxForScale1.x / self.screenScalar,
+				y: pxForScale1.y / self.screenScalar
+			};
 	}
 
 	/**
@@ -2644,13 +2672,13 @@ class CMGame {
 			 * to 0 height and disappear
 			 */
 			if(dimensionForReference === "width") {
-				newWidth = Math.min.apply(Math, [document.documentElement.clientWidth, window.outerWidth, window.innerWidth, document.body.clientWidth]);
+				newWidth = Math.min.apply(Math, [document.documentElement.clientWidth, window.outerWidth, window.innerWidth, documentBodyElm.clientWidth]);
 				newHeight = (this.canvasReferenceHeight / this.canvasReferenceWidth) * newWidth;
 
 				this.screenScalar = Math.min(newWidth / this.canvasReferenceWidth, newHeight / this.canvasReferenceHeight);
 			}
 			else {
-				newHeight = Math.min.apply(Math, [document.documentElement.clientHeight, window.outerHeight, window.innerHeight, document.body.clientHeight]);
+				newHeight = Math.min.apply(Math, [document.documentElement.clientHeight, window.outerHeight, window.innerHeight, documentBodyElm.clientHeight]);
 				newWidth = (this.canvasReferenceWidth / this.canvasReferenceHeight) * newHeight;
 
 				this.screenScalar = Math.min(newWidth / this.canvasReferenceWidth, newHeight / this.canvasReferenceHeight);
@@ -3577,36 +3605,42 @@ class CMGame {
 	 * parameters for CanvasRenderingContext2D,
 	 * and follow with one options object.
 	 * @param {object} image - The image (Image instance, <img> element, etc.) to be rotated
+	 * @param {array} otherArgs - All arguments after the image are saved in a rest parameter.
+	 *   These 
 	 * @param {object|number} opts - Drawing options. If just
 	 *   a number is entered, this will be taken as the
 	 *   angle and the rotation will rotate about the image center.
 	 *   This is reserved as an object for future option considerations.
 	 * @param {number} opts.angle - The angle in radians to rotate (clockwise, from viewer's perspective)
 	 */
-	drawRotatedImage() {
-		let numArgs = arguments.length; // 4, 6, or 10, with options
-		let opts = arguments.slice(numArgs - 1);
+	drawRotatedImage(image, ...args) {
+		let numArgs = args.length; // 4, 6, or 10, with options
+		let opts = args[numArgs - 1];
 		let angle = 0;
 
-		if(typeof opts === "number") {
-			angle = opts;
-		}
-		else {
-			angle = opts.angle;
+		switch(typeof opts) {
+			case "number":
+				angle = opts;
+				break;
+			case "object":
+				angle = opts.angle;
+				break;
+			default:
+				angle = 0;
+				break;
 		}
 
-		let image = arguments[0];
-		let x = arguments[1];
-		let y = arguments[2];
-		let imgWidth = arguments[3] || image.width;
-		let imgHeight = arguments[4] || image.height;
+		let x = args[0];
+		let y = args[1];
+		let imgWidth = args[2] || image.width;
+		let imgHeight = args[3] || image.height;
 
 		// Use destination coordinates, not source
-		if(numArgs > 6) {
-			x = arguments[1];
-			y = arguments[2];
-			imgWidth = arguments[3] || image.width;
-			imgHeight = arguments[4] || image.height;
+		if(numArgs > 5) {
+			x = args[0];
+			y = args[1];
+			imgWidth = args[2] || image.width;
+			imgHeight = args[3] || image.height;
 		}
 
 		let center = {
@@ -3618,7 +3652,7 @@ class CMGame {
 		this.offscreenCtx.translate(center.x, center.y);
 		this.offscreenCtx.rotate(angle);
 		this.offscreenCtx.translate(-center.x, -center.y);
-		this.offscreenCtx.drawImage.apply(this.offscreenCtx, Array.from(arguments));
+		this.offscreenCtx.drawImage.apply(this.offscreenCtx, [image, ...args]);
 		this.offscreenCtx.restore();
 	}
 
@@ -5143,7 +5177,7 @@ if(!CMGame.toastElement) {
 	CMGame.toastElement = document.createElement("span");
 	CMGame.toastElement.setAttribute("id", "cmToast");
 	CMGame.toastElement.classList.add("cm-toast");
-	document.body.appendChild(CMGame.toastElement);
+	documentBodyElm.appendChild(CMGame.toastElement);
 
 	// When a toast is shown, it fades to invisible after a few seconds, but then we need it to leave the HTML
 	CMGame.toastElement.addEventListener("animationend", function() {
@@ -5173,7 +5207,7 @@ if(!CMGame.offscreenToastElement) {
 	// Positive values here result in incorrect client rect values
 	CMGame.offscreenToastElement.style.left = "-100vw";
 	CMGame.offscreenToastElement.style.top = "-100vh";
-	document.body.appendChild(CMGame.offscreenToastElement);
+	documentBodyElm.appendChild(CMGame.offscreenToastElement);
 };
 
 /**
