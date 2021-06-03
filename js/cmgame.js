@@ -160,9 +160,10 @@ const CMSound = (function() {
      * Allow the requester to load a new sfx, specifying a file to load.
      * We store the decoded audio data for future (re-)use.
      * @param {string} sfxFile - The path of the audio file to load
+	 * @param {string} [preferredName] - If present, store loaded object under this key
      * @returns {Promise<AudioBuffer>}
      */
-    async function load (sfxFile) {
+    async function load (sfxFile, preferredName=null) {
         if (_af_buffers.has(sfxFile)) {
             return _af_buffers.get(sfxFile);
         }
@@ -178,7 +179,9 @@ const CMSound = (function() {
             audiobuffer = await _decodeShim(arraybuffer);
         }
 
-        _af_buffers.set(sfxFile, audiobuffer);
+        _af_buffers.set(preferredName || sfxFile, audiobuffer);
+
+		console.log(_af_buffers);
 
         return audiobuffer;
     };
@@ -187,10 +190,10 @@ const CMSound = (function() {
      * Play the specified file, loading it first - either retrieving it from the saved buffers, or fetching
      * it from the network.
      * @param {string} sfxFile - The path of the audio file to play
-	 * @param {boolean} [loopIfTrue=false] - Whether to loop the file
+	 * @param {boolean} [loopIfTrue] - Whether to loop the file
      * @returns {Promise<AudioBufferSourceNode>}
      */
-    function play (sfxFile, loopIfTrue=false) {
+    function play (sfxFile, loopIfTrue) {
 
 		// Added to improve performance, rather than call load on each play
 		if(_af_buffers.has(sfxFile)) {
@@ -463,7 +466,7 @@ Object.defineProperties(CMRandom, {
 	sign: {
 
 		get: function() {
-			return (-1)**CMRandom.Range(0, 2);
+			return (-1)**CMRandom.range(0, 2);
 		}
 	}
 });
@@ -552,9 +555,9 @@ let domLoaded = false,
 	numImagesLoaded = 0;
 
 // Extend Image class to manage preloading
-class CMImageLoad extends Image {
+class CMImage extends Image {
 	/**
-	 * Creates a CMImageLoad instance
+	 * Creates a CMImage instance
 	 * @param {string} imageSrc - The image's location
 	 */
 	constructor(imageSrc) {
@@ -572,9 +575,9 @@ class CMImageLoad extends Image {
 }
 
 // Extend Audio class to manage preloading
-class CMAudioLoad extends Audio {
+class CMAudio extends Audio {
 	/**
-	 * Creates a CMAudioLoad instance
+	 * Creates a CMAudio instance
 	 * @param {string} audioSrc - The audio file's location
 	 * @param {string} [preferredName|null] - A key the dev can use to call this
 	 *   resource, e.g., game.playSound("guns"); rather than
@@ -598,12 +601,14 @@ class CMAudioLoad extends Audio {
 
 		let keyString = CMGame.trimFilename(audioSrc);
 
-		if(typeof preferredName === "string")
+		if(typeof preferredName === "string") {
 			game.audioMap.set(preferredName, this);
-		else // preferredName and game are the same argument
+			CMSound.load(audioSrc, preferredName);
+		}
+		else { // preferredName and game are the same argument
 			game.audioMap.set(keyString, this);
-
-		CMSound.load(audioSrc);
+			CMSound.load(audioSrc);
+		}
 	}
 }
 
@@ -673,6 +678,7 @@ class CMDoodle {
 			startPoint: null,
 			lineWidth: Math.max(game.ctx.lineWidth, 1),
 			strokeStyle: CMGame.Color.BLACK,
+			fillStyle: CMGame.Color.TRANSPARENT,
 			fillStyleAbove: CMGame.Color.TRANSPARENT,
 			fillStyleBelow: CMGame.Color.TRANSPARENT,
 			fillStyleLeft: CMGame.Color.TRANSPARENT,
@@ -695,6 +701,7 @@ class CMDoodle {
 		this.fillStyleBelow = options.fillStyleBelow;
 		this.fillStyleLeft = options.fillStyleLeft;
 		this.fillStyleRight = options.fillStyleRight;
+		this.fillStyle = options.fillStyle;
 
 		this.points = [ this.startPoint ];
 
@@ -771,9 +778,36 @@ class CMDoodle {
 	}
 
 	/**
-	 * Determines if a given point is in this doodle's path
+	 * Determines if a given point is in this doodle's stroke path
 	 * @param {number|object} xOrPoint - The x value, or point object
 	 * @param {number} [y] - The y value (if xOrPoint is not a point)
+	 * @returns {boolean}
+	 */
+	intersectsPoint(xOrPoint, y) {
+		let point = {};
+		if(typeof xOrPoint === "number") {
+			point = {
+				x: xOrPoint,
+				y: y
+			};
+		}
+		else {
+			point = xOrPoint;
+		}
+
+		this.game.ctx.save();
+		this.game.ctx.lineWidth = this.lineWidth;
+		let isPointHere = game.ctx.isPointInStroke(this.path, point.x, point.y);
+		this.game.ctx.restore();
+		return isPointHere;
+	}
+
+	/**
+	 * Determines if a given point is in this doodle's fill path. Note:
+	 * this may not be verty reliable on complex shapes.
+	 * @param {number|object} xOrPoint - The x value, or point object
+	 * @param {number} [y] - The y value (if xOrPoint is not a point)
+	 * @returns {boolean}
 	 */
 	containsPoint(xOrPoint, y) {
 		let point = {};
@@ -789,7 +823,7 @@ class CMDoodle {
 
 		this.game.ctx.save();
 		this.game.ctx.lineWidth = this.lineWidth;
-		let isPointHere = ctx.isPointInStroke(this.path, point.x, point.y);
+		let isPointHere = game.ctx.isPointInPath(this.path, point.x, point.y);
 		this.game.ctx.restore();
 		return isPointHere;
 	}
@@ -921,6 +955,12 @@ class CMDoodle {
 		if(this.points.length > 1) {
 			ctx.lineWidth = this.lineWidth;
 			ctx.strokeStyle = this.strokeStyle;
+
+			if(this.fillStyle && this.fillStyle !== CMGame.Color.TRANSPARENT) {
+				ctx.fillStyle = this.fillStyle;
+				ctx.fill(this.path);
+			}
+
 			ctx.stroke(this.path);
 		}
 		else
@@ -1073,12 +1113,12 @@ class CMGame {
 
 				// Allow dev to access item by clipped filename or index in their array
 				this.images[i] = this.images[keyString] =
-						new CMImageLoad(opts.images[i]);
+						new CMImage(opts.images[i]);
 			}
 		}
 		else {
 			for(let key in opts.images) {
-				this.images[key] = new CMImageLoad(opts.images[key]);
+				this.images[key] = new CMImage(opts.images[key]);
 			}
 		}
 
@@ -1087,12 +1127,12 @@ class CMGame {
 			for(let i = 0; i < opts.audios.length; i++) {
 				let keyString = CMGame.trimFilename( opts.audios[i] );
 				this.audios[i] = this.audios[keyString] =
-						new CMAudioLoad(opts.audios[i], null, this);
+						new CMAudio(opts.audios[i], null, this);
 			}
 		}
 		else {
 			for(let key in opts.audios) {
-				this.audios[key] = new CMAudioLoad(opts.audios[key], key, this);
+				this.audios[key] = new CMAudio(opts.audios[key], key, this);
 			}
 		}
 
@@ -1610,6 +1650,14 @@ class CMGame {
 				}
 
 				this.ondraw(ctx);
+				
+				if(this.recordingVideo) {
+					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+
+					this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+						this.screenVideoDetails.width, this.screenVideoDetails.height);
+				}
 			}
 		}
 
@@ -1680,6 +1728,14 @@ class CMGame {
 				}
 
 				this.ondraw(ctx);
+
+				if(this.recordingVideo) {
+					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+
+					this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+						this.screenVideoDetails.width, this.screenVideoDetails.height);
+				}
 			};
 		}
 		else
@@ -1739,6 +1795,14 @@ class CMGame {
 				}
 
 				this.ondraw(ctx);
+				
+				if(this.recordingVideo) {
+					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+
+					this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+						this.screenVideoDetails.width, this.screenVideoDetails.height);
+				}
 			};
 		}
 
@@ -1816,6 +1880,18 @@ class CMGame {
 				width: this.width * videoWidthScalar,
 				height: this.height * videoWidthScalar
 			};
+		}
+
+		if(!this.screenVideoCanvas) {
+			this.screenVideoCanvas = document.createElement("canvas");
+
+			// Aim for resolution of 1920x1080 for ideal MP4 output
+			this.screenVideoCanvas.width = 1920;
+			this.screenVideoCanvas.height = 1080;
+			this.screenVideoCanvas.style.width = 1920 + "px";
+			this.screenVideoCanvas.style.height = 1080 + "px";
+
+			this.screenVideoCtx = this.screenVideoCanvas.getContext("2d", {alpha: false});
 		}
 	}
 
@@ -2122,18 +2198,6 @@ class CMGame {
 			}
 		}
 
-		if(!this.screenVideoCanvas) {
-			this.screenVideoCanvas = document.createElement("canvas");
-
-			// Aim for resolution of 1920x1080 for ideal MP4 output
-			this.screenVideoCanvas.width = 1920;
-			this.screenVideoCanvas.height = 1080;
-			this.screenVideoCanvas.style.width = 1920 + "px";
-			this.screenVideoCanvas.style.height = 1080 + "px";
-
-			this.screenVideoCtx = this.screenVideoCanvas.getContext("2d", {alpha: false});
-		}
-
 		return new Promise(function(resolve, reject) {
 
 			let stream = self.screenVideoCanvas.captureStream(opts.fps);
@@ -2148,6 +2212,7 @@ class CMGame {
 			let mediaRecorder = new MediaRecorder(stream);
 
 			setTimeout(() => {
+
 				mediaRecorder.ondataavailable = function(e) {
 					if(e.data.size > 0) {
 						recordedChunks.push(e.data);
@@ -2187,6 +2252,8 @@ class CMGame {
 
 				// Don't start counting duration until recording starts
 				mediaRecorder.onstart = () => {
+					console.log("duration of " + opts.duration);
+
 					setTimeout(() => {
 						mediaRecorder.stop();
 						self.recordingVideo = false;
@@ -2995,6 +3062,10 @@ class CMGame {
 			(e.clientX - this.wrapper.offsetLeft) / this.screenScalar,
 			(e.clientY - this.wrapper.offsetTop) / this.screenScalar);
 
+		/**
+		 * Avoid using onrightclick, but if you must, we give it x, y values
+		 * as a convenience, so that it looks like a point
+		 */
 		if(e.button === 2) {
 			this.onrightclick(e);
 		}
@@ -3289,7 +3360,7 @@ class CMGame {
 			this.latestSwipePath,
 			this.latestSwipePath8);
 
-		if(this.doodleOptions.enabled) {
+		if(this.currentDoodle) {
 			this.stopDoodle();
 		}
 
@@ -4869,7 +4940,7 @@ CMGame.last = ( arrGument ) => {
  * @returns {boolean}
  */
 CMGame.isPrimitiveSubArray = (subArr, bigArr) => {
-	let delimiter = "{(*&$(*(";
+	const delimiter = "{(*&$(*(";
 	return bigArr.join(delimiter).includes(subArr.join(delimiter));
 };
 
@@ -5368,7 +5439,7 @@ CMGame.Sprite = class {
 			this.fillStyle = drawRule;
 		}
 		else
-		if(drawRule instanceof CMImageLoad) {
+		if(drawRule instanceof CMImage) {
 			this.image = drawRule;	
 		}
 		else
