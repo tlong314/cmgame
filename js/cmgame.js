@@ -108,7 +108,6 @@ const CMSound = (function() {
         // We call this when user interaction will allow us to unlock
         // the audio API.
         const unlock = function (e) {
-			// e?.preventDefault(); // Causes some issues with our passive events, and is probably unnecessary
 
 			silentAudio.onended = function() {
 				var source = _audioCtx.createBufferSource();
@@ -180,9 +179,6 @@ const CMSound = (function() {
         }
 
         _af_buffers.set(preferredName || sfxFile, audiobuffer);
-
-		console.log(_af_buffers);
-
         return audiobuffer;
     };
 
@@ -669,12 +665,24 @@ const registerAudioLoad = () => {
  * rather than games.
  */
 class CMDoodle {
+	/**
+	 * Creates a CMDoodle instance
+	 * @param {object} game - The current CMGame instance
+	 * @param {object} [opts] - A plain JS object of drawing options
+	 * @param {object} [opts.startPoint] - The screen (x, y) position of the initial point drawn
+	 * @param {number} [opts.lineWidth] - Thickness (in pixels) of the drawn curves
+	 * @param {string} [opts.strokeStyle] - Color string for curve color
+	 * @param {string} [opts.fillStyle] - Color string to "fill" closed area with
+	 * @param {string} [opts.fillStyleAbove] - Color string to fill screen above this drawn curve
+	 * @param {string} [opts.fillStyleBelow] - Color string to fill screen below this drawn curve
+	 * @param {string} [opts.fillStyleLeft] - Color string to fill screen left of this drawn curve
+	 * @param {string} [opts.fillStyleRight] - Color string to fill screen right of this drawn curve
+	 */
 	constructor(game, opts) {
 		this.game = game;
 
 		let options = {};
 		let defaults = {
-			enabled: true,
 			startPoint: null,
 			lineWidth: Math.max(game.ctx.lineWidth, 1),
 			strokeStyle: CMGame.Color.BLACK,
@@ -728,7 +736,7 @@ class CMDoodle {
 
 	/**
 	 * Adds a new point to this doodle's path
-	 * @param {number|object} xOrPoint - The x value, or point object
+	 * @param {number|object} xOrPoint - The x value, or point-like object
 	 * @param {number} [y] - The y value (if xOrPoint is not a point)
 	 */
 	addPoint(xOrPoint, y) {
@@ -1624,6 +1632,7 @@ class CMGame {
 			}, false);
 		}
 
+		this.videoRecorder = null;
 		this.screenVideoLink = document.createElement("a");
 		this.screenVideoLink.href = "";
 		this.screenVideoLink.download = "cmgscreenvideo.mp4";
@@ -1920,16 +1929,17 @@ class CMGame {
 	}
 
 	/**
-	 * Download a snapshot of the current frame.
+	 * Captures a snapshot of the current frame.
 	 * Attempts to copy background if it is a defined
 	 * color or single image. If your background is more
 	 * complicated, you may wish to draw it into
 	 * the canvas with the canvas context, to
 	 * ensure it is included in the screenshots.
 	 * Returns a promise, resolving with an object with "image"
-	 * property set to an output <img> element (if defined) and
-	 * a "src" property set to the captured image source string.
-	 * @param {object} [option{}] - A plain JS object of options (if desired)
+	 * property set to an <img> element (the options.output element
+	 * if defined, or a new Image otherwise) and a "src"
+	 * property set to the captured image source string.
+	 * @param {object} [options={}] - A plain JS object of options (if desired)
 	 * @param {string} [options.filename="cmgscreenshot.png"] - The desired file name for the download
 	 * @param {HTMLImageElement|string} [output="download"] - An image element to display
 	 *   the screenshot if desired, or "download" to just download, or anything else to do nothing
@@ -2116,7 +2126,8 @@ class CMGame {
 	 *   defaults are used. If a number, defaults are used except for duration, which is
 	 *   set to that number.
 	 * @param {number} [options.start=0] - Number of milliseconds to wait before starting capture
-	 * @param {number} [options.duration=5000] - Number of milliseconds to capture
+	 * @param {number|string} [options.duration=5000] - Number of milliseconds to capture, or
+	 *   "indefinite" to continue recording until stopScreenVideo is called.
 	 * @param {number} [options.fps=this.FPS] - Desired frame rate for capture (default's to game's rate)
 	 * @param {number} [options.mimeType="video/mp4"] - Desired mimeType for the
 	 *   output video. If not present, will be inferred from options.filename (the preferred option)
@@ -2204,66 +2215,101 @@ class CMGame {
 			let recordedChunks = [];
 
 			/**
-			 * Only webm seems to be supported for the initial stream -
+			 * Only webm seems to be well supported for the initial stream;
 			 * requested mimeType will be used for the output Blob
 			 */
-			//let streamOptions = { mimeType: "video/webm; codecs=vp9" };
-			//let mediaRecorder = new MediaRecorder(stream, streamOptions);
-			let mediaRecorder = new MediaRecorder(stream);
+			// self.videoRecorder = new MediaRecorder(stream, { mimeType: "video/webm; codecs=vp9" });
+			self.videoRecorder = new MediaRecorder(stream);
 
+			self.videoRecorder.ondataavailable = function(e) {
+				if(e.data.size > 0) {
+					recordedChunks.push(e.data);
+				}
+			};
+
+			self.videoRecorder.onstop = function() {
+				let blob = new Blob(recordedChunks, {
+					type: opts.mimeType // "video/mp4", etc.
+				});
+
+				let videoUrl = URL.createObjectURL(blob);
+				let resolvedObj = {
+					video: null,
+					src: ""
+				};
+
+				if(opts.output instanceof HTMLVideoElement) {
+					opts.output.src = videoUrl;
+					resolvedObj.video = opts.output;
+					resolvedObj.src = opts.output.src;
+				}
+				else
+				if(opts.output === "download") {
+					self.screenVideoLink.href = videoUrl;
+					self.screenVideoLink.download = opts.filename;
+					resolvedObj.video = null;
+					resolvedObj.src = self.screenVideoLink.href;
+					self.screenVideoLink.click();
+				}
+
+				// garbage collection
+				recordedChunks = [];
+				window.URL.revokeObjectURL(videoUrl);
+				self.videoRecorder = null;
+				resolve(resolvedObj);
+			};
+
+			// Start recording only after requested time (opts.start)
 			setTimeout(() => {
 
-				mediaRecorder.ondataavailable = function(e) {
-					if(e.data.size > 0) {
-						recordedChunks.push(e.data);
-					}
-				};
+				self.videoRecorder.onstart = () => {
 
-				mediaRecorder.onstop = function() {
-					let blob = new Blob(recordedChunks, {
-						type: opts.mimeType // "video/mp4", etc.
-					});
-
-					recordedChunks = []; // clear out
-
-					let videoUrl = URL.createObjectURL(blob);
-					let resolvedObj = {
-						video: null,
-						src: ""
-					};
-
-					if(opts.output instanceof HTMLVideoElement) {
-						opts.output.src = videoUrl;
-						resolvedObj.video = opts.output;
-						resolvedObj.src = opts.output.src;
-					}
-					else
-					if(opts.output === "download") {
-						self.screenVideoLink.href = videoUrl;
-						self.screenVideoLink.download = opts.filename;
-						resolvedObj.video = null;
-						resolvedObj.src = self.screenVideoLink.href;
-						self.screenVideoLink.click();
+					/**
+					 * Stop recording only after requested time. For
+					 * a little more accuracy, we don't start counting
+					 * duration until onstart is triggered.
+					 */
+					if(opts.duration !== "indefinite") { // Set duration to "indefinite" if you will stop manually
+						setTimeout(() => {
+							self.videoRecorder.stop();
+							self.recordingVideo = false;
+						}, opts.duration);
 					}
 
-					window.URL.revokeObjectURL(videoUrl); // garbage collection
-					resolve(resolvedObj);
 				};
 
-				// Don't start counting duration until recording starts
-				mediaRecorder.onstart = () => {
-					console.log("duration of " + opts.duration);
-
-					setTimeout(() => {
-						mediaRecorder.stop();
-						self.recordingVideo = false;
-					}, opts.duration); // Stop recording only after requested time
-				};
-
-				mediaRecorder.start();
+				self.videoRecorder.start();
 				self.recordingVideo = true;
-			}, opts.start); // Start recording only after requested time
+			}, opts.start);
 		});
+	}
+
+	/**
+	 * For manual use when takeScreenVideo has
+	 * the optional "duration" set to "indefinite",
+	 * or to interrupt a currently recording video
+	 * early and stop recording. Note that the
+	 * Promise returned by takeScreenVideo
+	 * will be resolved.
+	 *
+	 * game.takeScreenVideo({
+	 *   duration: "indefinite"
+	 * }).then(function(data) {
+	 *    console.log("done");
+	 * });
+	 *
+	 * // later...
+	 * game.stopScreenVideo(); // This will finish recording, download, and clean up, and then "done" will be logged
+	 *
+	 */
+	stopScreenVideo() {
+		if(this.videoRecorder && this.recordingVideo) {
+			this.videoRecorder.stop();
+			this.recordingVideo = false;
+		}
+		else {
+			console.warn("No video to stop");
+		}
 	}
 
 	/**
@@ -2513,7 +2559,7 @@ class CMGame {
 		CMGame.clearAll( this.doodles );
 		this.currentDoodle = null;
 
-		// No animation running, so redraw without doodles
+		// No animation cycle running, so redraw without doodles
 		if(this.paused || !this.started) {
 			this.draw();
 		}
@@ -2522,14 +2568,139 @@ class CMGame {
 	}
 
 	/**
+	 * Converts a collection of CMDoodle objects to
+	 * an in-game sprite.
+	 * Note: this is for dynamic sprite creation and
+	 * entry into the game. If you want to save the
+	 * sprite image for later, you should just export
+	 * it with game.takeScreenshot();
+	 * @param {object[]} [doodlesArr] - A specific array of CMDoodle instances to
+	 *   use. If not present, the current game's "doodles" array will be used.
+	 * @param {boolean} [keepDoodles=false] Whether to clear old doodles once converted to a sprite
+	 * @returns {object} The created CMGame.Sprite instance, or null of no doodles exist.
+	 */
+	spriteFromDoodles( doodlesArr, keepDoodles=false ) {
+		let doodles = doodlesArr ? doodlesArr : this.doodles;
+
+		if(doodles.length === 0) {
+			return null;
+		}
+
+		let sprite;
+		let minX = this.canvas.width;
+		let minY = this.canvas.height;
+		let maxX = 0;
+		let maxY = 0;
+
+		for(let i = 0; i < doodles.length; i++) {
+			minX = Math.min(minX, Math.min.apply(Math, doodles[i].points.map(point=>point.x)));
+			minY = Math.min(minY, Math.min.apply(Math, doodles[i].points.map(point=>point.y)));
+			maxX = Math.max(maxX, Math.max.apply(Math, doodles[i].points.map(point=>point.x)));
+			maxY = Math.max(maxY, Math.max.apply(Math, doodles[i].points.map(point=>point.y)));
+		}
+
+		// Without any length in the path, nothing will be drawn
+		if(doodles[0].points.length === 1) {
+			doodles[0].addPoint(doodles[0].startPoint.x + 0.5,
+					doodles[0].startPoint.y + 0.5);
+		}
+
+		let spritePath = new Path2D(doodles[0].path);		
+		let numPaths = 1;
+		let spriteStroke = [doodles[0].strokeStyle];
+		let spriteFill = [doodles[0].fillStyle];
+		let spriteLineWidth = [doodles[0].lineWidth];
+
+		for(let i = 1; i < doodles.length; i++) {
+
+			// Without any length in the path, nothing will be drawn
+			if(doodles[i].points.length === 1) {
+				doodles[i].addPoint(doodles[i].startPoint.x + 0.5,
+						doodles[i].startPoint.y + 0.5);
+			}
+
+			spritePath.addPath(doodles[i].path);
+			numPaths++;
+			spriteStroke.push(doodles[i].strokeStyle);
+			spriteFill.push(doodles[i].fillStyle);
+			spriteLineWidth.push(doodles[i].lineWidth);
+		}
+
+		sprite = new CMGame.Sprite(
+			this,
+			minX,
+			minY,
+			maxX - minX,
+			maxY - minY,
+			function(ctx) {
+				ctx.save();
+				ctx.translate(this.x - minX, this.y - minY);
+				for(let i = 0; i < numPaths; i++) {
+					ctx.fillStyle = spriteFill[i];
+					ctx.fill(spritePath);
+					ctx.strokeStyle = spriteStroke[i];
+					ctx.lineWidth = spriteLineWidth[i];
+					ctx.stroke(spritePath);
+				}
+				ctx.restore();
+			}
+		);
+
+		if(!keepDoodles) {
+			this.clearDoodles();
+		}
+
+		return sprite;
+	}
+
+	/**
+	 * A convenience method for easier naming.
+	 * Performs same operations as spriteFromDoodles
+	 * but for a single CMDoodle object (like a
+	 * continous drawing).
+	 * @param {object} doodle - A CMDoodle instance. If no
+	 *   instance is provided, this uses the latest in-game
+	 *   doodle curve. If game has no doodles, this does
+	 *   nothing and returns null.
+	 * @param {boolean} [keepDoodle=false] - If true, the CMDoodle object will not be removed
+	 * @returns {object} A CMGame.Sprite instance, or null.
+	 */
+	spriteFromDoodle(doodle, keepDoodle=false) {
+		let doodlesArr = [];
+		if(doodle) {
+			doodlesArr = [doodle];
+		}
+		else {
+			if(game.doodles.length > 0) {
+				doodlesArr = [CMGame.last(game.doodles)];
+			}
+			else {
+				return null;
+			}
+		}
+
+		let sprite = this.spriteFromDoodles(doodlesArr, true);
+		if(!keepDoodle && this.doodles.indexOf(doodlesArr[0]) !== -1) {
+			this.doodles.splice(this.doodles.indexOf(doodlesArr[0]), 1);
+		}
+
+		return sprite;
+	}
+
+	/**
 	 * Add a new drawable function (CMGame.Function) to the game.
 	 * Prefer this method to adding the function yourself,
 	 * in case future operations are added here, or storage
 	 * processes are modified (e.g., using Map instead of Array)
-	 * @param {object} cmgFunc - The CMGame.Function instance
+	 * To prevent errors, a falsy cmgFunc argument does nothing.
+	 * @param {object} cmgFunc - The CMGame.Function instance	 
+	 * @returns {object} The current CMGame instance
 	 */
 	addFunction(/* CMGame.Function */ cmgFunc) {
-		this.functions.push(cmgFunc);
+		if(cmgFunc instanceof CMGame.Function) {
+			this.functions.push(cmgFunc);
+		}
+
 		return this;
 	}
 
@@ -2546,21 +2717,32 @@ class CMGame {
 	 * from game's update/draw calls. You can add the
 	 * function again later if desired.
 	 *
+	 * To prevent errors, a falsy cmgFunc argument does nothing.
+	 *
 	 * @param {object} cmgFunc - The CMGame.Function instance to remove
+	 * @returns {object} The current CMGame instance
 	 */
 	removeFunction(/* CMGame.Function */ cmgFunc) {
-		this.functions.splice(this.functions.indexOf(cmgFunc), 1);
+		if(cmgFunc) {
+			this.functions.splice(this.functions.indexOf(cmgFunc), 1);
+		}
+
 		return this;
 	}
 
 	/**
 	 * Adds a sprite to the game, and sorts the sprites
-	 * based on preferences for drawing order
+	 * based on preferences for drawing order. To prevent
+	 * errors, a falsy "sprite" argument does nothing.
 	 * @param {object} sprite - The sprite to add
+	 * @returns {object} The current CMGame instance
 	 */
 	addSprite(/* CMGame.Sprite */ sprite) {
-		this.sprites.push(sprite);
-		this.sprites.sort((a, b) => a.layer - b.layer);
+		if(sprite) {
+			this.sprites.push(sprite);
+			this.sprites.sort((a, b) => a.layer - b.layer);
+		}
+
 		return this;
 	}
 
@@ -2577,10 +2759,16 @@ class CMGame {
 	 * from game's update/draw calls. You can add the
 	 * sprite again later if desired.
 	 *
+	 * To prevent errors, a falsy "sprite" argument does nothing.
+	 *
 	 * @param {object} sprite - The CMGame.Sprite instance to remove
+	 * @returns {object} The current CMGame instance
 	 */
 	removeSprite(/* CMGame.Sprite */ sprite) {
-		this.sprites.splice(this.sprites.indexOf(sprite), 1);
+		if(sprite) {
+			this.sprites.splice(this.sprites.indexOf(sprite), 1);
+		}
+
 		return this;
 	}
 
@@ -3694,11 +3882,28 @@ class CMGame {
 	 *	  ["2", "&pi;", " - checked"],
 	 *   200, 100);
 	 *
+	 * There is also a feature that lets us write multi-line
+	 * strings, by passing in 2D arrays instead of normal arrays.
+	 *
+	 * game.drawStrings(
+	 *	 [
+	 *    ["15px Arial", "italic 16px Times", "14pt monospace"],
+	 *    ["15px Arial", "italic 16px Times", "14pt Arial"]
+	 *  ],
+	 *	 [
+	 *    ["2", "&pi;", " - checked"],
+	 *    ["5", "e", " is larger"],
+	 *  ],
+	 *   200, 100,
+	 *  { // in this case, fillStyle and strokeStyle options should be in 2D arrays as well
+	 *	   fillStyles: [["green", "blue", "orange"], ["yellow", "red", "green"]]
+	 *  });
+	 *
 	 * @param {string[]|string} fonts - The list of fonts to use in order
 	 *   (cycles back to beginning of strings.length > fonts.length)
 	 *   or a single font being used foor all strings. If a single font string
 	 *   is provided, it is read as a single-element array. If a falsy value
-	 *   or empty string is provided, game's current font is used.
+	 *   or empty string or empty array is provided, game's current font is used.
 	 * @param {string[]|string} strings - The strings to write in order
 	 *   or a single string being drawn. If a single string is provided,
 	 *   it is interpreted as a single-element array (ctx.fillText might
@@ -3706,10 +3911,11 @@ class CMGame {
 	 * @param {number} x - The starting x position of the full string
 	 * @param {number} y - The y position of the full string
 	 * @param {object} [options={}] - An object of options
-	 * @param {boolean} [options.fill=true] Will use fillText if true
-	 * @param {boolean} [options.stroke=false] Will use strokeText if true
-	 * @param {boolean} [options.fillStyles[]] An array of colors to fill with
-	 * @param {boolean} [options.strokeStyles[]] An array of colors to stroke with
+	 * @param {boolean} [options.fill=true] - Will use fillText if true
+	 * @param {boolean} [options.stroke=false] - Will use strokeText if true
+	 * @param {boolean} [options.fillStyles[]] - An array of colors to fill with
+	 * @param {boolean} [options.strokeStyles[]] - An array of colors to stroke with
+	 * @param {number} [options.lineHeight] - Pixels defining vertical spacing of multi-line text
 	 * @returns {number} The ending x of the complete string
 	 */
 	drawStrings(fonts, strings, x, y, options={}) {
@@ -3723,6 +3929,51 @@ class CMGame {
 		let opts = {};
 		for(let key in defaults) {
 			opts[key] = (typeof options[key] !== "undefined") ? options[key] : defaults[key]
+		}
+
+		// Allow dev to pass in multi-line strings
+		if(Array.isArray(fonts) && Array.isArray(fonts[0])) {
+			let maxX = x;
+
+			// Assumes all arrays are of the same length
+			for(let row = 0, numRows = Math.max(fonts.length, strings.length); row < numRows; row++) {
+				let maxFont = 10;
+				let lineHeight = 15;
+
+				let optsFromArrays = {
+					fill: Array.isArray(opts.fill) ? opts.fill[row] : opts.fill,
+					stroke: Array.isArray(opts.stroke) ? opts.stroke[row] : opts.stroke,
+					fillStyles: [[]],
+					strokeStyles: [[]]
+				};
+
+				if(Array.isArray(options.fillStyles) && Array.isArray(options.fillStyles[0])) {
+					optsFromArrays.fillStyles = options.fillStyles[row];
+				}
+
+				if(Array.isArray(options.strokeStyles) && Array.isArray(options.strokeStyles[0])) {
+					optsFromArrays.strokeStyles = options.strokeStyles[row];
+				}
+
+				if(typeof options.lineHeight === "number") {
+					lineHeight = options.lineHeight;
+				}
+				else {
+
+					// Find biggest font (assume in pixels) in a given row, and use it to determine line height
+					for(let col = 0, numCols = fonts.length; col < numCols; col++) {
+						let fontSize = fonts[row][col].match(/[0-9]+[A-Za-z]+/, "");
+						if(fontSize) {
+							maxFont = Math.max(maxFont, parseInt(fontSize[0]));
+							lineHeight = 1.5 * maxFont;
+						}
+					}
+				}
+
+				this.drawStrings(fonts[row], strings[row].concat([row]), x, y + row * lineHeight, optsFromArrays);
+			}
+
+			return maxX;
 		}
 
 		if(typeof opts.fillStyles === "string") {
@@ -3745,6 +3996,7 @@ class CMGame {
 			console.warn("\"colors\" is not a valid option for drawStrings(). Use \"fillStyles\" or \"strokeStyles\" instead.");
 		}
 
+		let numFonts;
 		if(typeof fonts === "string") {
 			fonts = [fonts];
 		}
@@ -3755,10 +4007,9 @@ class CMGame {
 
 		if(!fonts || fonts.length === 0) {
 			fonts = [this.offscreenCtx.font];
-			numFonts = 1;
 		}
 
-		let numFonts = fonts.length;
+		numFonts = fonts.length;
 		let numStrings = strings.length;
 		let offsetX = 0;
 
@@ -3788,7 +4039,8 @@ class CMGame {
 	 * This method calculates that measurement without
 	 * drawing to the screen. No x or y required.
 	 * @param {string[]|string} fonts - Array of the fonts to use in order (cycles if > strings.length);
-	 *   or single string with font to use. If null (or falsy value) is provided, will use game's current font.
+	 *   or single string with font to use. If falsy value or empty array is
+	 *   provided, this method will use the game's current font.
 	 * @param {string[]|string} strings - Array of the strings to write in order. Or
 	 *   a single string that is being measured.
 	 * @returns {number} The total string width as if drawn
@@ -3833,7 +4085,8 @@ class CMGame {
 	 * @param {boolean} [options.strokeStyles[]] An array of colors, gradients, etc. to stroke with
 	 * @param {number} [options.angle=0] An angle (radians) to rotate by (clockwise, from viewer's perspective)
 	 * @param {number} [options.centerVertically=true] If true uses textBaseline="middle"
-	 * @returns {number} The ending x of the complete centered string, as if not rotated
+	 * @returns {object} A CMPoint instance representing the (x, y) screen point where
+	 *   this text ends (even if rotated)
 	 */
 	drawStringsCentered(fontsArg, stringsArg, x, y, options={}) {
 		let defaults = {
@@ -3850,8 +4103,17 @@ class CMGame {
 			opts[key] = typeof options[key] !== "undefined" ? options[key] : defaults[key];
 		}
 
-		// These lines allow us to pass in single strings or arrays
-		let fonts = Array.isArray(fontsArg) ? fontsArg: [fontsArg];
+		let fonts = fontsArg;
+		let numFonts = 0;
+
+		if(typeof fontsArg === "string") { // pass in a single font string
+			fonts = [fontsArg];
+		}
+
+		if(!fontsArg || fontsArg.length === 0) { // pass in falsy value or empty array
+			fonts = [this.offscreenCtx.font];
+		}
+
 		let strings = Array.isArray(stringsArg) ? stringsArg: [stringsArg];
 
 		if(typeof opts.fillStyles === "string") {
@@ -3870,8 +4132,7 @@ class CMGame {
 			opts.strokeStyles = [this.offscreenCtx.strokeStyle];
 		}
 
-
-		let numFonts = fonts.length;
+		numFonts = fonts.length;
 		let numStrings = strings.length;
 		let offsetX = 0;
 		this.offscreenCtx.save();
@@ -3881,7 +4142,8 @@ class CMGame {
 		}
 
 		// Pre-draw strings, shift left by half
-		let newLeftX = x - .5 * this.measureStrings.apply(this, [fonts, strings]);
+		let stringLengthPx = this.measureStrings.apply(this, [fonts, strings]);
+		let newLeftX = x - .5 * stringLengthPx;
 
 		if(opts.angle !== 0) {
 			this.offscreenCtx.translate(x, y);
@@ -3907,7 +4169,9 @@ class CMGame {
 		}
 
 		this.offscreenCtx.restore();
-		return newLeftX + offsetX;
+
+		return new CMPoint(x + .5 * stringLengthPx * Math.cos(opts.angle),
+			y + .5 * stringLengthPx * Math.sin(opts.angle));
 	}
 
 	/**
@@ -5137,6 +5401,7 @@ CMGame.Color = {
 
 	ORANGE: "rgb(254, 137, 39)", // "rgb(247, 101, 3)"
 	YELLOW: "rgb(255, 245, 10)",
+	GOLD: "rgb(255, 193, 4)",
 
 	LIGHT_GREEN: "rgb(0, 240, 0)",
 	GREEN: "rgb(0, 185, 0)",
@@ -5152,7 +5417,9 @@ CMGame.Color = {
 	PURPLE: "rgb(128, 0, 128)", // 143, 41, 140
 
 	BROWN: "rgb(121, 74, 25)",
-	TAN: "rgb(242, 245, 235)", // sand-like
+	SAND: "rgb(242, 245, 235)",
+	TAN: "rgb(242, 228, 205)",
+	PEACH: "rgb(242, 222, 212)", // "rgb(242, 215, 205)", // "rgb(255, 248, 235)",
 
 	// grayscale colors
 	WHITE: "rgb(255, 255, 255)",
@@ -5178,7 +5445,7 @@ CMGame.Color = {
  *
  * Example usage:
  *
- * ctx.font = game.font.SANS_SERIF; // Sets font to Arial in current font size
+ * ctx.font = game.font.SANS; // Sets font to the default sans-serif font in current font size
  *
  */
 Object.defineProperty(CMGame.prototype, "font", {
@@ -5201,7 +5468,7 @@ Object.defineProperty(CMGame.prototype, "font", {
 		return {
 			rel: (pxForScale1) => pxForScale1 / self.screenScalar,
 			MONO: `${currentFontSize} monospace`,
-			SANS_SERIF: `${currentFontSize} Arial, sans-serif`,
+			SANS: `${currentFontSize} OpenSans, Arial, sans-serif`,
 			SERIF: `${currentFontSize} Times New Roman, serif`,
 			VARIABLE: `italic ${currentFontSize} Times New Roman, serif`
 		};
