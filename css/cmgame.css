@@ -416,43 +416,43 @@ label .cm-play-button {
 .cm-fuschia {
 	background-color: rgb(253, 13, 136);
 }
- 
+
 .cm-magenta {
 	background-color: rgb(228, 0, 228);
 }
- 
+
 .cm-pink {
 	background-color: rgb(254, 3, 133);
 }
- 
+
 .cm-red {
 	background-color: rgb(250, 0, 92);
 }
- 
+
 .cm-dark_red {
 	background-color: rgb(133, 33, 33);
 }
- 
+
 .cm-orange {
 	background-color: rgb(254, 137, 39);
 }
- 
+
 .cm-yellow {
 	background-color: rgb(255, 245, 10);
 }
- 
+
 .cm-light_green {
 	background-color: rgb(0, 240, 0);
 }
- 
+
 .cm-green {
 	background-color: rgb(0, 185, 0);
 }
- 
+
 .cm-dark_green {
 	background-color: rgb(0, 136, 0);
 }
- 
+
 .cm-light_blue {
 	background-color: rgb(0, 250, 235);
 }
@@ -460,59 +460,59 @@ label .cm-play-button {
 .cm-sky_blue {
 	background-color: rgb(142, 227, 252);
 }
- 
+
 .cm-blue {
 	background-color: rgb(1, 97, 251);
 }
- 
+
 .cm-blue_green {
 	background-color: rgb(0, 168, 153);
 }
- 
+
 .cm-violet {
 	background-color: rgb(185, 51, 158);
 }
- 
+
 .cm-purple {
 	background-color: rgb(128, 0, 128);
 }
- 
+
 .cm-brown {
 	background-color: rgb(121, 74, 25);
 }
- 
+
 .cm-tan {
 	background-color: rgb(242, 245, 235);
 }
- 
+
 .cm-white {
 	background-color: rgb(255, 255, 255);
 }
- 
+
 .cm-almost_white {
 	background-color: rgb(250, 250, 250);
 }
- 
+
 .cm-black {
 	background-color: rgb(0, 0, 0);
 }
- 
+
 .cm-almost_black {
 	background-color: rgb(15, 23, 33);
 }
- 
+
 .cm-gray {
 	background-color: rgb(158, 158, 158);
 }
- 
+
 .cm-light_gray {
 	background-color: rgb(205, 205, 205);
 }
- 
+
 .cm-dark_gray {
 	background-color: rgb(58, 58, 58);
 }
- 
+
 .cm-translucent_white {
 	background-color: rgba(255, 255, 255, 0.85);
 }
@@ -528,43 +528,43 @@ label .cm-play-button {
 .cm-text-fuschia {
 	color: rgb(253, 13, 136);
 }
- 
+
 .cm-text-magenta {
 	color: rgb(228, 0, 228);
 }
- 
+
 .cm-text-pink {
 	color: rgb(254, 3, 133);
 }
- 
+
 .cm-text-red {
 	color: rgb(250, 0, 92);
 }
- 
+
 .cm-text-dark_red {
 	color: rgb(133, 33, 33);
 }
- 
+
 .cm-text-orange {
 	color: rgb(254, 137, 39);
 }
- 
+
 .cm-text-yellow {
 	color: rgb(255, 245, 10);
 }
- 
+
 .cm-text-light_green {
 	color: rgb(0, 240, 0);
 }
- 
+
 .cm-text-green {
 	color: rgb(0, 185, 0);
 }
- 
+
 .cm-text-dark_green {
 	color: rgb(0, 136, 0);
 }
- 
+
 .cm-text-light_blue {
 	color: rgb(0, 250, 235);
 }
@@ -576,55 +576,55 @@ label .cm-play-button {
 .cm-text-blue {
 	color: rgb(1, 97, 251);
 }
- 
+
 .cm-text-blue_green {
 	color: rgb(0, 168, 153);
 }
- 
+
 .cm-text-violet {
 	color: rgb(185, 51, 158);
 }
- 
+
 .cm-text-purple {
 	color: rgb(128, 0, 128);
 }
- 
+
 .cm-text-brown {
 	color: rgb(121, 74, 25);
 }
- 
+
 .cm-text-tan {
 	color: rgb(242, 245, 235);
 }
- 
+
 .cm-text-white {
 	color: rgb(255, 255, 255);
 }
- 
+
 .cm-text-almost_white {
 	color: rgb(250, 250, 250);
 }
- 
+
 .cm-text-black {
 	color: rgb(0, 0, 0);
 }
- 
+
 .cm-text-almost_black {
 	color: rgb(15, 23, 33);
 }
- 
+
 .cm-text-gray {
 	color: rgb(158, 158, 158);
 }
- 
+
 .cm-text-light_gray {
 	color: rgb(205, 205, 205);
 }
- 
+
 .cm-text-dark_gray {
 	color: rgb(58, 58, 58);
 }
- 
+
 .cm-text-translucent_white {
 	color: rgba(255, 255, 255, 0.85);
 }
@@ -635,6 +635,68 @@ label .cm-play-button {
 
 .cm-text-transparent: {
 	color: rgba(0, 0, 0, 0);
+}
+
+.cm-overlay {
+	width: 100vw;
+	height: 100vh;
+	z-index: 2000;
+	position: fixed;
+	top: 0;
+	left: 0;
+	background: rgba(0, 15, 33, 0.5);
+}
+
+#cmAlert {
+    width: 360px;
+    position: absolute;
+    top: 20px;
+    left: calc(50vw - 360px / 2);
+    text-align: center;
+    border-radius: 4px;
+    background: rgb(250, 251, 255);
+    box-shadow: 4px 4px 10px rgb(0, 15, 33, .55);
+    border-radius: 4px;
+}
+
+#cmAlert h3 {
+    margin: 0;
+    padding: 0.5em 0;
+    color: rgb(255 255 255);
+    text-align: left;
+    text-indent: 1em;
+    border-radius: 4px 4px 0 0;
+	background: rgb(63, 0, 2);
+}
+
+#cmAlert input {
+	background: rgb(255 255 255);
+    width: 80%;
+    border-radius: 4px;
+    border: 1px solid rgb(128 128 128);
+    height: 24px;
+    font-size: 16px;
+    line-height: 24px;
+
+	margin-bottom: 32px;
+}
+
+#cmAlert button {
+	font: 16px OpenSans, Arial, sans-serif;
+	border: none;
+	border-radius: 6px;
+	width: 70px;
+	height: 30px;
+	bottom: 10px;
+	box-shadow: 1px 1px 3px rgba(0, 15, 33, 0.55);
+}
+
+#cmAlert button:nth-of-type(2) {
+	margin-left: 8px;
+}
+
+#cmAlert p:last-of-type {
+	margin-bottom: 1.125em;
 }
 
 /* vmin can shrink on small screens - 16px should be your minimum font for accessibility */
