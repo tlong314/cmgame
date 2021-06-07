@@ -22,14 +22,30 @@ Math.PHI = Math.PHI || .5 * (1 + Math.SQRT5); // Golden ratio
 window.requestNextFrame = window.requestAnimationFrame;
 window.cancelNextFrame = window.cancelAnimationFrame;
 
-// For minimal code, we let user omit <body> tag
-window.documentBodyElm = document.body || document.documentElement;
-
+/**
+ * Some style guides suggest not using "optional" HTML tags,
+ * including the <body> tag, but this can lead to unexpected
+ * results when trying to bind handlers to dynamically added
+ * elements (something we do a lot of in this script).
+ *
+ * If no <body> is present, we create a temporary one
+ * while the handlers bind, and remove any extra
+ * generated <body> tags later.
+ */
 if(!document.body) {
-	console.warn("Some event handlers may not register without HTML tags present. " +
+	window.documentBody = document.body =
+			document.documentElement.appendChild( document.createElement("body") );
+
+	console.warn("Some issues may arise without certain HTML tags present. " +
 		"If you need touch/mouse events, provide either " +
 		"a <body> tag or a <canvas> tag in your HTML.");
 }
+else {
+	window.documentBody = document.body;
+}
+
+// For minimal code, we let user omit <body> tag
+//window.documentBody = document.body || document.documentElement;
 
 /**
  * Manage web audio logic, overcoming iOS bug
@@ -1288,7 +1304,7 @@ class CMGame {
 		if(!this.wrapper) {
 			this.wrapper = document.createElement("div");
 			this.wrapper.setAttribute("id", "cmWrapper");
-			documentBodyElm.appendChild(this.wrapper);
+			documentBody.appendChild(this.wrapper);
 		}
 
 		this.canvas = null;
@@ -1620,7 +1636,7 @@ class CMGame {
 		this.screenshotLink.href = "";
 		this.screenshotLink.download = "cmgscreenshot.png";
 		this.screenshotLink.style.display = "none";
-		documentBodyElm.appendChild(this.screenshotLink);
+		documentBody.appendChild(this.screenshotLink);
 
 		this.screenshotBtn = null;
 		if(opts.screenshotBtn) {
@@ -1637,7 +1653,7 @@ class CMGame {
 		this.screenVideoLink.href = "";
 		this.screenVideoLink.download = "cmgscreenvideo.mp4";
 		this.screenVideoLink.style.display = "none";
-		documentBodyElm.appendChild(this.screenVideoLink);
+		documentBody.appendChild(this.screenVideoLink);
 
 		// For devs who just want the engine, no math drawing
 		if(this.type === "none") {
@@ -1902,6 +1918,46 @@ class CMGame {
 
 			this.screenVideoCtx = this.screenVideoCanvas.getContext("2d", {alpha: false});
 		}
+
+		this.alertOverlay = document.createElement("div");
+		this.alertOverlay.classList = "cm-overlay cm-transparent-black";
+
+		this.alertElement = document.createElement("aside");
+		this.alertElement.setAttribute("id", "cmAlert");
+
+		let header = document.createElement("header");
+		let h3 = document.createElement("h3");
+		this.alertMessage = document.createElement("p");
+		this.alertMessage.classList.add("cm-center-text");
+		let p2 = document.createElement("p");
+		p2.classList.add("cm-center-text");
+
+		this.alertInput = document.createElement("input");
+		this.alertInput.type = "text";
+		this.alertInput.style.background = "white";
+
+		this.alertOKButton = document.createElement("button");
+		this.alertOKButton.className = "cm-dark_green cm-text-white";
+		this.alertOKButton.setAttribute("id", "cmAlertOKBtn");
+		this.alertOKButton.innerText = "OK";
+
+		this.alertCancelButton = document.createElement("button");
+		this.alertCancelButton.className = "cm-gray cm-text-white";
+		this.alertCancelButton.setAttribute("id", "cmAlertCancelBtn");
+		this.alertCancelButton.innerText = "Cancel";
+
+		this.alertOverlay.appendChild(this.alertElement);
+		h3.innerText = (document.title || "Game") + " says:";
+		header.appendChild(h3);
+		this.alertElement.appendChild(header);
+		this.alertElement.appendChild(this.alertMessage);
+
+		p2.appendChild(this.alertInput);
+		p2.appendChild(this.alertOKButton);
+		p2.appendChild(this.alertCancelButton);
+		this.alertElement.appendChild(p2);
+		this.alertOverlay.style.display = "none";
+		documentBody.appendChild(this.alertOverlay);
 	}
 
 	/**
@@ -2919,13 +2975,13 @@ class CMGame {
 			 * to 0 height and disappear
 			 */
 			if(dimensionForReference === "width") {
-				newWidth = Math.min.apply(Math, [document.documentElement.clientWidth, window.outerWidth, window.innerWidth, documentBodyElm.clientWidth]);
+				newWidth = Math.min.apply(Math, [document.documentElement.clientWidth, window.outerWidth, window.innerWidth, documentBody.clientWidth]);
 				newHeight = (this.canvasReferenceHeight / this.canvasReferenceWidth) * newWidth;
 
 				this.screenScalar = Math.min(newWidth / this.canvasReferenceWidth, newHeight / this.canvasReferenceHeight);
 			}
 			else {
-				newHeight = Math.min.apply(Math, [document.documentElement.clientHeight, window.outerHeight, window.innerHeight, documentBodyElm.clientHeight]);
+				newHeight = Math.min.apply(Math, [document.documentElement.clientHeight, window.outerHeight, window.innerHeight, documentBody.clientHeight]);
 				newWidth = (this.canvasReferenceWidth / this.canvasReferenceHeight) * newHeight;
 
 				this.screenScalar = Math.min(newWidth / this.canvasReferenceWidth, newHeight / this.canvasReferenceHeight);
@@ -3064,7 +3120,8 @@ class CMGame {
 	 * @param {object} e - The keydown event
 	 */
 	keyDown(e) {
-		e.preventDefault();
+		if(!game.paused) // If game is paused, user may be typing into prompt input
+			e.preventDefault();
 
 		switch(e.keyCode) {
 			case 38: // Up arrow
@@ -4992,21 +5049,229 @@ class CMGame {
 		this.ctx.restore(); // return to previous font
 	}
 
-	// Some graph theory methods:
+	/**
+	 * Adds a new edge to a "graphtheory" game
+	 * @param {object} edge - A CMEdge instance
+	 * @returns {object} The current CMGame instance
+	 */
 	addEdge(edge) {
-		this.edges.push(edge);
+		if(edge) {
+			this.edges.push(edge);
+		}
+
+		return this;
 	}
 
+	/**
+	 * Adds a new vertex to a "graphtheory" game
+	 * @param {object} vertex - A CMVertex instance
+	 * @returns {object} The current CMGame instance
+	 */
 	addVertex(vertex) {
-		this.vertices.push(vertex);
+		if(vertex) {
+			this.vertices.push(vertex);
+		}
+
+		return this;
 	}
 
+	/**
+	 * Removes an edge from a "graphtheory" game
+	 * @param {object} edge - A CMEdge instance
+	 * @returns {object} The current CMGame instance
+	 */
 	removeEdge(edge) {
-		this.edges.splice(this.edges.indexOf(edge), 1);
+		if(edge) {
+			this.edges.splice(this.edges.indexOf(edge), 1);
+		}
+
+		return this;
 	}
 
+	/**
+	 * Removes an vertex from a "graphtheory" game
+	 * @param {object} vertex - A CMVertex instance
+	 * @returns {object} The current CMGame instance
+	 */
 	removeVertex(vertex) {
-		this.vertices.splice(this.vertices.indexOf(vertex), 1);
+		if(vertex) {
+			this.vertices.splice(this.vertices.indexOf(vertex), 1);
+		}
+
+		return this;
+	}
+
+	/**
+	 * Presents a pop-up message, which halts the
+	 * game similar to window.alert, but without
+	 * actually blocking the JS main thread.
+	 * Rather than blocking and waiting for user to
+	 * press OK, this returns a Promise that resolves
+	 * when user presses OK.
+	 * @param {string} [msg=""] - A message to display 
+	 */
+	alert(msg="") {
+		let self = this;
+
+		let pauseState = this.paused;
+		if(!pauseState) {
+			this.pause();
+		}
+
+		let doodleEnabledState = this.doodleOptions.enabled;
+		if(doodleEnabledState) {
+			this.doodleOptions.enabled = false;
+		}
+
+		this.alertMessage.innerHTML = msg;
+		this.alertCancelButton.style.display = "none";
+		this.alertInput.style.display = "none";
+
+		return new Promise(function(resolve, reject) {
+			self.alertOKButton.onclick = function(e) {
+				e.preventDefault();
+				self.alertOverlay.style.display = "none";
+
+				if(!pauseState) {
+					self.unpause();
+				}
+
+				if(doodleEnabledState) {
+					this.doodleOptions.enabled = true;
+				}
+
+				resolve();
+			};
+
+			self.alertOverlay.style.display = "block";
+		});
+	}
+
+	/**
+	 * Creates a "confirm" dialog, similar to window.confirm,
+	 * and halts current game processes without actually
+	 * blocking the JS main thread.
+	 * Rather than blocking and returning a boolean,
+	 * this returns a promise, that resolves with the
+	 * boolean (true if user pressed OK, false otherwise).
+	 * @param {string} [msg=""] - A message to display
+	 * @returns {Promise}
+	 */
+	confirm(msg="") {
+		let self = this;
+
+		let pauseState = this.paused;
+		if(!pauseState) {
+			this.pause();
+		}
+
+		let doodleEnabledState = this.doodleOptions.enabled;
+		if(doodleEnabledState) {
+			this.doodleOptions.enabled = false;
+		}
+
+		this.alertMessage.innerHTML = msg;
+		this.alertCancelButton.style.display = "inline-block";
+		this.alertInput.style.display = "none";
+
+		return new Promise(function(resolve, reject) {
+			self.alertOKButton.onclick = function(e) {
+				e.preventDefault();
+				self.alertOverlay.style.display = "none";
+
+				if(!pauseState) {
+					self.unpause();
+				}
+
+				if(doodleEnabledState) {
+					this.doodleOptions.enabled = true;
+				}
+
+				resolve(true);
+			};
+
+			self.alertCancelButton.onclick = function(e) {
+				e.preventDefault();
+				self.alertOverlay.style.display = "none";
+
+				if(!pauseState) {
+					self.unpause();
+				}
+
+				if(doodleEnabledState) {
+					this.doodleOptions.enabled = true;
+				}
+
+				resolve(false);
+			};
+
+			self.alertOverlay.style.display = "block";
+		});
+	}
+
+	/**
+	 * Creates a "confirm" dialog, similar to window.confirm,
+	 * and halts current game processes without actually
+	 * blocking the JS main thread.
+	 * Rather than blocking and returning entered text,
+	 * this returns a promise, that resolves with the
+	 * entered text if the user press OK, and with null otherwise.
+	 * @param {string} [msg=""] - A message to display
+	 * @param {string} [defaultString=""] - A string to load in the textbox instead of leaving blank
+	 * @returns {Promise}
+	 */
+	prompt(msg="", defaultString="") {
+		let self = this;
+
+		let pauseState = this.paused;
+		if(!pauseState) {
+			this.pause();
+		}
+
+		let doodleEnabledState = this.doodleOptions.enabled;
+		if(doodleEnabledState) {
+			this.doodleOptions.enabled = false;
+		}
+
+		this.alertMessage.innerHTML = msg;
+		this.alertInput.value = defaultString;
+		this.alertInput.style.display = "inline-block";
+		this.alertCancelButton.style.display = "inline-block";
+
+		return new Promise(function(resolve, reject) {
+			self.alertOKButton.onclick = function(e) {
+				e.preventDefault();
+				self.alertOverlay.style.display = "none";
+
+				if(!pauseState) {
+					self.unpause();
+				}
+
+				if(doodleEnabledState) {
+					this.doodleOptions.enabled = true;
+				}
+
+				resolve(self.alertInput.value);
+			};
+
+			self.alertCancelButton.style.display = "inline-block";
+			self.alertCancelButton.onclick = function(e) {
+				e.preventDefault();
+				self.alertOverlay.style.display = "none";
+
+				if(!pauseState) {
+					self.unpause();
+				}
+
+				if(doodleEnabledState) {
+					this.doodleOptions.enabled = true;
+				}
+
+				resolve(null);
+			};
+
+			self.alertOverlay.style.display = "block";
+		});
 	}
 
 	/**
@@ -5250,6 +5515,17 @@ CMGame.manageLoad = (e) => {
 		return;
 	}
 
+	// If HTML was written with no <body> tag, remove any extra generated tags
+	if(document.querySelectorAll("body").length > 1) {
+		let notBody = null;
+
+		document.querySelectorAll("body").forEach(elm => {
+			if(elm !== document.body) {
+				elm.parentNode.removeChild(elm);
+			}
+		});
+	}
+
 	CMGame.pageLoaded = true;
 	CMGame.onpageload.call(window, e);
 	domLoaded = true;
@@ -5445,7 +5721,7 @@ CMGame.Color = {
  *
  * Example usage:
  *
- * ctx.font = game.font.SANS; // Sets font to the default sans-serif font in current font size
+ * ctx.font = game.font.SANS_SERIF; // Sets font to the default sans-serif font in current font size
  *
  */
 Object.defineProperty(CMGame.prototype, "font", {
@@ -5468,7 +5744,7 @@ Object.defineProperty(CMGame.prototype, "font", {
 		return {
 			rel: (pxForScale1) => pxForScale1 / self.screenScalar,
 			MONO: `${currentFontSize} monospace`,
-			SANS: `${currentFontSize} OpenSans, Arial, sans-serif`,
+			SANS_SERIF: `${currentFontSize} OpenSans, Arial, sans-serif`,
 			SERIF: `${currentFontSize} Times New Roman, serif`,
 			VARIABLE: `italic ${currentFontSize} Times New Roman, serif`
 		};
@@ -5504,7 +5780,7 @@ if(!CMGame.toastElement) {
 	CMGame.toastElement = document.createElement("span");
 	CMGame.toastElement.setAttribute("id", "cmToast");
 	CMGame.toastElement.classList.add("cm-toast");
-	documentBodyElm.appendChild(CMGame.toastElement);
+	documentBody.appendChild(CMGame.toastElement);
 
 	// When a toast is shown, it fades to invisible after a few seconds, but then we need it to leave the HTML
 	CMGame.toastElement.addEventListener("animationend", function() {
@@ -5534,7 +5810,7 @@ if(!CMGame.offscreenToastElement) {
 	// Positive values here result in incorrect client rect values
 	CMGame.offscreenToastElement.style.left = "-100vw";
 	CMGame.offscreenToastElement.style.top = "-100vh";
-	documentBodyElm.appendChild(CMGame.offscreenToastElement);
+	documentBody.appendChild(CMGame.offscreenToastElement);
 };
 
 /**
