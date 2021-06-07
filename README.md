@@ -108,11 +108,7 @@ exitFullscreenBtn: An HTML element (or CSS selector for that element) to be used
 
 screenshotBtn: An HTML element (or CSS selector for that element) to be used to capture an in-game screenshot when user clicks.
 
-toggleSoundBtn: null
-
-toggleMusicBtn: null
-
-type - A string describing the type of math game. Available options are "graph" (standard 2D Cartesian graph system), "venn" (Venn Diagrams), "graphtheory" (A system of vertices and edges, as presented in Graph Theory), or "none" (no math-specific resources, in case you just want to use this to make a basic game or animation)
+type - A string describing the type of math game. Available options are "graph" (standard 2D Cartesian graph system), "venn" (Venn Diagrams), "graphtheory" (A system of vertices and edges, as presented in Graph Theory), or "none" (no math-specific resources, in case you just want to use this to make a basic game or animation). Since this engine is geared toward math games, "graph" is the default.
 
 images - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path. E.g.,
 
@@ -652,8 +648,6 @@ game.onupdate = function() {
 
 layer - The "drawing layer" on which to draw the sprite. If you have very specific requirements about which sprites should be drawn first, you can define this to any number for your sprites. They will be drawn in the order you have set, with lower numbers drawn first.
 
-omitFromSprites - A boolean. Mainly used internally for extending the sprite class. Lets us manage extended classes separately from when most game sprites are updated or drawn.
-
 ### Sprite Properties and Methods
 
 When making mobile-driven or desktop games, it can be useful to detect whether the user has clicked/tapped on a sprite. The sprite's "containsPoint" method can help detect this.
@@ -699,7 +693,7 @@ var path = new CMGame.Function(
   game,
   function(theta) { return Math.sin(theta) },
   {
-    type: "polar",
+    type: "polar", // polar functions are very useful for enemy paths, because of their repeating nature
     strokeStyle: CMGame.Color.TRANSPARENT // Don't show path sprite is following
   }
 });
@@ -712,6 +706,37 @@ Occasionally we only need to access the sprite's center point (rather than the t
 ```javascript
 // Returns a point with an x value and y value representing the sprite's center point on the canvas
 var centerPoint = sprite.center;
+```
+
+Sometimes we only want part of a sprite to be used when checking for collision (e.g., for space shooters where the hero's ship has a lit vulnerable area much smaller than the ship itself). These are generally rectangles (hence the term "box"). We can define a sprite's hitbox in a custom way - otherwise the sprite itself is used when checking hitbox collisions.
+
+```javascript
+
+// Check if the actual sprites collide
+if(game.areColliding(hero, enemy) {
+  console.log("Double explosion!");
+}
+
+// This will do the exact same thing
+if(game.areColliding(hero.hitbox, enemy.hitbox) {
+  console.log("Double explosion!");
+}
+
+// But we can use a function to define the hero's hitbox
+hero.hitbox = function() { // Avoid arrow functions, as `this` keyword will be very useful here
+  return {
+    x: this.x + this.width / 4,
+    y: this.y + this.height / 4,
+    width: this.width / 2,
+    height: this.height / 2
+  };
+};
+
+// Now this only happens when a smaller part of the hero is hit
+if(game.areColliding(hero.hitbox, enemy.hitbox) {
+  console.log("Double explosion!");
+}
+
 ```
 
 ## CMGame Methods
@@ -730,7 +755,12 @@ game.unpause(); // unpause the game
 
 // Check if two items are colliding
 if( game.areColliding(sprite1, sprite2) ) {
-  game.playSound( "audio/collision.wav" ); // play a sound file
+  game.playSound( "audio/collision.wav" );
+}
+
+// ... or do the same thing with all information for two rectangular shapes (like hitboxes)
+if( game.areColliding(rect1.x, rect1.y, rect1.width, rect1.height, rect2.x, rect2.y, rect2.width, rect2.height) ) {
+  game.playSound( "audio/collision.wav" );
 }
 
 // Check distance of 2 points (objects with x and y number coordinates defined)
@@ -739,6 +769,28 @@ game.distance( point1, point2 );
 game.takeScreenshot(); // take a screenshot of current screen and download it
 
 game.takeScreenVideo(3000); // take video of current screen for next 3 seconds and download it
+
+game.stopScreenVideo(); // stops a screen video immediately instead of waiting for its duration to complete
+
+// This is similar to window.alert (halts the game until closed) but does not block the browser's JS thread.
+// Instead, returns a Promise, that resolves once they close the message.
+game.alert("Welcome!").then(function() {
+  console.log("OK, I guess they closed the alert");
+});
+
+// This is similar to window.alert (halts the game until closed) but does not block the browser's JS thread
+// Instead, returns a Promise, that resolves (with true or false) once they close the message.
+game.confirm("Want to play again?").then(function(clickedOK) {
+  if(clickedOK)
+    restartMyCustomGame(); // or whatever you name your restart
+});
+
+// This is similar to window.alert (halts the game until closed) but does not block the browser's JS thread
+// Instead, returns a Promise, that resolves with the user entry once they close the message (or null if they cancel).
+game.prompt("What is your name?").then(function(entry) {
+  if(entry !== null)
+    game.state.name = entry;
+});
 
 // Zooms to 90% of normal view. Do not change origin while game is zoomed in/out. (Still a little buggy in such a case.)
 game.zoom(0.9);
@@ -784,6 +836,12 @@ game.stopDoodle();
 
 // Erase all doodles from screen
 game.clearDoodles();
+
+// Turns all the visible player-drawn doodles into a sprite object you can use for the current game
+let multiPartSprite = game.spriteFromDoodles();
+
+// Similar to game.spriteFromDoodles(); but only uses the very last thing drawn.
+let singlePartSprite = game.spriteFromDoodle();
 
 // static values and methods
 
