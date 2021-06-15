@@ -772,24 +772,26 @@ game.takeScreenVideo(3000); // take video of current screen for next 3 seconds a
 
 game.stopScreenVideo(); // stops a screen video immediately instead of waiting for its duration to complete
 
+game.startScreenVideo(); // starts recording video for an indefinite amount of time. Must be stopped with game.stopScreenVideo()
+
 // This is similar to window.alert (halts the game until closed) but does not block the browser's JS thread.
 // Instead, returns a Promise, that resolves once they close the message.
 game.alert("Welcome!").then(function() {
   console.log("OK, I guess they closed the alert");
 });
 
-// This is similar to window.alert (halts the game until closed) but does not block the browser's JS thread
+// This is similar to window.confirm (halts the game until closed) but does not block the browser's JS thread
 // Instead, returns a Promise, that resolves (with true or false) once they close the message.
 game.confirm("Want to play again?").then(function(clickedOK) {
   if(clickedOK)
     restartMyCustomGame(); // or whatever you name your restart
 });
 
-// This is similar to window.alert (halts the game until closed) but does not block the browser's JS thread
+// This is similar to window.prompt (halts the game until closed) but does not block the browser's JS thread
 // Instead, returns a Promise, that resolves with the user entry once they close the message (or null if they cancel).
 game.prompt("What is your name?").then(function(entry) {
   if(entry !== null)
-    game.state.name = entry;
+    game.state.playerName = entry;
 });
 
 // Zooms to 90% of normal view. Do not change origin while game is zoomed in/out. (Still a little buggy in such a case.)
@@ -952,12 +954,11 @@ game.drawLine( x1, y1, x2, y2 );
 // Or you can pass in 2 point's or point-like objects (e.g., to draw a line from one circle's center to another's). These use context's current line width and strokeStyle.
 game.drawLine( point1, point2 );
 
-// rotating images can be confusing, and a lot of code. CMGame provides a drawRotatedImage method that takes in similar arguments to canvas context drawImage method, but with a final argument added as thenumber of radians to rotate by (counterclockwise) around the drawn image's center
+// rotating images can be confusing, and a lot of code. CMGame provides a drawRotatedImage method that takes in similar arguments to canvas context drawImage method, but with a final argument added as the number of radians to rotate by (counterclockwise) around the drawn image's center
 
-game.drawRotatedImage(img, Math.PI / 4); // draws image rotated about it center by pi/4 radians
 game.drawRotatedImage(img, 100, 200, Math.PI / 4); // draws image at point (100, 200), but rotated about the image center
 game.drawRotatedImage(img, 100, 200, 80, 40, Math.PI / 4); // draws image as width 80 and height 40 at point (100, 200), but rotated about the drawn image's center
-game.drawRotatedImage(img, 0, 0, 100, 50, 100, 200, 80, 40, Math.PI / 4); // draws image from source rectangle (0, 0, 100, 50) to destination (100, 200, 80, 40), but rotated about the drawn image's center
+game.drawRotatedImage(img, 0, 0, 100, 50, 100, 200, 80, 40, Math.PI / 4); // draws image from source rectangle (0, 0, 100, 50) to destination (100, 200, 80, 40), but rotated about the destination rectangle's (drawn image's) center
 
 // Draw multiple strings together with varying fonts and colors.
 // First argument is list of fonts to use. If list of text strings is longer, this will cycle back around when reaching last font.
@@ -979,7 +980,7 @@ game.measureStrings(["12px Arial", "italic 14px Times New Roman"], ["5", "x", " 
 //   centerVertically - A boolean; if true, will try and center the text vertically around the point (x, y)
 //   angle - An angle in radians to rotate the entire string around if desired
 // As with drawStrings, this returns an x value for the end of the drawn strings (however, this assumes they were not rotated)
-game.drawStringsCentered( ["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"] , 200, 100, { fillStyles: ["pink", "blue"] )
+game.drawStringsCentered( ["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"] , 200, 100, { fillStyles: ["pink", "blue"] });
 
 // Fills a circle of radius 20 around canvas point (200, 100)
 game.fillOval(200, 100, 20);
@@ -1001,12 +1002,12 @@ ctx.font = game.font.SANS_SERIF; // Gets sans-serif font of current font size
 ctx.font = game.font.SERIF; // Gets serif font of current font size
 ctx.font = game.font.VARIABLE; // Gets expected font for variables (italic, serif) of current font size
 
-// Since canvas scaling is automated and may result in text becoming too small, you can get an appropriate font size relative to current scale
+// Since canvas scaling is automated and may result in text becoming too small, you can get an appropriate font size to offset the current scale
 ctx.font = game.font.rel(12) + "px Arial"; // If current screen has canvas scaled to half its starting size, then this value becomes "24px Arial".
 
 ```
 
-While drawing, you may want to refer to the predefined modern color palette, with CMGame.Color. This has many constant values represented by the color name in all caps. Color names are as expected, with multiple words being separated by an underscore (_).
+While drawing, you may want to refer to the predefined modern color palette, with CMGame.Color. This has many constant values represented by the color name in all caps. Color names are as expected (RED, ORANGE, BROWN, etc.), with multiple words being separated by an underscore (SKY_BLUE, etc.).
 
 ```javascript
 
@@ -1014,7 +1015,7 @@ ctx.fillStyle = CMGame.Color.BLUE;
 
 ```
 
-For constistency, it is best to use CMGame.Color.TRANSPARENT rather than "transparent", "rgba(0, 0, 0, 0)", etc. This way the game can reliably check for transparent values before wasting resources on drawing.
+For consistency, it is best to use CMGame.Color.TRANSPARENT rather than "transparent", "rgba(0, 0, 0, 0)", etc. This way the game can reliably check for transparent values before wasting resources on drawing.
 
 If you have HTML elements that you want to use the same color palette, you can add corresponding classes, all lowercase, replacing CMGame.Color with .cm- to use the color as a background, or .cm-text- to use the color as the font color.
 
