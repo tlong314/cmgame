@@ -193,7 +193,17 @@ hideOnStart - An array of HTML elements (or CSS selectors defining each) to be h
 
 tickDistance - How many pixels apart x-axis (and y-axis) tick marks are from each other. Default is 20.
 
+gridlineDistance - How many pixels apart (horizontally or vertically) graph gridlines are drawn. If not provided, picks value based on tickDistance.
+
 graphScalar - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
+
+tickFontSize - A specific size (in pixels) for the tick mark font. If not provided, picks value based on gridlineDistance and tickDistance, with a minimum of 10 pixels.
+
+tickLabelIf - A function that takes in a real value (for a tick value on the x or y axis) and returns true to draw the value next to the tick mark, false to not draw it, or a specific string to draw. By default draws all tick values.
+
+tickLabelIfX - Similar to tickLabelIf, but only considering values on x-axis.
+
+tickLabelIfY - Similar to tickLabelIf, but only considering values on y-axis.
 
 soundOn - A boolean: true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 
@@ -737,6 +747,21 @@ hero.hitbox = function() { // Avoid arrow functions, as `this` keyword will be v
 if(game.areColliding(hero.hitbox, enemy.hitbox) {
   console.log("Double explosion!");
 }
+
+```
+
+Sprites will also have an opacity property. This can be animated easily with the sprite's fadeIn and fadeOut methods. First you may want to define what happens after the animation, by setting onfadein and onfadeout callbacks.
+
+```javascript
+
+sprite.onfadein = function() { console.log("Faded in"); };
+sprite.onfadeout = function() { console.log("Faded out"); };
+
+sprite.fadeIn(); // fades in (by default, takes .5 seconds)
+sprite.fadeIn(2000); // fades in, taking 2 seconds (2000 milliseconds) to do so
+
+sprite.fadeOut();
+sprite.fadeOut(2000);
 
 ```
 
