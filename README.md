@@ -80,7 +80,7 @@ The main focus of this engine is working with function graphs on the Cartesian p
 ```javascript
 var game = new CMGame().start();
 
-var func = new CMGame.Function(
+var func = new CMFunction(
   game,
   function(x) {
     return Math.sin(x) + 1;
@@ -392,10 +392,10 @@ If you require more control, you can also use the callbacks below. Each of these
 
 ## Adding Functions
 
-For a "graph" type game, you can add functions to the Cartesian grid screen using the static `CMGame.Function` class. The most basic function takes 2 arguments: the game that will use the function, and a function defining the well... function.
+For a "graph" type game, you can add functions to the Cartesian grid screen using the `CMFunction` class. The most basic function takes 2 arguments: the game that will use the function, and a function defining the well... function.
 
 ```javascript
-var func = new CMGame.Function(
+var func = new CMFunction(
   game,
   function(x) {
     return Math.sin(x) + 1;
@@ -413,20 +413,20 @@ You can add multiple functions to the same game screen.
 
 Functions also take in an optional third parameter, defining options for the function, described below.
 
-### CMGame.Function Options
+### CMFunction Options
 
 type - A lowercase string defining the type of function. Can be "cartesian", "polar", "parametric", "xofy". Default is "cartesian".
 A "cartesian" function is as expected - inputs are represented on the x-axis, and outputs in vertical direction. "xofy" is the opposite. "polar" uses radians and distance from origin to describe points (generally "r" as a function of "theta"). And "parametric" defines both x and y from 0 up to some defined endpoint as functions of a third parameter (usually, t). These are defined in the same general way, except a parametric function must return an object with x and y values, instead of a single number.
 
 ```javascript
-var cartesianFunc = new CMGame.Function(
+var cartesianFunc = new CMFunction(
   game,
   function(x) {
     return Math.sin(x) + 1;
   }
 );
 
-var xOfYFunc = new CMGame.Function(
+var xOfYFunc = new CMFunction(
   game,
   function(y) {
     return Math.sin(y) + 1; // Defined in same way, but now will move up vertically
@@ -436,7 +436,7 @@ var xOfYFunc = new CMGame.Function(
   }
 );
 
-var xOfYFunc = new CMGame.Function(
+var xOfYFunc = new CMFunction(
   game,
   function(theta) {
     return Math.sin(theta) + 1;
@@ -446,7 +446,7 @@ var xOfYFunc = new CMGame.Function(
   }
 );
 
-var xOfYFunc = new CMGame.Function(
+var xOfYFunc = new CMFunction(
   game,
   function(t) {
     return {
@@ -569,12 +569,12 @@ game.removeEdge( e1 );
 
 ## Sprites
 
-One fundamental concept of game programming is sprites. These are in-game objects with some visual representation, which may be an image or shape, etc.
+One fundamental concept of game programming is sprites. These are in-game objects- usually in the foreground- with some visual representation, which may be an image or shape, etc.
 
 ```javascript
 
 // Create the sprite, and you can add to the game when ready
-var boxes = new CMGame.Sprite(
+var boxes = new CMSprite(
   game,
   100,
   150,
@@ -620,7 +620,7 @@ If you need different results based on which side is being hit, you can send an 
 
 ```javascript
 
-var ball = new CMGame.Sprite(
+var ball = new CMSprite(
   game,
   200,
   100,
@@ -678,7 +678,7 @@ if(sprite.velocity.y === 0) {
 
 ```
 
-A very useful tool that makes use of a few others is a sprite's setPath method. It can give you a lot of control over your sprite's movement. You can use it to set the sprite's velocity all at once, via a point object or an array. Or, for more interesting patterns, you can set it to a CMGame.Function instance (generally one that is animated).
+A very useful tool that makes use of a few others is a sprite's setPath method. It can give you a lot of control over your sprite's movement. You can use it to set the sprite's velocity all at once, via a point object, an array, or number arguments. Or, for more interesting patterns, you can set it to a CMFunction instance (generally one that is animated).
 
 ```javascript
 sprite.setPath({
@@ -688,8 +688,9 @@ sprite.setPath({
 });
 
 sprite.setPath([2, 1, 0]); // Again, last coordinate is optional
+sprite.setPath(2, 1, 0); // Again, last coordinate is optional
 
-var path = new CMGame.Function(
+var path = new CMFunction(
   game,
   function(theta) { return Math.sin(theta) },
   {
