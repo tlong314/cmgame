@@ -46,12 +46,11 @@ let vennDiagram = new CMGame({
 });
 
 // Make it a 3-set Venn Diagram, of variation 2 (upside down triangle)
-vennDiagram.setNumberOfSets(3, 2);
+vennDiagram.setNumberOfSets(2, 0);
 
 // Handle all clicks/taps
 vennDiagram.onpressstart = function(e) {
 
-	// toggle a region's "filled" property when clicked/tapped
 	for(let [id, region] of vennDiagram.vennRegions) {
 		if(region.containsPoint(e)) {
 			region.filled = !region.filled;
@@ -62,7 +61,7 @@ vennDiagram.onpressstart = function(e) {
 // Draw instructions: "Click any region!"
 vennDiagram.ondraw = function(ctx) {
 	ctx.font = vennDiagram.font.rel(16) + "px Arial"; // Will render at 16px even if canvas is scaled down on small screen
-	ctx.fillText("Click any region!", 5, vennDiagram.height - 50);
+	ctx.fillText("Click any region!", 5, vennDiagram.height - 32);
 };
 
 </script>

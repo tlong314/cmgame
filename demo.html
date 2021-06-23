@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
 <title>CMGame Demo</title>
-<link rel="stylesheet" href="css/cmgame.min.css" />
+<link rel="stylesheet" href="css/cmgame.css" />
 </head>
 <body>
 
@@ -36,7 +36,7 @@
 	</canvas>
 </div>
 
-<script src="js/cmgame.min.js"></script>
+<script src="js/cmgame.js"></script>
 <script>
 
 // Create the game
@@ -45,7 +45,7 @@ var game = new CMGame({
 	hideOnStart: ["#playBtn", "#cmTitle"],
 	graphScalar: 40,
 	tickDistance: 40
-});
+})
 
 // These options add some color and animation to the graph
 var options = {
@@ -64,7 +64,7 @@ var options = {
 };
 
 // Create a basic function, and add it to the game
-var basicFunc = new CMGame.Function(
+var basicFunc = new CMFunction(
 		game,
 		function(x) {
 			return Math.sin(x) + 1;

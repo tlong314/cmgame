@@ -40,8 +40,11 @@
 		<i>Welcome to another CMGame Engine demo!</i>
 	</p>
 	<p>
-		This one displays normal functions and "x of y" functions,
-		all dynamically defined, and a zoom effect around the origin.
+		This demo displays normal functions and "x of y" functions,
+		all dynamically updated, as well as a zoom effect around the origin.
+	</p>
+	<p>
+		This demo also allows the user to test the "screenshot" and "screen video" functions.
 	</p>
 	<p class="cm-center-text">
 		<label for="playBtn">
@@ -88,7 +91,7 @@ CMGame.onpageload = () => {
 		e.preventDefault();
 		document.getElementById("videoBtn").disabled = true;
 
-		game.takeScreenVideo(3100).then(() => {
+		game.takeScreenVideo(3000).then(() => {
 			document.getElementById("videoBtn").disabled = false;
 		});
 
@@ -98,7 +101,7 @@ CMGame.onpageload = () => {
 let shift = 0; // We'll use this later
 
 // Create a basic function, and add it to the game
-const basicFunc = new CMGame.Function(
+const basicFunc = new CMFunction(
 		game,
 		function(x) {
 			return Math.sin(x - 9 * shift);
@@ -111,7 +114,7 @@ const basicFunc = new CMGame.Function(
 game.addFunction(basicFunc);
 
 // Create a basic function, and add it to the game
-const basicFunc2 = new CMGame.Function(
+const basicFunc2 = new CMFunction(
 		game,
 		function(x) {
 			return Math.cos(x + 20 * shift);
@@ -124,7 +127,7 @@ const basicFunc2 = new CMGame.Function(
 
 game.addFunction(basicFunc2);
 
-const basicFunc3 = new CMGame.Function(
+const basicFunc3 = new CMFunction(
 		game,
 		function(y) {
 			return Math.sin(y - 9 * shift);
@@ -139,7 +142,7 @@ const basicFunc3 = new CMGame.Function(
 game.addFunction(basicFunc3);
 
 // Create a basic function, and add it to the game
-const basicFunc4 = new CMGame.Function(
+const basicFunc4 = new CMFunction(
 		game,
 		function(y) {
 			return Math.cos(y + 20 * shift);
