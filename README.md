@@ -519,6 +519,50 @@ var xOfYFunc = new CMFunction(
 
 `velocity.end` - A plain JS object defining the velocity at which to move each variable within this function's `end` object (see `end` parameter above)
 
+`origin` - A similar argument in CMGame constructor options. This lets you change the "origin" that the function will be drawn relative to. Defaults to the current game's origin. Since a similar effect can be produced by rewriting the function definition, this is mainly used for creating different sprite paths.
+
+`discontinuousAt` - In general, this constructor will assume your function is continuous, unless it has two consecutively drawn points that are separated by an entire screen (thus assumed to be an asymptote). For more complicated functions with discontinuities where the curve should break, you can provide this argument, as an array of specific (real) points where the graph should break, or a boolean function that takes in a real number and returns true if it should break. This function can also take a second value if you want your response to be based on the (real values of) two consecutively drawn points. By default, the constructor checks if the function contains "Math.floor" or "Math.ceil" and if so, creates a discontinuity whenever two consecutive outputs are not equal; for other functions it assumes continuity everywhere (except for inferred asymptotes).
+
+### CMFunction Properties and Methods
+
+Generally you will not be accessing CMFunction properties and methods directly. Most options will be set in their constructor, and then they can be added into the game, or used as a sprite's path. Still, some properties and methods are available.
+
+```javascript
+
+(suppose func is a CMFunction instance)
+
+// Returns the real output of the real input x
+func.of(x);
+
+// Returns the onscreen pixel value output of the real input x. For instance, if func is type "cartesian" this will get the real y value and return the onscreen y-value that represents this number (based on the function's origin, and the game's graphScalar)
+func.screenOf(x);
+
+// These are 3 ways to perform the same operation: Look at the point (200, 400) on the canvas, and determine its position relative to the graph.
+func.positionOf(200, 400);
+func.positionOf({x: 200, y: 400});
+func.positionOf(new CMPoint({x: 200, y: 400}));
+
+// The positionOf function will return "above" (point is in pathAbove), "below" (point is in pathBelow), "on" (point sits directly on the curve), or "none" (cannot be determined, e.g., if point is offscreen).
+
+// Returns true if function is considered discontinuous at the given input. The function's constructor lets you set this with a function or an array. If you try to redefine this directly and an existing CMFunction instance, you must use a function.
+func.discontinuousAt(0);
+
+```
+
+Since you can set a CMFunction to be based on a different "origin" than the current game, some conversions will be different relative to the CMFunction. Thus, these methods are also provided in the CMFunction prototype:
+
+```javascript
+
+func.xToScreen( realX )
+func.yToScreen( realY )
+func.xToReal( screenX )
+func.yToReal( screenY )
+
+func.toScreen( realPoint )
+func.toReal( screenPoint )
+
+```
+
 ## Building a Venn Diagram
 
 If you define your game's "type" to be "venn" then the game will build a Venn Diagram. Initiate your game as usual, but set type to "venn". Then define the number of sets that will be in your diagram with `game.setNumberOfSets`. This method also takes an optional second parameter defining which "variation" of a certain Venn Diagram to use. The variation is 0 (the "usual" diagram) by default, 1 for a "subsets" diagram, 2 for a different (non-subset) view.
