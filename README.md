@@ -98,19 +98,19 @@ Instead of building your own project, you can of course open one of the demo HTM
 
 As discussed above, we can pass in various options when creating our game. These are described below.
 
-startBtn - An HTML element (or CSS selector for that element) that will be used to start the game. Defaults to null, and game starts on first user interaction.
+`startBtn` - An HTML element (or CSS selector for that element) that will be used to start the game. Defaults to null, and game starts on first user interaction.
 
-fullscreen - {boolean} If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
+`fullscreen` - {boolean} If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
 
-enterFullscreenBtn - An HTML element (or CSS selector for that element) to be used to enter fullscreen when user clicks. Default is null.
+`enterFullscreenBtn` - An HTML element (or CSS selector for that element) to be used to enter fullscreen when user clicks. Default is null.
 
-exitFullscreenBtn: An HTML element (or CSS selector for that element) to be used to exit fullscreen when user clicks. Default is null.
+`exitFullscreenBtn` - An HTML element (or CSS selector for that element) to be used to exit fullscreen when user clicks. Default is null.
 
-screenshotBtn: An HTML element (or CSS selector for that element) to be used to capture an in-game screenshot when user clicks.
+`screenshotBtn` An HTML element (or CSS selector for that element) to be used to capture an in-game screenshot when user clicks.
 
-type - A string describing the type of math game. Available options are "graph" (standard 2D Cartesian graph system), "venn" (Venn Diagrams), "graphtheory" (A system of vertices and edges, as presented in Graph Theory), or "none" (no math-specific resources, in case you just want to use this to make a basic game or animation). Since this engine is geared toward math games, "graph" is the default.
+`type` - A string describing the type of math game. Available options are "graph" (standard 2D Cartesian graph system), "venn" (Venn Diagrams), "graphtheory" (A system of vertices and edges, as presented in Graph Theory), or "none" (no math-specific resources, in case you just want to use this to make a basic game or animation). Since this engine is geared toward math games, "graph" is the default.
 
-images - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path. E.g.,
+`images` - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path. E.g.,
 
 ```javascript
 
@@ -142,7 +142,7 @@ game.images[0];
 
 ```
 
-audios - A plain JS object of audio files that may need preloading. You can define these similar to images, by providing your string identifier in an object, or by listing the full file paths in an array, but you reference them using CMGame methods rather than accessing directly game.playSound(soundPath). This allows us internally to load the best playback option for the current environment.
+`audios` - A plain JS object of audio files that may need preloading. You can define these similar to images, by providing your string identifier in an object, or by listing the full file paths in an array, but you reference them using CMGame methods rather than accessing directly game.playSound(soundPath). This allows us internally to load the best playback option for the current environment.
 
 ```javascript
 
@@ -187,73 +187,81 @@ game.playSound("laser_beam");
 
 ```
 
-onload - A function to call when the game's constructor has completed setup. Thus this only occurs as a constructor option, and is never used again in game's lifecycle.
+`onload` - A function to call when the game's constructor has completed setup. Thus this only occurs as a constructor option, and is never used again in game's lifecycle.
 
-hideOnStart - An array of HTML elements (or CSS selectors defining each) to be hidden from the screen when the game starts (e.g., when user presses Start button)
+`hideOnStart` - An array of HTML elements (or CSS selectors defining each) to be hidden from the screen when the game starts (e.g., when user presses Start button)
 
-tickDistance - How many pixels apart x-axis (and y-axis) tick marks are from each other. Default is 20.
+`tickDistance` - How many pixels apart x-axis (and y-axis) tick marks are from each other. Default is 20.
 
-gridlineDistance - How many pixels apart (horizontally or vertically) graph gridlines are drawn. If not provided, picks value based on tickDistance.
+`gridlineDistance` - How many pixels apart (horizontally or vertically) graph gridlines are drawn. If not provided, picks value based on tickDistance.
 
-graphScalar - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
+`graphScalar` - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
 
-tickFontSize - A specific size (in pixels) for the tick mark font. If not provided, picks value based on gridlineDistance and tickDistance, with a minimum of 10 pixels.
+`tickFontSize` - A specific size (in pixels) for the tick mark font. If not provided, picks value based on gridlineDistance and tickDistance, with a minimum of 10 pixels.
 
-tickLabelIf - A function that takes in a real value (for a tick value on the x or y axis) and returns true to draw the value next to the tick mark, false to not draw it, or a specific string to draw. By default draws all tick values.
+`tickLabelIf` - A function that takes in a real value (for a tick value on the x or y axis) and returns true to draw the value next to the tick mark, false to not draw it, or a specific string to draw. By default draws all tick values.
 
-tickLabelIfX - Similar to tickLabelIf, but only considering values on x-axis.
+`tickLabelIfX` - Similar to tickLabelIf, but only considering values on x-axis.
 
-tickLabelIfY - Similar to tickLabelIf, but only considering values on y-axis.
+`tickLabelIfY` - Similar to tickLabelIf, but only considering values on y-axis.
 
-soundOn - A boolean: true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
+`soundOn` - A boolean: true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 
-musicOn - A boolean: true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
+`musicOn` - A boolean: true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 
-saveName - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke save() or load() methods this value is never used)
+`saveName` - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke save() or load() methods this value is never used)
 
-frameCap - During each animation cycle, the game stores an internal `frameCount` variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this `frameCap` to some positive integer, because the default is Infinity.
+`frameCap` - During each animation cycle, the game stores an internal `frameCount` variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this `frameCap` to some positive integer. The default is a rather arbitrary 100000. You can set this to `Infinity` if you need the count to continue throughout gameplay.
 
-originByRatio - An array allowing you to define the Cartesian "origin" on screen based on game dimensions. This array has 2 elements: the first is a scalar to multiply by the canvas width to get the origin's x position on screen. The second element does the same with y using the game's height. Defaults to \[0.5, 0.5\] (i.e., the center point on the screen, or \[half the width, half the height\].
+`originByRatio` - An array allowing you to define the Cartesian "origin" on screen based on game dimensions. This array has 2 elements: the first is a scalar to multiply by the canvas width to get the origin's x position on screen. The second element does the same with y using the game's height. Defaults to \[0.5, 0.5\] (i.e., the center point on the screen, or \[half the width, half the height\].
 
-origin - An array, similar to originByRatio, but takes in actual x and y position, rather than scalars. Defaults to game's center point.
+`origin` - An array, similar to originByRatio, but takes in actual x and y position, rather than scalars. Defaults to game's center point.
 
-wrapper - An HTML element (or CSS selector for that element) to be used as the canvas "host" or "wrapper" element, used for CSS scaling. If this option is not present, the game looks for an element with id "cmWrapper". If none is found, the game creates and adds a new div to take the role. Default is null.
+`wrapper` - An HTML element (or string CSS selector for that element) to be used as the canvas "host" or "wrapper" element, used for CSS scaling. If this option is not present, the game looks for an element with id "cmWrapper". If none is found, the game creates and adds a new div to take the role. Default is null.
 
-canvas - An HTML element (or CSS selector for that element) to be used as the visible output canvas element for all game drawing. If this option is not present, the game looks for an element with id "cmCanvas". If none is found, the game creates and adds a new div to take the role. Default is null.
+`canvas` - An HTML element (or CSS selector for that element) to be used as the visible output canvas element for all game drawing. If this option is not present, the game looks for an element with id "cmCanvas". If none is found, the game creates and adds a new div to take the role. Default is null.
 
-backgroundCanvas - An HTML element (or CSS selector for that element) to be used as the output canvas element for the game's background. If this option is not present, we assume there is no background canvas. Default is null.
+`backgroundCanvas` - An HTML element (or CSS selector for that element) to be used as the output canvas element for the game's background. If this option is not present, we assume there is no background canvas. Default is null.
 
-pressElement: An HTML element (or CSS selector for that element) defining the element to be used for mouse/touch events. Defaults to the game's canvas (as expected). This option should only be used if you need touch/mouse events handled outside the actual game.
+`pressElement` - An HTML element (or CSS selector for that element) defining the element to be used for mouse/touch events. Defaults to the game's canvas (as expected). This option should only be used if you need touch/mouse events handled outside the actual game.
 
-orientation - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
+`orientation` - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
 
-tickStyle - A color string for the Cartesian grid tick marks on the axes. Defaults to CMGame.Color.DARK_GRAY.
+`tickStyle` - A color string for the Cartesian grid tick marks on the axes. Defaults to CMGame.Color.DARK_GRAY.
 
-xAxisStyle - A color string for the line defining the x-axis. Defaults to CMGame.Color.GRAY.
+`xAxisStyle` - A color string for the line defining the x-axis. Defaults to CMGame.Color.GRAY.
 
-yAxisStyle - A color string for the line defining the y-axis. Defaults to CMGame.Color.GRAY.
+`yAxisStyle` - A color string for the line defining the y-axis. Defaults to CMGame.Color.GRAY.
 
-gridStyle - A color string for the Cartesian grid graph lines. Defaults to CMGame.Color.LIGHT_GRAY.
+`gridStyle` - A color string for the Cartesian grid graph lines. Defaults to CMGame.Color.LIGHT_GRAY.
 
-ignoreNumLock - A boolean, for keyboard-based games. true if you want numpad arrows to always register as direction (even when NumLock is on); false if you want NumLock to force those keys to register as numbers. Default is false.
+`gridlineWidth` - The lineWidth (in pixels) used to draw the graph gridlines. Defaults to 1.
 
-multiTouch - A boolean; true if you want every touch to register a new event even if touches are simultaneous. false to allow one touch/mouse press event at a time. Default is false, as this allows desktop and mobile experiences to be similar.
+`ignoreNumLock` - A boolean, for keyboard-based games. true if you want numpad arrows to always register as direction (even when NumLock is on); false if you want NumLock to force those keys to register as numbers. Default is false.
 
-doodleOptions - A plain JS object defining whether the user can draw in the current game.
+`allowContextMenu` - A boolean. By default the game tries to override "right click"/"long press" actions that show a context menu to the user. Set this option to true if you want the user to be able to show that menu, e.g., to give them the "Download image" option for the canvas. Note however that this will only download the foreground canvas image. Use takeScreenshot() (with say, a button for the user to click) if you want them to take screenshots that include the background.
 
-doodleOptions.enabled - Whether or not user can current "doodle" on the game screen. Defaults to false.
+`overrideStyles` - CMGame has various styles built in, with the cmgame.css file. If you do not include this file, the console will provide warnings about the missing resource. Set overrideStyles option to true to suppress these warnings, if you want to handle all the CSS styling yourself.
 
-doodleOptions.lineWidth - Number of pixels wide these drawing lines should be.
+`debug` - A boolean, for testing. Do not use in production. When set to true, this starts the game automatically without user trigger, thus hiding all elements in hideOnStart. It also makes invisible gridlines visible for game type "graph".
 
-doodleOptions.strokeStyle - Color string used to draw the new doodle. Default is CMGame.Color.BLACK.
+`multiTouch` - A boolean; true if you want every touch to register a new event even if touches are simultaneous. false to allow one touch/mouse press event at a time. (This is added for future versions, but currently us unused) Default is false, as this allows desktop and mobile experiences to be similar.
 
-doodleOptions.fillStyleAbove - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions` - A plain JS object defining whether the user can draw in the current game.
 
-doodleOptions.fillStyleBelow - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.enabled` - Whether or not user can current "doodle" on the game screen. Defaults to false.
 
-doodleOptions.fillStyleLeft - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.lineWidth` - Number of pixels wide these drawing lines should be.
 
-doodleOptions.fillStyleRight - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.strokeStyle` - Color string used to draw the new doodle. Default is CMGame.Color.BLACK.
+
+`doodleOptions.fillStyleAbove` - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+
+`doodleOptions.fillStyleBelow` - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+
+`doodleOptions.fillStyleLeft` - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+
+`doodleOptions.fillStyleRight` - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
 
 ```javascript
 
@@ -274,7 +282,9 @@ Numerous callbacks can be applied to the game, as discussed below. You can defin
 
 ## Callbacks
 
-Multiple callbacks can be added to the game. Two of the most useful are `onupdate` and `ondraw`. While the engine handles the "update and draw" cycle internally, you can add logic on top of what happens in these instances. `onupdate` occurs immediately after game's update() method, and `ondraw` is called immediately after the game's `draw` method.
+Multiple callbacks can be added to the game. The two core callbacks are `onupdate` and `ondraw`. While the engine handles the "update and draw" cycle internally, you can add logic on top of what happens in these instances. `onupdate` occurs immediately after game's update() method, and `ondraw` is called immediately after the game's `draw` method. `onupdate` takes a single parameter, `frameCount`, which is the number of frames that have run in the game up to the current frame. The `ondraw` method takes in a single parameter, the drawing context to use for additional drawing.
+
+NOTE: the context used here is an offscreen canvas context, which performs scaling based on the screen's device pixel ratio. If you need to access canvas dimensions, (like canvas.width) from within ondraw, onbeforedraw, etc., you can access the canvas via game.canvas, not ctx.canvas. For more clear code, use game.width and game.height instead.
 
 ```javascript
 
@@ -286,12 +296,12 @@ game.onupdate = function(frameCount) {
 
 game.ondraw = function(ctx) {
   ctx.fillStyle = "red";
-  ctx.fillText("Counting: " + this.frameCount, 100, 50);
+  ctx.fillRect(0, 0, game.width, game.height); // same as ctx.fillRect(0, 0, game.canvas.width, game.canvas.height);
 };
 
 ```
 
-You can also use arrow functions, but remember that these do not have a `this` defined, so you must refer to the game itself. Thus it is safer to just refer to the game in general.
+You can also use arrow functions, but remember that these do not have a `this` defined, so you must refer to the game itself.
 
 ```javascript
 
@@ -314,7 +324,7 @@ If you need these events to occur at a more precise time, you can use:
 
 For user interaction, you should use these callbacks:
 
-`onkeydown` - Similar to a usual onkeydown handler, with the same Key Event parameter. However, preventDefault() has already been called, and the event parameter has the added property "direction" which is set to "left"/"down"/"right"/"up" if the key was an arrow key, a numpad key (and game has ignoreNumLock set to true) or the usual ASDW keys. If none of these, direction is set to "".
+`onkeydown` - Similar to a usual onkeydown handler, with the same Key Event parameter. However, preventDefault() has already been called, and the event parameter has the added property `direction` which is set to "left", "down", "right", or "up" if the key was an arrow key, a numpad key (and game has ignoreNumLock set to true) or the usual ASDW keys. If none of these, direction is set to "".
 
 ```javascript
 game.onkeydown = (e) => {
@@ -323,7 +333,7 @@ game.onkeydown = (e) => {
 };
 ```
 
-`onkeyup` - Similar description as onkeydown (but for keyup event). Also includes the "direction" property.
+`onkeyup` - Similar description as `onkeydown` above (but for keyup event). Also includes the `direction` property.
 
 `onpressstart` - A combined callback for touchstart and mousedown. Instead of the event, the only parameter is a plain JS object representing the pressed point on the canvas (or pressElement) rather than the window. If you wish to determine if more than one finger is pressing down (on screen or on the mouse buttons) you can use game.numPressPoints
 
@@ -352,8 +362,20 @@ game.onpressmove = (point) {
 };
 
 ```
+... or to "drag" the object, having to tap on it initially before moving:
 
-Or to let the user drag the entire graph around to look at a specific area. Note this code will become buggy if performed while zoom is not 100%.
+```javascript
+
+game.onpressmove = (point) {
+  if(hero.containsPoint(point.oldX, point.oldY)) {
+    hero.x += point.offset.x;
+    hero.y += point.offset.y;
+  }
+};
+
+```
+
+... or to let the user drag the entire graph around to look at a specific area. Note this code will become buggy if performed while zoom is not 100%:
 
 ```javascript
 
@@ -366,23 +388,23 @@ game.onpressmove = (point) {
 
 `onswipe` - Handles a swipe action either from a finger swipe, or from moving mouse while it is pressed. This handler takes a single argument, an instance of the CMSwipe class, from which you can access this information:
 
-newX - The end point's x value
+`newX` - The end point's x value
 
-newY - The end point's y value
+`newY` - The end point's y value
 
-oldX- The start point's x value
+`oldX` - The start point's x value
 
-oldY - The start point's y value
+`oldY` - The start point's y value
 
-direction - A string indicating one of 4 general directions the swipe moved: "up", "down", "left" or "right"
+`direction` - A string indicating one of 4 general directions the swipe moved: "up", "down", "left" or "right"
 
-direction8 - A string indicating one of 8 general directions the swipe moved: "right", "downright", "down", "downleft", "left", "upleft", "up", "upright"
+`direction8` - A string indicating one of 8 general directions the swipe moved: "right", "downright", "down", "downleft", "left", "upleft", "up", "upright" (Note: these are all lowercase, and directions between the 4 standard strings are written as vertical direction then horizontal direction with no spaces)
 
 ```javascript
 
 game.onswipe = (swipe) => {
   if(swipe.direction === "left") {
-    alert("How dare you swipe left on me!");
+    game.alert("How dare you swipe left on me!");
   }
 }
 
@@ -390,15 +412,15 @@ game.onswipe = (swipe) => {
 
 If you require more control, you can also use the callbacks below. Each of these methods takes a single input- the event that triggered it.
 
-- ontouchstart
-- ontouchmove
-- ontouchend
-- onmousedown
-- onmousemove
-- onmouseup
-- onclick
-- ondblclick
-- onrightclick
+- `ontouchstart`
+- `ontouchmove`
+- `ontouchend`
+- `onmousedown`
+- `onmousemove`
+- `onmouseup`
+- `onclick`
+- `ondblclick`
+- `onrightclick`
 
 ## Adding Functions
 
@@ -425,7 +447,7 @@ Functions also take in an optional third parameter, defining options for the fun
 
 ### CMFunction Options
 
-type - A lowercase string defining the type of function. Can be "cartesian", "polar", "parametric", "xofy". Default is "cartesian".
+`type` - A lowercase string defining the type of function. Can be "cartesian", "polar", "parametric", "xofy". Default is "cartesian".
 A "cartesian" function is as expected - inputs are represented on the x-axis, and outputs in vertical direction. "xofy" is the opposite. "polar" uses radians and distance from origin to describe points (generally "r" as a function of "theta"). And "parametric" defines both x and y from 0 up to some defined endpoint as functions of a third parameter (usually, t). These are defined in the same general way, except a parametric function must return an object with x and y values, instead of a single number.
 
 ```javascript
@@ -471,31 +493,31 @@ var xOfYFunc = new CMFunction(
 
 ```
 
-strokeStyle - The color (string) to draw the curve with. Default is black.
+`strokeStyle` - The color (string) to draw the curve with. Default is black.
 
-lineWidth - How many pixels wide the curve lines should be. Default is 1.
+`lineWidth` - How many pixels wide the curve lines should be. Default is 1.
 
-fillStyleBelow - A color string to fill in below the curve (defined differently based on graph's type). Default is transparent.
+`fillStyleBelow` - A color string to fill in below the curve (defined differently based on graph's type). Default is transparent.
 
-fillStyleAbove - A color string to fill in above the curve (defined differently based on graph's type). Default is transparent.
+`fillStyleAbove` - A color string to fill in above the curve (defined differently based on graph's type). Default is transparent.
 
-static - A boolean that should only be set to true if you know the graph will not change while it is drawn. This is an optimization and lets game save the drawing internally to resuse. Default is false.
+`static` - A boolean that should only be set to true if you know the graph will not change while it is drawn (this includes graph origin, function origin, and screen bounds). This is an optimization and lets game save the drawing internally to reuse. (This option is added for future versions, but is not currently used) Default is false.
 
-onupdate - A callback called after this functions update() method. Defaults to an empty function.
+`onupdate` - A callback called after this functions update() method. Defaults to an empty function.
 
-ondraw - A callback called after this functions draw() method, taking in the game's drawing context as the only parameter. Defaults to an empty function.
+`ondraw` - A callback called after this functions draw() method, taking in the game's drawing context as the only parameter. Defaults to an empty function.
 
-start - Real values used to define a starting point for this graph, rather than displaying entire graph on screen. Some values are ignored based on function type. Values are: x, y, r, theta, t
+`start` - Real values used to define a starting point for this graph, rather than displaying entire graph on screen. Some values are ignored based on function type. Values are: x, y, r, theta, t
 
-end - Real values used to define a ending point for this graph, rather than displaying entire graph on screen. Some values are ignored based on function type. Values are: x, y, r, theta, t
+`end` - Real values used to define a ending point for this graph, rather than displaying entire graph on screen. Some values are ignored based on function type. Values are: x, y, r, theta, t
 
-velocity - A plain JS object defining how animations will move in this graph
+`velocity` - A plain JS object defining how animations will move in this graph
 
-velocity.animationTime - A number that can used by the dev for timing various actions
+`velocity.animationTime` - A number that can used by the dev for timing various actions
 
-velocity.start - A plain JS object defining the velocity at which to move each variable within this function's `start` object (see `start` parameter above)
+`velocity.start` - A plain JS object defining the velocity at which to move each variable within this function's `start` object (see `start` parameter above)
 
-velocity.end - A plain JS object defining the velocity at which to move each variable within this function's `end` object (see `end` parameter above)
+`velocity.end` - A plain JS object defining the velocity at which to move each variable within this function's `end` object (see `end` parameter above)
 
 ## Building a Venn Diagram
 
@@ -606,27 +628,31 @@ game.removeSprite( boxes );
 
 The constructor takes these arguments, in order (after the first 5, all other arguments are optional):
 
-game - The current game
+```javascript
+new CMSprite(game, x, y, widthOrRadius, heightOrCircle, drawRule, boundingRule, options);
+```
 
-x - The sprite's starting x value. If a rectangle (the default shape) this is its top left corner's x value. If a circle it is the circle's center's x value.
+`game` - The current game
 
-y - The sprite's starting y value. If a rectangle (the default shape) this is its top left corner's y value. If a circle it is the circle's center's y value.
+`x` - The sprite's starting x value. If a rectangle (the default shape) this is its top left corner's x value. If a circle it is the circle's center's x value.
 
-widthOrRadius - A number used as the rectangle's width, as the radius if it is a circle, or as the line width if it is a line (see heightOrCircle below)
+`y` - The sprite's starting y value. If a rectangle (the default shape) this is its top left corner's y value. If a circle it is the circle's center's y value.
 
-heightOrCircle - A number representing the sprite's height if it is a rectangle; or the string "circle" or "line" describing what shape this actually is
+`widthOrRadius` - A number used as the rectangle's width, as the radius if it is a circle, or as the line width if it is a line (see heightOrCircle below)
 
-drawRule - An argument describing how this sprite's drawing is handled. If drawRule is an `<img>` element then that image will be drawn at this sprite's rectangular coordinates. If it is a color string, then this sprite's inferred shape will be drawn in that color. If it is a function, then that function will replace the sprite's default draw operations (note: the function should take one parameter, the game's drawing context).
+`heightOrCircle` - A number representing the sprite's height if it is a rectangle; or the string "circle" or "line" describing what shape this actually is
 
-boundingRule - A string description of how to handle this sprite's collision with the 4 sides of the canvas. Options for this string are:
+`drawRule` - An argument describing how this sprite's drawing is handled. If drawRule is an `<img>` element then that image will be drawn at this sprite's rectangular coordinates. If it is a color string, then this sprite's inferred shape will be drawn in that color. If it is a function, then that function will replace the sprite's default draw operations (note: the function should take one parameter, the game's drawing context).
+
+`boundingRule` - A string description of how to handle this sprite's collision with the 4 sides of the canvas. Options for this string are:
 
 - "none" - do nothing
 - "bounce" - bounces off the walls (think Breakout, or the top/bottom sides of Pong)
 - "wraparound" - moves sprite to the opposite side of the screen (think Asteroids)
-- "clip" - Pushes object back just enough to keep it entirely within the game canvas
+- "fence" - Pushes object back just enough to keep it entirely within the game canvas
 - "destroy" - Removes the sprite from the game
 
-If you need different results based on which side is being hit, you can send an array in instead of a single string. The array should have 4 strings (each being one of the options above), written in clockwise order from the top. For example, this is how you might handle the ball in a Pong clone:
+If you need different results based on which side is being hit, you can send an array in instead of a single string. The array should have 4 strings (each being one of the options above), written in clockwise order from the top (i.e., \[top rule, right rule, bottom rule, left rule\]). For example, this is how you might handle the ball in a Pong clone:
 
 ```javascript
 
@@ -656,7 +682,9 @@ game.onupdate = function() {
 
 ```
 
-layer - The "drawing layer" on which to draw the sprite. If you have very specific requirements about which sprites should be drawn first, you can define this to any number for your sprites. They will be drawn in the order you have set, with lower numbers drawn first.
+`options` - A plain JS object of options
+
+`options.layer` - The "drawing layer" on which to draw the sprite. If you have very specific requirements about which sprites should be drawn first, you can define this to any number for your sprites. They will be drawn in the order you have set, with lower numbers drawn first.
 
 ### Sprite Properties and Methods
 
@@ -667,7 +695,7 @@ sprite.containsPoint({ x: 200, y: 150 }); // Returns true if canvas point (200, 
 sprite.containsPoint(200, 150); // Same as above
 ```
 
-Once a sprite is created, you can set its constant movement (velocity). The velocity is a point with x, y, and z coordinates. z is generally set to 0, but it is available in case you want to use it.
+Once a sprite is created, you can set its constant movement (velocity). The velocity is a point with x, y, and z coordinates. z is generally set to 0, but it is available in case you want to use it to manage a sense of "depth"; as this is a 2D engine though, you will also have to use it to manage size scaling. (The sprite's velocity has an additional property, opacity, which we discuss further below.)
 
 ```
 sprite.velocity.x = 2; // Makes sprite move 2 pixels to the right per frame
@@ -750,10 +778,28 @@ if(game.areColliding(hero.hitbox, enemy.hitbox) {
 
 ```
 
-Sprites will also have an opacity property. This can be animated easily with the sprite's fadeIn and fadeOut methods. First you may want to define what happens after the animation, by setting onfadein and onfadeout callbacks.
+The sprite and its velocity object each have one other (essentially hidden) property, `opacity`. As expected this manages the sprite's opacity (default is 1.0 and velocity.opacity defaults to 0.0). These values are mainly used internally to handle the sprite's fadeIn() and fadeOut() methods, which automate animations to make this sprite fade into the current screen, or out of it, respectively.
+
+Before calling these methods, you may want to define what happens when the animation completes, by setting `onfadein` and `onfadeout` callbacks. These can be defined in the CMSprite constructor, or after the sprite is created.
 
 ```javascript
 
+// Defining fading callbacks in constructor
+let sprite = new CMSprite(game,
+  100,
+  100,
+  40,
+  30,
+  "red",
+  "none",
+  {
+    layer: 2,
+    sprite.onfadein = function() { console.log("Faded in"); },
+    sprite.onfadeout = function() { console.log("Faded out"); }
+  }
+);
+
+// Defining fading callbacks after sprite is created
 sprite.onfadein = function() { console.log("Faded in"); };
 sprite.onfadeout = function() { console.log("Faded out"); };
 
@@ -765,7 +811,7 @@ sprite.fadeOut(2000);
 
 ```
 
-## CMGame Methods
+## CMGame Properties and Methods
 
 Besides the callbacks described above, there are various methods built into the CMGame prototype, used for converting mathematical points or values, drawing canvas text with more control, reconciling real numbers with their on-screen representations, and managing basic gameplay.
 
@@ -790,7 +836,11 @@ if( game.areColliding(rect1.x, rect1.y, rect1.width, rect1.height, rect2.x, rect
 }
 
 // Check distance of 2 points (objects with x and y number coordinates defined)
-game.distance( point1, point2 );
+game.distance( point1, point2 ); // returns a number
+
+// Check if two numbers, or point-like objects (e.g., CMPoint instances) can be considered equal.
+// Unlike CMGame.roundSmall which uses a fixed number cap, this checks values relative to current game's scaling
+game.almostEqual(val1, val2); // returns a boolean
 
 game.takeScreenshot(); // take a screenshot of current screen and download it
 
@@ -822,6 +872,8 @@ game.prompt("What is your name?").then(function(entry) {
 
 // Zooms to 90% of normal view. Do not change origin while game is zoomed in/out. (Still a little buggy in such a case.)
 game.zoom(0.9);
+
+// The game's current zoom is stored in game.zoomLevel, which defaults to 1. Use game.zoom() instead of setting zoomLevel directly, as this method performs extra actions such saving original zoom information. game.zoomLevel can be accessed if needed, but should not be set directly.
 
 // Saves the current game details (an object you provide) to current browser.
 // Object should be JSON-compliant; primitives (strings, numbers) are your safest options. Avoid null values and functions.
@@ -870,16 +922,15 @@ let multiPartSprite = game.spriteFromDoodles();
 
 // Similar to game.spriteFromDoodles(); but only uses the very last thing drawn.
 let singlePartSprite = game.spriteFromDoodle();
+```
 
-// static values and methods
+Some static CMGame properties and methods.
+
+```javascript
+
+CMGame.roundSmall( 0.00001 ); // convert tiny numbers to 0 (threshold is 0.00000001). Useful when dealing with rounding errors from polar coordinates, Math.PI, etc.
 
 CMGame.noop - Empty function (essentially a placeholder). Does nothing.
-
-CMGame.PIXELS_FOR_SWIPE - This is set to how many pixels you think should be moved across before a "swipe" is registered. Currently set as 5. If you lower this it may cause performance issues due to constant processing.
-
-CMGame.SAVE_PREFIX - A string used internally to generate unique save names. Never change this after a game has already been released/published.
-
-CMGame.FPS - The frame rate for games made with CMGame. Defaults to roughly 60 FPS (frames per second), the standard browser drawing speed. If modified, will change your game's speed instantly, though it is better practice to control speed within the game (e.g., with sprite velocity values).
 
 // Show a brief pop-up style message (called "toasts" in many games and apps) to the user without blocking UI thread.
 // With a single arguments, this detects expected length based on the input's length, and fades out accordingly.
@@ -892,21 +943,38 @@ CMGame.showToast("Achievement, completed!", 2000, 5000, function() { console.log
 // If you wnat to show multiple messages without worrying about all the details, use showToasts with an array of strings, an an optional second parameter for delay in milliseconds before showing first message:
 CMGame.showToasts(["Achievement Completed!", "Trophy Earned!", "All Trophies Collected"], 2000);
 
+CMGame.PIXELS_FOR_SWIPE - This is set to how many pixels you think should be moved across before a "swipe" is registered. Currently set as 5. If you lower this it may cause performance issues due to constant processing.
+
+CMGame.SAVE_PREFIX - A string used internally to generate unique save names. Never change this after a game has already been released/published.
+
+CMGame.FPS - The frame rate for games made with CMGame. Defaults to roughly 60 FPS (frames per second), the standard browser drawing speed. If modified, will change your game's speed instantly, though it is better practice to control speed within the game (e.g., with sprite velocity values).
+
+CMGame.FRAME_DELAY - A value used internally- based on CMGame.FPS- to manage how much time occurs between animation frames. Do not set this directly, as it will not update CMGame.FPS. Instead set CMGame.FPS directly (or do not set either), as that will automatically update CMGame.FRAME_DELAY.
+
+CMGame.MAX_FPS - A constant value, fixing the maximum possible frame rate for games as 60 frames per second
+
+CMGame.MIN_FRAME_DELAY - A constant value, fixing the minimum delay between frames as 16.7 milliseconds (i.e., a frame rate of roughly 60 frames per second)
+
 ```
 
-Some methods for working with arrays, objects, and Map instances:
+Some static methods for working with arrays, objects, and Map instances:
 
 ```javascript
 
 CMGame.pickFrom( arr ); // Randomly picks an element from the input (an array, Map instance, or object)
 CMGame.pluckFrom( arr ); // Randomly picks an element from the input (an array, Map instance, or object) and REMOVES that item from the input
+
+CMGame.pluckFrom( arr, item ); // Picks the specific item from the input (an array, Map instance, or object) and REMOVES that item from the input
+
 CMGame.shuffle( arr ); // Randomly shuffles the input, which is an array
 CMGame.last( arr ); // Gets last element of the array (i.e., elemment index at array.length - 1)
-CMGame.isPrimitiveSubArray
+CMGame.isPrimitiveSubArray(subArr, bigArr); // boolean function to see if an array (subArr) of primitive values is contained in another array (bigArr)
 
-// Clears out input object, which can be an array, Map instance, or object, and returns the emptied item.
-//Can also take multiple arguments: (CMGame.clearAll( myArr, myArr2, myObj, myMap);
+// Clears out input object, which can be an array, Map instance, or object, and returns the emptied item
 CMGame.clearAll( arr );
+
+// This can also take multiple arguments, in which case it returns an array of the emptied arguments
+CMGame.clearAll( myArr, myArr2, myObj, myMap );
 
 ```
 
@@ -931,14 +999,16 @@ game.radiansToSlope( Math.PI / 4 ); // radians to slope of line from origin to t
 game.slopeToDegrees( 1 ); // inverse function of game.degreesToSlope
 game.slopeToRadians( 1 ); // inverse function of game.radiansToSlope
 
-game.roundSmall( 0.00001 ); // convert tiny numbers to 0 (threshold is Number.EPSILON). Useful when dealing with polar coordinates, Math.PI, etc.
+```
 
-// Static math methods (not including static classes):
+Static math methods:
+
+```javascript
 CMGame.factorial( 5 ); // Returns factorial of nonnegative integar n, so n!; i.e., that number times every positive integer less than it (and returns 1 for input of 0).
-CMGame.P( 6, 4 ); // Takes permutation formula of the given inputs (in this example, "six permute four")
-CMGame.C( 6, 4 ); // Takes combination formula of the given inputs (in this example, "six choose four")
+CMGame.P( 6, 4 ); // Takes permutation formula of the given inputs (in this example, "six permute four"). Sometimes written as P(n, r) or nPr.
+CMGame.C( 6, 4 ); // Takes combination formula of the given inputs (in this example, "six choose four"). Sometimes written as C(n, r) or nCr.
 CMGame.mean(2, 8, 4); // Takes the mean average of any list of numbers
-CMGame.sum( (x) => 1/x, 1, Infinity); // Adds a list of number inputs, or if first coordinate is a function attempts to add the values like a sigma sum. If present, second coordinate represents the starting index, and third represents the ending index. If third parameter is infinite and partial sums become insignificantly different, assumes convegence and returns the latest partial sum rather than continuing the infinite loop.
+CMGame.sum(x => 1/x, 1, Infinity); // Adds a list of number inputs, or if first coordinate is a function attempts to add the values like a sigma sum. If present, second coordinate represents the starting index, and third represents the ending index. If third parameter is infinite and partial sums become insignificantly different, assumes convegence and returns the latest partial sum rather than continuing the infinite loop.
 
 // Static variables added to Math object for convenience:
 
@@ -989,6 +1059,7 @@ game.drawRotatedImage(img, 0, 0, 100, 50, 100, 200, 80, 40, Math.PI / 4); // dra
 // Draw multiple strings together with varying fonts and colors.
 // First argument is list of fonts to use. If list of text strings is longer, this will cycle back around when reaching last font.
 // Second argument is list of text strings to write. First string is written in first font, second in second font, etc.
+//   If 2D arrays are used, method will assume multi-line, with each row representing a new line.
 // Third argument: the x position to start writing the first string
 // Fourth argument: the y position to write the strings
 // Fifth argument: optional. A JS object of options:
@@ -996,6 +1067,8 @@ game.drawRotatedImage(img, 0, 0, 100, 50, 100, 200, 80, 40, Math.PI / 4); // dra
 //   stroke (boolean - true to use strokeText, false otherwise. default is false);
 //   fillStyles - An array of colors to use with fillText on corresponding text strings. Cycles around similar to font array.
 //   strokeStyles - An array of colors to use with strokeText on corresponding text strings. Cycles around similar to font array.
+//   offsets - An array of point-like objects (with x and y values) to translate each portion of text. Useful for superscripts and subscripts.
+//   lineHeight - Only relevant for multi-line. Defines vertical spacing for each line. Defaults to 15 * font height (in px)
 // Note: this returns the x value where the list of strings ends on the canvas.
 game.drawStrings( ["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"] , 200, 100, { fillStyles: ["pink", "blue"] });
 
@@ -1005,7 +1078,7 @@ game.measureStrings(["12px Arial", "italic 14px Times New Roman"], ["5", "x", " 
 // Similar to game.drawStrings, but centers around the provided (x, y) point and allows two more options:
 //   centerVertically - A boolean; if true, will try and center the text vertically around the point (x, y)
 //   angle - An angle in radians to rotate the entire string around if desired
-// As with drawStrings, this returns an x value for the end of the drawn strings (however, this assumes they were not rotated)
+// This method returns a CMPoint instance with x, y values representing the canvas point where this text ends
 game.drawStringsCentered( ["12px Arial", "italic 14px Times New Roman"], ["5", "x", " + 2 = ", "y"] , 200, 100, { fillStyles: ["pink", "blue"] });
 
 // Fills a circle of radius 20 around canvas point (200, 100)
@@ -1043,7 +1116,7 @@ ctx.fillStyle = CMGame.Color.BLUE;
 
 For consistency, it is best to use CMGame.Color.TRANSPARENT rather than "transparent", "rgba(0, 0, 0, 0)", etc. This way the game can reliably check for transparent values before wasting resources on drawing.
 
-If you have HTML elements that you want to use the same color palette, you can add corresponding classes, all lowercase, replacing CMGame.Color with .cm- to use the color as a background, or .cm-text- to use the color as the font color.
+If you have HTML elements that you want to use the same color palette, you can add corresponding classes, all lowercase, replacing CMGame.Color with `.cm-` to use the color as a background, or `.cm-text-` to use the color as the text color.
 
 ```html
 
@@ -1055,7 +1128,53 @@ If you have HTML elements that you want to use the same color palette, you can a
 
 ```
 
-## Random values
+## CMPoint
+
+CMPoint is a class used to manage 2- (or 3-) dimensional points, that is, JavaScript objects with a numerical x value and a numerical y value (and in the case of 3 dimensions, a numerical z value). These are mostly used internally by the engine, but you can also create them yourself.
+
+```javascript
+
+// Creates a point where x = 0, y = 0, z = 0
+let point = new CMPoint();
+
+// Creates a point where x = 20, y = 40, and z = 0
+let point = new CMPoint(20, 40);
+
+// a point where x = 20, y = 40, and z = 2
+let point = new CMPoint(20, 40, 2);
+
+// Creates a point where x = 20, y = 40, and z = 0
+let point = new CMPoint({
+  x: 20,
+  y: 40
+});
+
+// a point where x = 20, y = 40, and z = 2
+let point = new CMPoint({
+  x: 20,
+  y: 40,
+  z: 2
+});
+
+// Creates a new CMPoint from another CMPoint
+let point = new CMPoint( otherCMPoint );
+
+```
+
+If point is a CMPoint instance, and otherPoint is any point-like object (has x and y numerical values), you can use CMPoint boolean methods to check if their coordinates match, i.e., if they should be considered the same.
+
+```javascript
+
+// Checks the values for exact equality
+point.isPoint( otherPoint );
+
+// Checks if the values match, at least so much that CMGame.roundSmall converts their difference to 0
+point.isAlmost( otherPoint );
+
+```
+
+
+## Creating Random Values
 
 Random values are very useful in creating games. This engine provides a CMRandom class that can be used to access various random values when needed. Many of these, like CMRandom.value, create a random value on access, so do not require any function invocation.
 
