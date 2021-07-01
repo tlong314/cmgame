@@ -55,8 +55,12 @@ else {
  * https://artandlogic.com/2019/07/unlocking-the-web-audio-api/
  */
 
-// Dev can redefine this before instantiating game
-window.CM_SILENCE_PATH = "js/cmgame/audio/silencesecond.wav";
+if(document.currentScript !== null) {
+	window.CM_SILENCE_PATH = document.currentScript.src.replace(/js\/cmgame(\/min)?\.js$/, "audio/silencesecond.wav");
+}
+else { // if currentScript is null, we assume CMGame code is being processed within the HTML file
+	window.CM_SILENCE_PATH = "js/cmgame/audio/silencesecond.wav";
+}
 
 /**
  * Creates a sound handler, CMSound,
@@ -476,7 +480,6 @@ Object.defineProperties(CMRandom, {
 	 * @returns {number}
 	 */
 	sign: {
-
 		get: function() {
 			return (-1)**CMRandom.range(0, 2);
 		}
@@ -580,7 +583,7 @@ class CMImage extends Image {
 		if(imageSrc instanceof CMImage) {
 			return this;
 		}
-		
+
 		numImagesToLoad++;
 
 		let progress = document.getElementById("cmLoadingProgress");
@@ -1027,6 +1030,8 @@ class CMSwipe {
 		this.newY = newY;
 		this.oldX = oldX;
 		this.oldY = oldY;
+		this.offsetX = this.newX - this.oldX;
+		this.offsetY = this.newY - this.oldY;
 
 		this.direction = this.getDirection(oldX, oldY, newX, newY); // "left", "up", "down", "right"
 		this.direction8 = this.getDirection8(oldX, oldY, newX, newY); // "left", "up", "upleft", "downright" , etc.
@@ -1165,8 +1170,9 @@ class CMGame {
 	 * @param {number} [opts.frameCap] - During each animation cycle, the game stores an internal frameCount variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this frameCap to some positive integer, because the default is Infinity.
 	 * @param {number} [opts.width] - Desired game width in pixels (defaults to canvas width)
 	 * @param {number} [opts.height] - Desired game height in pixels (defaults to canvas height)
-	 * @param {boolean} [opts.overrideStyles] - If true, suppresses warnings when dev does not include CMGame stylesheet
-	 * @param {boolean} [opts.allowContextMenu] - If true, lets right-click show context (e.g., to let user download canvas as an image)
+	 * @param {boolean} [opts.overrideStyles] - If true, suppresses warnings when dev does not include CMGame stylesheet. Default is false.
+	 * @param {boolean} [opts.overrideResize] - If true, gives dev full command of canvas sizing and positioning. Default is false.
+	 * @param {boolean} [opts.allowContextMenu] - If true, lets right-click show context (e.g., to let user download canvas as an image). Default is false.
 	 * @param {number[]} [opts.originByRatio] - An array allowing you to define the Cartesian "origin" on screen based on game dimensions. This array has 2 elements: the first is a scalar to multiply by the canvas width to get the origin's x position on screen. The second element does the same with y using the game's height. Defaults to [0.5, 0.5] (i.e., the center point on the screen, or [half the width, half the height].
 	 * @param {number[]|object} [opts.origin] - An array, similar to originByRatio, but takes in actual x and y position, rather than scalars; or an object with x and y values. Defaults to game's center point.
 	 * @param {object|string} [opts.wrapper] - An HTML element (or CSS selector for that element) to be used as the canvas "host" or "wrapper" element, used for CSS scaling. If this option is not present, the game looks for an element with id "cmWrapper". If none is found, the game creates and adds a new div to take the role. Default is null.
@@ -1404,11 +1410,11 @@ class CMGame {
 		this.mouseState = new Array(5).fill(0);
 		this.mouseStateString = "00000";
 		this.started = false;
-		this.paused = false;
+		this.paused = true;
 		this.animFrameId = null;
 		this.gameOver = false;
 		this.frameCount = 0;
-		
+
 		// The default here is arbitrary. For a long game letting this go indefinitely could hurt performance
 		this.frameCap = (typeof opts.frameCap === "number") ? opts.frameCap : 100000;
 
@@ -1696,8 +1702,27 @@ class CMGame {
 		window.addEventListener("keydown", self.keyDown.bind(self), false);
 		window.addEventListener("keyup", self.keyUp.bind(self), false);
 
-		window.addEventListener("resize", self.resizeCanvas.bind(self), false);
-		this.resizeCanvas.call(this); // for loaded screen size
+		if(!opts.overrideResize) {
+			window.addEventListener("resize", self.resizeCanvas.bind(self), false);
+			this.resizeCanvas.call(this); // for loaded screen size
+		}
+
+		// This property is only really used here, and is used to pause game on browser tab change etc.
+		this.unpausedWhenVisible = true;
+		window.addEventListener("visibilitychange", (e) => {
+			if(document.visibilityState === "visible") {
+				if(self.unpausedWhenVisible) {
+					self.unpause();
+				}
+			}
+			else
+			if(document.visibilityState === "hidden") {
+				self.unpausedWhenVisible = !self.paused;
+				if(self.unpausedWhenVisible) {
+					self.pause();
+				}
+			}
+		}, false);
 
 		// Handle fullscreen and orientation setting processes
 		this.orientationLock = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation || null;
@@ -2032,6 +2057,7 @@ class CMGame {
 			"ondblclick",
 			"onkeydown",
 			"onkeyup",
+			"onresize",
 
 			// These are helper methods you can override for the game loop
 			"onbeforestart",
@@ -2133,13 +2159,15 @@ class CMGame {
 			this.onload();
 		}
 
+		this.debug = !!opts.debug;
+
 		/**
 		 * "debug" option immediately hides the load screen, and
 		 * any "hideOnStart" elements, starting game immediately.
 		 */
-		if(opts.debug) {
+		if(this.debug) {
 			try {
-			document.getElementById("cmLoading").style.display = "none";
+				document.getElementById("cmLoading").style.display = "none";
 			} catch(e) {}
 
 			if(this.tickStyle === CMGame.Color.TRANSPARENT)
@@ -2194,6 +2222,11 @@ class CMGame {
 	 * property set to an <img> element (the options.output element
 	 * if defined, or a new Image otherwise) and a "src"
 	 * property set to the captured image source string.
+	 *
+	 * NOTE: if you are testing locally, and draw image resources into
+	 * the canvas, it will be considered "tainted" and this method
+	 * will not work (toDataURL() will throw an error).
+	 *
 	 * @param {object} [options={}] - A plain JS object of options (if desired)
 	 * @param {string} [options.filename="cmgscreenshot.png"] - The desired file name for the download
 	 * @param {HTMLImageElement|string} [output="download"] - An image element to display
@@ -2388,7 +2421,7 @@ class CMGame {
 	 *   output video. If not present, will be inferred from options.filename (the preferred option)
 	 * @param {string|Video} [options.output] Option for handling. "download"  to download immediately, "none"
 	 *   to do nothing (e.g., if dev wants to wait for Promise), or an HTMLVideo element whose source will
-	 *   be set to the output video once available.
+	 *   be set to the output video once available. Default is "download".
 	 * @returns {Promise}
 	 */
 	takeScreenVideo(options={}) {
@@ -2473,8 +2506,7 @@ class CMGame {
 			 * Only webm seems to be well supported for the initial stream;
 			 * requested mimeType will be used for the output Blob
 			 */
-			// self.videoRecorder = new MediaRecorder(stream, { mimeType: "video/webm; codecs=vp9" });
-			self.videoRecorder = new MediaRecorder(stream);
+			self.videoRecorder = new MediaRecorder(stream, { mimeType: "video/webm; codecs=vp9" });
 
 			self.videoRecorder.ondataavailable = function(e) {
 				if(e.data.size > 0) {
@@ -2514,24 +2546,20 @@ class CMGame {
 				resolve(resolvedObj);
 			};
 
-			// Start recording only after requested time (opts.start)
+			// Start recording only after requested delay (opts.start)
 			setTimeout(() => {
 
-				self.videoRecorder.onstart = () => {
+				/**
+				 * Stop recording only after requested time.
+				 * May not be accurate down to the exact second.
+				 */
+				if(opts.duration !== "indefinite") { // Set duration to "indefinite" if you will stop manually
 
-					/**
-					 * Stop recording only after requested time. For
-					 * a little more accuracy, we don't start counting
-					 * duration until onstart is triggered.
-					 */
-					if(opts.duration !== "indefinite") { // Set duration to "indefinite" if you will stop manually
-						setTimeout(() => {
-							self.videoRecorder.stop();
-							self.recordingVideo = false;
-						}, opts.duration);
-					}
-
-				};
+					setTimeout(() => {
+						self.videoRecorder.stop();
+						self.recordingVideo = false;
+					}, opts.duration);
+				}
 
 				self.videoRecorder.start();
 				self.recordingVideo = true;
@@ -2553,7 +2581,7 @@ class CMGame {
 			return Promise.resolve();
 		}
 
-		return takeScreenVideo({duration: "indefinite"});
+		return this.takeScreenVideo({duration: "indefinite"});
 	}
 
 	/**
@@ -2606,6 +2634,7 @@ class CMGame {
 		}
 
 		this.started = true;
+		this.paused = false;
 		this.animFrameId = requestNextFrame(self.runCycle);
 
 		if(typeof this.onstart === "function") {
@@ -2748,7 +2777,7 @@ class CMGame {
 		ctx.font = tickFontSize + "px Arial, sans-serif";
 		ctx.textBaseline = "middle";
 		if(this.tickStyle && this.tickStyle !== CMGame.Color.TRANSPARENT) {
-			ctx.strokeStyle = this.tickStyle;
+			ctx.strokeStyle = ctx.fillStyle = this.tickStyle;
 
 			let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
 
@@ -2868,6 +2897,7 @@ class CMGame {
 	 * over the current game screen.
 	 * @param {object} point - A CMPoint or similar
 	 * @param {object} [opts=this.doodleOptions] - options to pass to CMDoodle
+	 * @returns {object} The current CMGame instance
 	 */
 	startDoodle(point, opts=this.doodleOptions) {
 		this.doodleOptions.enabled = true;
@@ -2880,6 +2910,7 @@ class CMGame {
 
 	/**
 	 * Ends current doodling session
+	 * @returns {object} The current CMGame instance
 	 */
 	stopDoodle() {
 		this.currentDoodle = null;
@@ -2887,7 +2918,25 @@ class CMGame {
 	}
 
 	/**
-	 * Removes all doodles from game instance
+	 * Removes only the very last doodle drawn
+	 * @returns {object} The current CMGame instance
+	 */
+	undoDoodle() {
+		this.doodles.pop();
+
+		// No animation cycle running, so redraw without doodles
+		if(this.paused || !this.started) {
+			this.draw();
+		}
+
+		return this;		
+	}
+
+	/**
+	 * Removes all current doodles from game instance.
+	 * Note: sprites created from spriteFromDoodle(s)
+	 * will not be removed.
+	 * @returns {object} The current CMGame instance
 	 */
 	clearDoodles() {
 		CMGame.clearAll( this.doodles );
@@ -2939,7 +2988,8 @@ class CMGame {
 					doodles[0].startPoint.y + 0.5);
 		}
 
-		let spritePath = new Path2D(doodles[0].path);		
+		// Using a single path with .addPath does not allow us to use multiple styles
+		let spritePaths = [doodles[0].path];
 		let numPaths = 1;
 		let spriteStroke = [doodles[0].strokeStyle];
 		let spriteFill = [doodles[0].fillStyle];
@@ -2953,7 +3003,7 @@ class CMGame {
 						doodles[i].startPoint.y + 0.5);
 			}
 
-			spritePath.addPath(doodles[i].path);
+			spritePaths.push(doodles[i].path);
 			numPaths++;
 			spriteStroke.push(doodles[i].strokeStyle);
 			spriteFill.push(doodles[i].fillStyle);
@@ -2971,11 +3021,12 @@ class CMGame {
 				ctx.translate(this.x - minX, this.y - minY);
 				for(let i = 0; i < numPaths; i++) {
 					ctx.fillStyle = spriteFill[i];
-					ctx.fill(spritePath);
+					ctx.fill(spritePaths[i]);
 					ctx.strokeStyle = spriteStroke[i];
 					ctx.lineWidth = spriteLineWidth[i];
-					ctx.stroke(spritePath);
+					ctx.stroke(spritePaths[i]);
 				}
+
 				ctx.restore();
 			}
 		);
@@ -3022,17 +3073,148 @@ class CMGame {
 	}
 
 	/**
+	 * Takes a CMFunction instance and converts it to a sprite that
+	 * can be used in the game. Useful for creating odd terrains.
+	 * @param {object} func - The CMFunction instance to convert
+	 * @param {boolean} keepFunc=false] If CMFunction was added to game, set this to true to
+	 *   keep it. Otherwise it will be removed.
+	 * @returns {object} The created CMSprite instance
+	 */
+	spriteFromFunction(func, keepFunc=false) {
+
+		let spritePath = new Path2D(func.path);
+		let spriteStroke = func.strokeStyle;
+		let spriteLineWidth = func.lineWidth;
+		let spritePathBelow = null,
+			spriteFillBelow = CMGame.Color.TRANSPARENT,
+			spritePathAbove = null,
+			spriteFillAbove = CMGame.Color.TRANSPARENT;
+
+		if(func.pathBelow && func.fillStyleBelow &&
+				func.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+			spritePathBelow = func.pathBelow;
+			spriteFillBelow = func.fillStyleBelow;
+		}
+
+		if(func.pathAbove && func.fillStyleAbove &&
+				func.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+			spritePathAbove = func.pathAbove;
+			spriteFillAbove = func.fillStyleAbove;
+		}
+
+		// @todo base these on function "type"
+		let minX, minY, maxX, maxY;
+		
+		switch(func.type) {
+			case "cartesian":
+				minX = Math.max(0, this.xToScreen(func.start.x));
+				minY = Math.min.apply(null, func.screenValsArray);
+
+				maxX = Math.min(this.width, this.xToScreen(func.end.x));
+				maxY = Math.max.apply(null, func.screenValsArray);
+				break;
+			case "xofy":
+				minY = Math.min(this.height, this.xToScreen(func.end.y));
+				minX = Math.min.apply(null, func.screenValsArray);
+
+				maxY = Math.max(0, this.yToScreen(func.start.y));
+				maxX = Math.max.apply(null, func.screenValsArray);
+				break;
+			case "parametric":
+				minX = func.screenValsArray.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.x), game.width);
+				minY = func.screenValsArray.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.y), game.height);
+
+				maxX = func.screenValsArray.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.x), 0);
+				maxY = func.screenValsArray.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.y), 0);
+				break;
+			case "polar": // just a rough "box" estimate
+				let maxR = Math.max(...func.screenValsArray);
+				minX = func.origin.x - maxR;
+				minY = func.origin.y - maxR;
+				maxX = func.origin.x + maxR;
+				maxY = func.origin.y + maxR;
+				break;
+		}
+
+		let sprite = new CMSprite(
+			this,
+			minX,
+			minY,
+			maxX - minX,
+			maxY - minY,
+			function(ctx) {
+				ctx.lineWidth = spriteLineWidth;
+
+				if(spritePathBelow) {
+					ctx.fillStyle = spriteFillBelow;
+					ctx.fill(spritePathBelow);
+				}
+
+				if(spritePathAbove) {
+					ctx.fillStyle = spriteFillAbove;
+					ctx.fill(spritePathAbove);
+				}
+
+				// Draw actual function curve
+				ctx.strokeStyle = spriteStroke;
+				ctx.stroke(spritePath);
+			}
+		);
+
+		sprite.containsPoint = function(xOrPoint, y) {
+			let point = {},
+				game = this.game;
+
+			if(typeof xOrPoint === "number") {
+				point = {
+					x: xOrPoint,
+					y: y
+				};
+			}
+			else {
+				point = xOrPoint;
+			}
+
+			let isPointHere = false;
+			game.ctx.save();
+			game.ctx.lineWidth = this.lineWidth;
+			if(game.ctx.isPointInStroke(spritePath, point.x, point.y))
+				isPointHere = true;
+
+			if(spritePathBelow) {
+				if(game.ctx.isPointInPath(spritePathBelow, point.x, point.y))
+					isPointHere = true;
+			}
+
+			if(spritePathAbove) {
+				if(game.ctx.isPointInPath(spritePathAbove, point.x, point.y))
+					isPointHere = true;
+			}
+
+			game.ctx.restore();
+			return isPointHere;
+		}
+
+		if(!keepFunc) {
+			if(game.has(func))
+				game.removeFunction(func);
+		}
+
+		return sprite;
+	}
+
+	/**
 	 * Add a new drawable function (CMFunction) to the game.
 	 * Prefer this method to adding the function yourself,
 	 * in case future operations are added here, or storage
 	 * processes are modified (e.g., using Map instead of Array)
-	 * To prevent errors, a falsy cmgFunc argument does nothing.
-	 * @param {object} cmgFunc - The CMFunction instance	 
+	 * To prevent errors, a falsy cmFunc argument does nothing.
+	 * @param {object} cmFunc - The CMFunction instance	 
 	 * @returns {object} The current CMGame instance
 	 */
-	addFunction(/* CMFunction */ cmgFunc) {
-		if(cmgFunc instanceof CMFunction) {
-			this.functions.push(cmgFunc);
+	addFunction(/* CMFunction */ cmFunc) {
+		if(cmFunc instanceof CMFunction && !this.functions.includes(cmFunc)) {
+			this.functions.push(cmFunc);
 		}
 
 		return this;
@@ -3069,14 +3251,14 @@ class CMGame {
 	 * from game's update/draw calls. You can add the
 	 * function again later if desired.
 	 *
-	 * To prevent errors, a falsy cmgFunc argument does nothing.
+	 * To prevent errors, a falsy cmFunc argument does nothing.
 	 *
-	 * @param {object} cmgFunc - The CMFunction instance to remove
+	 * @param {object} cmFunc - The CMFunction instance to remove
 	 * @returns {object} The current CMGame instance
 	 */
-	removeFunction(/* CMFunction */ cmgFunc) {
-		if(cmgFunc) {
-			this.functions.splice(this.functions.indexOf(cmgFunc), 1);
+	removeFunction(/* CMFunction */ cmFunc) {
+		if(cmFunc && this.functions.includes(cmFunc)) {
+			this.functions.splice(this.functions.indexOf(cmFunc), 1);
 		}
 
 		return this;
@@ -3108,7 +3290,7 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	addSprite(/* CMSprite */ sprite) {
-		if(sprite) {
+		if(sprite && !this.sprites.includes(sprite)) {
 			this.sprites.push(sprite);
 			this.sprites.sort((a, b) => a.layer - b.layer);
 		}
@@ -3153,7 +3335,7 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeSprite(/* CMSprite */ sprite) {
-		if(sprite) {
+		if(sprite && this.sprites.includes(sprite)) {
 			sprite.onscreen = false;
 			this.sprites.splice(this.sprites.indexOf(sprite), 1);
 
@@ -3269,21 +3451,25 @@ class CMGame {
 	 * scaled onscreen position's
 	 * x value (in pixels)
 	 * @param {number} realX - The real x input
+	 * @param {object} [relativeOrigin] - A canvas point to use as the real
+	 *   point (0, 0). Defaults to the current game's origin.
 	 * @returns {number}
 	 */
-	xToScreen(realX) {
+	xToScreen(realX, relativeOrigin=this.origin) {
 		let x = this.graphScalar * realX;
 
-		return this.origin.x + x;
+		return relativeOrigin.x + x;
 	}
 
 	/**
 	 * Gets graph x value from screen's x value
 	 * @param {number} screenX - The screen point's x value
+	 * @param {object} [relativeOrigin] - A canvas point to use as the real
+	 *   point (0, 0). Defaults to the current game's origin.
 	 * @returns {number}
 	 */
-	xToReal(screenX) {
-		let x = screenX - this.origin.x;
+	xToReal(screenX, relativeOrigin=this.origin) {
+		let x = screenX - relativeOrigin.x;
 
 		return x / this.graphScalar;
 	}
@@ -3293,22 +3479,26 @@ class CMGame {
 	 * scaled onscreen position's
 	 * y value (in pixels)
 	 * @param {number} realY - The real y input
+	 * @param {object} [relativeOrigin] - A canvas point to use as the real
+	 *   point (0, 0). Defaults to the current game's origin.
 	 * @returns {number}
 	 */
-	yToScreen(realY) {
+	yToScreen(realY, relativeOrigin=this.origin) {
 		let y = this.graphScalar * realY;
 
 		// Reflect so graph sits above x axis
-		return this.origin.y - y;
+		return relativeOrigin.y - y;
 	}
 
 	/**
 	 * Gets graph y value from screen's y value
 	 * @param {number} screenY - The screen point's y value
+	 * @param {object} [relativeOrigin] - A canvas point to use as the real
+	 *   point (0, 0). Defaults to the current game's origin.
 	 * @returns {number}
 	 */
-	yToReal(screenY) {
-		let y = -(screenY - this.origin.y);
+	yToReal(screenY, relativeOrigin=this.origin) {
+		let y = -(screenY - relativeOrigin.y);
 
 		return y / this.graphScalar;
 	}
@@ -3317,12 +3507,14 @@ class CMGame {
 	 * A convenience method. Converts an x, y point
 	 * of real numbers to current screen.
 	 * @param {object} realPoint - A plain JS object with x and y number values
+	 * @param {object} [relativeOrigin] - A canvas point to use as the real
+	 *   point (0, 0). Defaults to the current game's origin.
 	 * @returns {object} A point with x, y values
 	 */
-	toScreen(realPoint) {
+	toScreen(realPoint, relativeOrigin=this.origin) {
 		return new CMPoint({
-			x: this.xToScreen(realPoint.x),
-			y: this.yToScreen(realPoint.y)
+			x: this.xToScreen(realPoint.x, relativeOrigin),
+			y: this.yToScreen(realPoint.y, relativeOrigin)
 		});
 	}
 
@@ -3330,17 +3522,20 @@ class CMGame {
 	 * A convenience method. Converts an x, y point
 	 * from the current game's screen scale to real numbers.
 	 * @param {object} screenPoint - A plain JS object with x and y number values
+	 * @param {object} [relativeOrigin] - A canvas point to use as the real
+	 *   point (0, 0). Defaults to the current game's origin.
 	 * @returns {object} A point with x, y values
 	 */
-	toReal(screenPoint) {
+	toReal(screenPoint, relativeOrigin=this.origin) {
 		return new CMPoint({
-			x: this.xToReal(screenPoint.x),
-			y: this.yToReal(screenPoint.y)
+			x: this.xToReal(screenPoint.x, relativeOrigin),
+			y: this.yToReal(screenPoint.y, relativeOrigin)
 		});
 	}
 
 	/**
-	 * Manages all single animation frame processes:
+	 * This is the core of the game animation cycle.
+	 * It manages all single animation frame processes:
 	 * state updates, component drawing and moving
 	 * draw screen from offscreen to screen
 	 * while accounting for devicePixelRatio,
@@ -3381,6 +3576,19 @@ class CMGame {
 		let newWidth = this.canvasReferenceWidth;
 		let newHeight = this.canvasReferenceHeight;
 		let dimensionForReference = "width";
+		let data = {
+			screen: {
+				width: 0,
+				height: 0
+			},
+			wrapper: {
+				x: 0, // left offset
+				y: 0, // top offset
+				width: 0,
+				height: 0
+			},
+			screenScalar: 1
+		};
 
 		// We only need to apply scales if screen is smaller than desired size of 640 x 480
 		if(document.documentElement.clientWidth < this.canvasReferenceWidth ||
@@ -3433,6 +3641,24 @@ class CMGame {
 			this.wrapper.style.left = `calc(100vw / 2 - ${0.5 * this.screenScalar} * ${this.width}px)`;
 
 			this.wrapper.style.top = "0";
+
+			data = {
+				screen: {
+					width: document.documentElement.clientWidth,
+					height: document.documentElement.clientHeight
+				},
+				wrapper: {
+					x: document.documentElement.clientWidth / 2 - .5 * this.screenScalar * this.width, // left offset
+					y: 0, // top offset
+					width: this.width * this.screenScalar,
+					height: this.height * this.screenScalar
+				},
+				screenScalar: this.screenScalar,
+				orientation: "landscape"
+			};
+
+			if(data.screen.width < data.screen.height)
+				data.orientation = "portrait";
 		}
 		else { // Screen is big enough for intended size
 			newWidth = this.canvasReferenceWidth;
@@ -3447,7 +3673,28 @@ class CMGame {
 			// Center the content on the page
 			this.wrapper.style.left = `calc(100vw / 2 - ${0.5 * this.screenScalar} * ${this.width}px)`;
 			this.wrapper.style.top = "18px";
+
+			data = {
+				screen: {
+					width: document.documentElement.clientWidth,
+					height: document.documentElement.clientHeight
+				},
+				wrapper: {
+					x: document.documentElement.clientWidth / 2 - .5 * this.screenScalar * this.width, // left offset
+					y: 18, // top offset
+					width: this.width,
+					height: this.height
+				},
+				screenScalar: this.screenScalar,
+				orientation: "landscape"
+			};
+
+			if(data.screen.width < data.screen.height)
+				data.orientation = "portrait";
 		}
+
+		if(typeof this.onresize === "function")
+			this.onresize(data);
 	}
 
 	/**
@@ -3663,14 +3910,14 @@ class CMGame {
 		if(this.multiTouch) {
 			for(let i = 0; i < e.targetTouches.length; i++) {
 				this.pressStart(
-					(e.targetTouches[i].clientX - this.wrapper.offsetLeft) / this.screenScalar,
-					(e.targetTouches[i].clientY - this.wrapper.offsetTop) / this.screenScalar);
+					(e.targetTouches[i].clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+					(e.targetTouches[i].clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 			}
 		}
 		else {
 			this.pressStart(
-				(e.targetTouches[0].clientX - this.wrapper.offsetLeft) / this.screenScalar,
-				(e.targetTouches[0].clientY - this.wrapper.offsetTop) / this.screenScalar);
+				(e.targetTouches[0].clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+				(e.targetTouches[0].clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 		}
 	}
 
@@ -3745,8 +3992,8 @@ class CMGame {
 
 		// Account CSS transform scaling
 		this.pressStart(
-			(e.clientX - this.wrapper.offsetLeft) / this.screenScalar,
-			(e.clientY - this.wrapper.offsetTop) / this.screenScalar);
+			(e.clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+			(e.clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 
 		/**
 		 * Avoid using onrightclick, but if you must, we give it x, y values
@@ -3798,14 +4045,14 @@ class CMGame {
 		if(this.multiTouch) {
 			for(let i = 0; i < e.targetTouches.length; i++) {
 				this.pressMove(
-					(e.targetTouches[i].clientX - this.wrapper.offsetLeft) / this.screenScalar,
-					(e.targetTouches[i].clientY - this.wrapper.offsetTop) / this.screenScalar);
+					(e.targetTouches[i].clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+					(e.targetTouches[i].clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 			}
 		}
 		else {
 			this.pressMove(
-				(e.targetTouches[0].clientX - this.wrapper.offsetLeft) / this.screenScalar,
-				(e.targetTouches[0].clientY - this.wrapper.offsetTop) / this.screenScalar);
+				(e.targetTouches[0].clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+				(e.targetTouches[0].clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 		}
 	}
 
@@ -3881,8 +4128,8 @@ class CMGame {
 
 		if(this.leftMousePressed) {
 			this.pressMove(
-				(e.clientX - this.wrapper.offsetLeft) / this.screenScalar,
-				(e.clientY - this.wrapper.offsetTop) / this.screenScalar);
+				(e.clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+				(e.clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 		}
 	}
 
@@ -3939,8 +4186,9 @@ class CMGame {
 	 */
 	touchEnd(e) {
 
-		// This should prevent a touch registering as a mouse click
-		e.preventDefault();
+		// Preventing default should prevent a touch registering as a mouse click
+		if(e.cancelable)
+			e.preventDefault();
 
 		this.numPressPoints = e.touches.length;
 
@@ -4610,6 +4858,7 @@ class CMGame {
 		for(let i = 0; i < numStrings; i++) {
 			this.offscreenCtx.save();
 			this.offscreenCtx.font = fonts[i % numFonts];
+			this.offscreenCtx.textAlign = "left"; // "center" will affect our positioning
 
 			if(opts.offsets) {
 				let offset = opts.offsets[i % opts.offsets.length];
@@ -4663,6 +4912,8 @@ class CMGame {
 		let numStrings = strings.length;
 		let offsetX = 0;
 
+		this.offscreenCtx.save();
+		this.offscreenCtx.textAlign = "left"; // "center" will affect our positioning
 		for(let i = 0; i < numStrings; i++) {
 			this.offscreenCtx.font = fonts[i % numFonts];
 
@@ -4670,6 +4921,7 @@ class CMGame {
 			offsetX += this.offscreenCtx.measureText(strings[i]).width;
 		}
 
+		this.offscreenCtx.restore();
 		return offsetX;
 	}
 
@@ -4760,6 +5012,7 @@ class CMGame {
 		let numStrings = strings.length;
 		let offsetX = 0;
 		this.offscreenCtx.save();
+		this.offscreenCtx.textAlign = "left"; // "center" will affect our positioning
 
 		if(opts.centerVertically) {
 			this.offscreenCtx.textBaseline = "middle";
@@ -5170,7 +5423,7 @@ class CMGame {
 
 	/**
 	 * Gets the slope between to two-dimensional points.
-	 * Note: JavaScript will return Infinity for a division by
+	 * Note: JavaScript will return Infinity or -Infinity for a division by
 	 * zero. The dev may want to check the answer with
 	 * Number.isFinite() and set as "undefined" or undefined.
 	 * Also see getFiniteSlope().
@@ -5217,7 +5470,7 @@ class CMGame {
 
 	/**
 	 * Set the stage, with number of circles in a Venn
-	 * diagram. Currently only relates to type "venn".
+	 * diagram. Currently only relates to game type "venn".
 	 * @param {number} [numSets=0] - Number of circle sets in initial diagram
 	 * @param {boolean} [variation=0] - Allows us to include
 	 *   different shapes of standard diagrams.
@@ -5615,7 +5868,7 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	addVertex(vertex) {
-		if(vertex) {
+		if(vertex && !this.vertices.includes(vertex)) {
 			this.vertices.push(vertex);
 		}
 
@@ -5646,7 +5899,7 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeVertex(vertex) {
-		if(vertex) {
+		if(vertex && this.vertices.includes(vertex)) {
 			this.vertices.splice(this.vertices.indexOf(vertex), 1);
 		}
 
@@ -5677,7 +5930,7 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	addEdge(edge) {
-		if(edge) {
+		if(edge && !this.edges.includes(edge)) {
 			this.edges.push(edge);
 		}
 
@@ -5708,7 +5961,7 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeEdge(edge) {
-		if(edge) {
+		if(edge && this.edges.includes(edge)) {
 			this.edges.splice(this.edges.indexOf(edge), 1);
 		}
 
@@ -5737,12 +5990,12 @@ class CMGame {
 	 * Checks if two items are close enough to be indistinguishable
 	 * for the current game (e.g., numbers relative to current
 	 * graphScalar). Compares two numbers or two CMPoint instances.
-	 * @param {number|object} val - The first number, or CMPoint
-	 * @param {number|object} otherVal - The second number, or CMPoint
+	 * @param {number|object} val - The first number, or point-like object
+	 * @param {number|object} otherVal - The second number, or point-like object
 	 * @returns {boolean}
 	 */
 	almostEqual(val, otherVal) {
-		if(typeof val === "point") {
+		if(typeof val === "object") {
 			return new CMPoint(val).isAlmost(new CMPoint(otherVal));
 		}
 
@@ -6197,11 +6450,24 @@ CMGame.manageLoad = (e) => {
 		});
 	}
 
+	// Try to force a game page that allowed occasional scrolling to reload at the top left
+	window.scrollTo(0, 0);
+	document.documentElement.scrollTop = 0;
+	document.documentElement.scrollLeft = 0;
+	
 	CMGame.pageLoaded = true;
 	CMGame.onpageload.call(window, e);
 	domLoaded = true;
 	initializeIfReady();
 };
+
+// More tricks to force a scrolled page to reload at the top left
+window.history.scrollRestoration = "manual";
+document.documentElement.addEventListener("load", () => {
+	window.scrollTo(0, 0);
+	document.documentElement.scrollTop = 0;
+	document.documentElement.scrollLeft = 0;
+}, false);
 
 /** Try a few load implementations, to overcome occasional browser inconsistencies. */
 window.addEventListener("pageshow", CMGame.manageLoad, false);
@@ -6417,7 +6683,7 @@ Object.defineProperty(CMGame.prototype, "font", {
 			MONO: `${currentFontSize} monospace`,
 			SANS_SERIF: `${currentFontSize} OpenSans, Arial, sans-serif`,
 			SERIF: `${currentFontSize} Times New Roman, serif`,
-			VARIABLE: `italic ${currentFontSize} Times New Roman, serif`
+			VARIABLE: `italic calc(${currentFontSize} * 1.1) Times New Roman, serif`
 		};
 	}
 });
@@ -6517,19 +6783,19 @@ CMGame.showToast = function(toastMessage, startDelay=0, duration="auto", callbac
 
 	CMGame.toastElement.addEventListener("animationend", amendedCallback, false);
 
+	let boundingRect = CMGame.offscreenToastElement.getBoundingClientRect();
+	let widthStr = window.getComputedStyle(CMGame.offscreenToastElement).getPropertyValue("width").replace("px", "");
+	let computedWidth = parseFloat(widthStr) || 0; // if "auto", "", etc., defaults to 0
+	let assumedWidth = Math.max(boundingRect.right - boundingRect.left, computedWidth);
+
+	CMGame.toastElement.style.opacity = "0";
+	CMGame.toastElement.style.display = "none";
+	CMGame.toastElement.style.left = `calc(50vw - ${.5 * assumedWidth}px)`;
+
+	CMGame.toastElement.style.animationDuration =
+		CMGame.toastElement.style.webkitAnimationDuration = `${toastDuration}s`;
+
 	setTimeout(function() {
-		let boundingRect = CMGame.offscreenToastElement.getBoundingClientRect();
-		let widthStr = window.getComputedStyle(CMGame.offscreenToastElement).getPropertyValue("width").replace("px", "");
-		let computedWidth = parseFloat(widthStr) || 0; // if "auto", "", etc., defaults to 0
-		let assumedWidth = Math.max(boundingRect.right - boundingRect.left, computedWidth);
-
-		CMGame.toastElement.style.opacity = "0";
-		CMGame.toastElement.style.display = "none";
-		CMGame.toastElement.style.left = `calc(50vw - ${.5 * assumedWidth}px)`;
-
-		CMGame.toastElement.style.animationDuration =
-				CMGame.toastElement.style.webkitAnimationDuration = `${toastDuration}s`;
-
 		CMGame.toastElement.style.display = "inline-block";
 	}, startDelay);
 };
@@ -6591,11 +6857,6 @@ class CMSprite {
 	 *   "fence": object is pushed back so that it just rests on the wall
 	 *   "destroy": object is removed from game
 	 *   "none": (default) object just keeps moving offscreen,
-	 * @param {number} [layer=0] - A number than can be used to define the
-	 *   order to draw sprites in a frame. Sprites with the same layer number
-	 *   will be drawn in the order they were created. By default, all sprites have
-	 *   layer 0, so are drawn in the order they were created. Negative numbers
-	 *   are permitted as well, e.g., for background sprites.
 	 * @param {object} [options] - A plain JS object of additional options,
 	 *   mainly for defining helper functions on creation.
 	 * @param {function} [options.onupdate] A function to be executed after this sprite's update()
@@ -6606,9 +6867,14 @@ class CMSprite {
 	 * @param {function} [options.onfadeout] A function to be executed at the end of a "fade out" animation
 	 * @param {number} [options.z] A third coordinate "z" value if dev wants to manage
 	 *   some form of "depth". Defaults to 0.
+	 * @param {number} [options.layer=0] - A number than can be used to define the
+	 *   order to draw sprites in a frame. Sprites with the same layer number
+	 *   will be drawn in the order they were created. By default, all sprites have
+	 *   layer 0, so are drawn in the order they were created. Negative numbers
+	 *   are permitted as well, e.g., for background sprites.
 	 */
 	constructor(game, x, y, widthOrRadius, heightOrCircle, drawRule=null,
-			boundingRule="none", layer=0, options) {
+			boundingRule="none", options) {
 
 		let opts = options || {};
 
@@ -6617,9 +6883,11 @@ class CMSprite {
 		this.y = y;
 		this.z = opts.z || 0;
 
-		// Do not override this - it is used with Object.defineProperty. Override boundingRule instead.
+		// Do not override these - they are used with Object.defineProperty. Override boundingRule instead.
 		this.boundingRulePrivate = boundingRule;
+		this.layerPrivate = opts.layer || 0;
 
+		this.layer = this.layerPrivate;
 		this.boundingRuleTop = "none";
 		this.boundingRuleRight = "none";
 		this.boundingRuleBottom = "none";
@@ -6667,7 +6935,9 @@ class CMSprite {
 		this.image = null;
 		this.fillStyle = "black";
 
-		if(typeof drawRule === "string") {
+		if(typeof drawRule === "string" ||
+			drawRule instanceof CanvasGradient ||
+			drawRule instanceof CanvasPattern) {
 			this.fillStyle = drawRule;
 		}
 		else
@@ -6700,8 +6970,6 @@ class CMSprite {
 		this.ondraw = opts.ondraw || CMGame.noop;
 		this.onfadein = opts.onfadein || CMGame.noop;
 		this.onfadeout = opts.onfadeout || CMGame.noop;
-
-		this.layer = layer;
 
 		this.onscreen = false;
 		this.hasEnteredScreen = false; // bounding rules will not apply until sprite has entered screen
@@ -6865,9 +7133,22 @@ class CMSprite {
 			this.pathFunction = null;
 		}
 		else
-		if(typeof newPath === "object") { // object, just setting velocities
-			this.velocity.x = newPath.x || 0;
-			this.velocity.y = newPath.y || 0;
+		if(typeof newPath === "object") { // object, just setting velocities, OR setting from a polar point
+			if(typeof newPath.r === "number" || typeof newPath.theta === "number") {
+				let cart = game.fromPolar(
+				{
+					r: newPath.r || 1,
+					theta: newPath.theta || this.game.slopeToRadians(this.velocity.y / this.velocity.x)
+				});
+
+				this.velocity.x = cart.x;
+				this.velocity.y = cart.y;
+			}
+			else {
+				this.velocity.x = newPath.x || 0;
+				this.velocity.y = newPath.y || 0;
+			}
+	
 			this.velocity.z = newPath.z || 0;
 			this.pathFunction = null;
 		}
@@ -6890,27 +7171,27 @@ class CMSprite {
 
 			switch(this.pathFunction.type) {
 				case "xofy":
-					this.y = this.pathFunction.yToScreen(this.pathFunction[this.pathFunctionFollow].y);
-					this.x = this.pathFunction.xToScreen(this.pathFunction.of(this.pathFunction[this.pathFunctionFollow].y));
+					this.y = this.game.yToScreen(this.pathFunction[this.pathFunctionFollow].y, this.pathFunction.origin);
+					this.x = this.game.xToScreen(this.pathFunction.of(this.pathFunction[this.pathFunctionFollow].y), this.pathFunction.origin);
 					break;
 				case "polar":
 					let cartPoint = this.game.fromPolar(
 						this.pathFunction.of(this.pathFunction[this.pathFunctionFollow].theta), // r
 						this.pathFunction[this.pathFunctionFollow].theta
 					);
-					this.x = this.pathFunction.xToScreen(cartPoint.x);
-					this.y = this.pathFunction.yToScreen(cartPoint.y);
+					this.x = this.game.xToScreen(cartPoint.x, this.pathFunction.origin);
+					this.y = this.game.yToScreen(cartPoint.y, this.pathFunction.origin);
 					break;
 				case "parametric":
 					let funcPoint = this.pathFunction.of( this.pathFunction[this.pathFunctionFollow].t );
 
-					this.x = this.pathFunction.xToScreen( funcPoint.x );
-					this.y = this.pathFunction.yToScreen( funcPoint.y );
+					this.x = this.game.xToScreen( funcPoint.x, this.pathFunction.origin );
+					this.y = this.game.yToScreen( funcPoint.y, this.pathFunction.origin );
 					break;
 				case "cartesian":
 					default:
-					this.x = this.pathFunction.xToScreen(this.pathFunction[this.pathFunctionFollow].x);
-					this.y = this.pathFunction.yToScreen(this.pathFunction.of(this.pathFunction[this.pathFunctionFollow].x));
+					this.x = this.game.xToScreen(this.pathFunction[this.pathFunctionFollow].x, this.pathFunction.origin);
+					this.y = this.game.yToScreen(this.pathFunction.of(this.pathFunction[this.pathFunctionFollow].x), this.pathFunction.origin);
 					break;
 			}
 
@@ -6959,34 +7240,90 @@ class CMSprite {
 			}
 		}
 
-		if(this.shape === "rect") {
-			this.boundAsRect();
-		}
-		else
-		if(this.shape === "line") {
-			this.boundAsLine();
-		}
-		else {
-			this.boundAsCircle();
+		switch(this.shape) {
+			case "line":
+				this.boundAsLine();
+				break;
+			case "circle":
+				this.boundAsCircle();
+				break;
+			case "rect":
+			default:
+				this.boundAsRect();
+				break;
 		}
 
 		this.onupdate(frameCount);
 	}
 
 	/**
-	 * Animates sprite to fade in for current scene
+	 * Animates sprite to fade in for current scene. Returns a promise,
+	 * resolving after the animation, which can be used for further
+	 * actions
+	 * Note: setting onfadein before calling this method will
+	 * allow similar control, with more accuracy because it is based
+	 * on the actual fader, rather than the expected time.
+	 * For instance, if you  change the FPS while fading, onfadein
+	 * will be called after the animation, but the Promise may resolve
+	 * before or after that frame.
+	 *
+	 * Example usage:
+	 * sprite.fadeIn().then(() => { sprite.moveToward(game.center) });
+	 *
 	 * @param {number} [duration=500] Number of milliseconds fade should last
+	 * @returns {Promise} A promise resolving after the given duration
 	 */
 	fadeIn(duration=500) {
 		this.velocity.opacity = 1 / (CMGame.FPS * (duration / 1000));
+		return new Promise(function(resolve, reject) {
+			setTimeout(resolve, duration);
+		});
 	}
 
 	/**
-	 * Animates sprite to fade out from current scene
+	 * Animates sprite to fade out from current scene.
+	 * Note: the same concerns mentioned in fadeIn()
+	 * about the returned Promise apply here.
+	 *
+	 * Example usage:
+	 * sprite.fadeOut().then(() => sprite.destroy());
+	 * 
 	 * @param {number} [duration=500] Number of milliseconds fade should last
+	 * @returns {Promise} A promise resolving after the given duration
 	 */
 	fadeOut(duration=500) {
 		this.velocity.opacity = -1 / (CMGame.FPS * (duration / 1000));
+		return new Promise(function(resolve, reject) {
+			setTimeout(resolve, duration);
+		});
+	}
+
+	/**
+	 * Sets the sprite's current course towards
+	 * a specific onscreen point.
+	 * @param {object} newPoint - The point to move towards (must have x and y values)
+	 * @param {number} [desiredSpeed=1] The velocity to move in the new direction.
+	 *   Note: this is not necessarily velocity of x or y coordinates, but really a polar radius.
+	 */
+	moveToward(newPoint, desiredSpeed=1) {
+		let slope = game.getSlope(this.center, newPoint);
+
+		let point = game.fromPolar(
+			{
+				r: 1,
+				theta: game.slopeToRadians(slope)
+			})
+
+		let xVelocity = desiredSpeed,
+			yVelocity = desiredSpeed;
+
+		if(newPoint.x < this.center.x)
+			xVelocity *= -1;
+
+		if(newPoint.x < this.center.x)
+			yVelocity *= -1;
+
+		this.setPath(point.x * xVelocity, point.y * yVelocity);
 	}
 
 	/**
@@ -7009,10 +7346,10 @@ class CMSprite {
 	/** Manages screen boundaries for "circle" shape */
 	boundAsCircle() {
 		if(this.hasEnteredScreen) {
-			if(this.x <= this.radius) { // left wall
+			if(this.x < this.radius) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
-						if(this.x + this.radius <= 0) {
+						if(this.x + this.radius < 0) {
 							this.x = this.game.width + this.radius + (this.x + this.radius);
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7041,11 +7378,11 @@ class CMSprite {
 						break;
 				}
 			}
-			else
-			if(this.x + this.radius >= this.game.width) { // right wall		
+
+			if(this.x + this.radius > this.game.width) { // right wall		
 				switch(this.boundingRuleRight) {
 					case "wrap":
-						if(this.x - this.radius >= this.game.width) {
+						if(this.x - this.radius > this.game.width) {
 							this.x = -this.radius + (this.x - this.radius - this.game.width);
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7074,11 +7411,11 @@ class CMSprite {
 						break;
 				}
 			}
-			else
-			if(this.y - this.radius <= 0) { // top wall
+
+			if(this.y - this.radius < 0) { // top wall
 				switch(this.boundingRuleTop) {
 					case "wrap":
-						if(this.y + this.radius <= 0) {
+						if(this.y + this.radius < 0) {
 							this.y = this.game.height + this.radius + (this.y + this.radius);
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7107,11 +7444,11 @@ class CMSprite {
 						break;
 				}
 			}
-			else
-			if(this.y + this.radius >= this.game.height) { // bottom wall
+
+			if(this.y + this.radius > this.game.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
-						if(this.y - this.radius >= this.game.height) {
+						if(this.y - this.radius > this.game.height) {
 							this.y = -this.radius + (this.y - this.radius - this.game.height);
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7161,10 +7498,10 @@ class CMSprite {
 	boundAsRect(rectToBound=this) {
 
 		if(this.hasEnteredScreen) {
-			if(rectToBound.x <= 0) { // left wall
+			if(rectToBound.x < 0) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
-						if(rectToBound.x + rectToBound.width <= 0) {
+						if(rectToBound.x + rectToBound.width < 0) {
 							this.x = this.game.width + (rectToBound.x + rectToBound.width);
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7193,11 +7530,11 @@ class CMSprite {
 						break;
 				}
 			}
-			else
-			if(rectToBound.x + rectToBound.width >= this.game.width) { // right wall
+
+			if(rectToBound.x + rectToBound.width > this.game.width) { // right wall
 				switch(this.boundingRuleRight) {
 					case "wrap":
-						if(rectToBound.x >= this.game.width) {
+						if(rectToBound.x > this.game.width) {
 							this.x = rectToBound.x - this.game.width;
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7226,11 +7563,11 @@ class CMSprite {
 						break;
 				}
 			}
-			else
-			if(rectToBound.y <= 0) { // top wall
+
+			if(rectToBound.y < 0) { // top wall
 				switch(this.boundingRuleTop) {
 					case "wrap":
-						if(rectToBound.y + rectToBound.height <= 0) {
+						if(rectToBound.y + rectToBound.height < 0) {
 							this.y = this.game.height + (rectToBound.y + rectToBound.height); // this.game.height;
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7259,11 +7596,11 @@ class CMSprite {
 						break;
 				}
 			}
-			else
-			if(rectToBound.y + rectToBound.height >= this.game.height) { // bottom wall
+
+			if(rectToBound.y + rectToBound.height > this.game.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
-						if(rectToBound.y >= this.game.height) {
+						if(rectToBound.y > this.game.height) {
 							this.y = rectToBound.y - this.game.height;
 
 							// For path functions, sprites internal path value may be way off screen
@@ -7371,35 +7708,124 @@ class CMSprite {
 	}
 }
 
-/**
- * Define the sprite's center as an accessor
- * so it does not need to update until needed.
- * Especially useful if sprite's size is animated.
- */
-Object.defineProperty(CMSprite.prototype, "center", {
+Object.defineProperties(CMSprite.prototype, {
 
 	/**
-	 * Gets sprite's center point.
-	 * Obvious when sprite is "circle", so
-	 * primarily used for "rect"
-	 * @returns {Point}
+	 * Define the sprite's center as an accessor
+	 * so it does not need to update until needed.
+	 * Especially useful if sprite's size is animated.
 	 */
-	get() {
-		if(this.shape === "rect") {
-			return new CMPoint(
-				this.x + .5 * this.width,
-				this.y + .5 * this.height
-			);
+	center: {
+
+		/**
+		 * Gets sprite's center point.
+		 * Obvious when sprite is "circle", so
+		 * primarily used for "rect"
+		 * @returns {Point}
+		 */
+		get() {
+			if(this.shape === "rect") {
+				return new CMPoint(
+					this.x + .5 * this.width,
+					this.y + .5 * this.height
+				);
+			}
+			else
+			if(this.shape === "line") {
+				return CMGame.midpoint(this.start, this.end);
+			}
+			else { // "circle"
+				return new CMPoint(
+					this.x,
+					this.y
+				);
+			}
 		}
-		else
-		if(this.shape === "line") {
-			return CMGame.midpoint(this.start, this.end);
+	},
+	
+	/**
+	 * We define values like "bottom" to assist with
+	 * collision detection, especially for platformers
+	 * landing on surfaces
+	 */
+	bottom: {
+
+		/**
+		 * Setting sprite's bottom value essentially just redefines y
+		 * @param {number} newVal - The new "bottom" y value
+		 */
+		set(newVal) {
+			this.y = newVal - this.height;
+		},
+
+		/**
+		 * Gets sprite's bottom edge's y pixel value.
+		 * @returns {number}
+		 */
+		get() {
+			return this.y + this.height;
 		}
-		else { // "circle"
-			return new CMPoint(
-				this.x,
-				this.y
-			);
+	},
+	
+	right: {
+
+		/**
+		 * Setting sprite's right value essentially just redefines x
+		 * @param {number} newVal - The new "right" x value
+		 */
+		set(newVal) {
+			this.x = newVal - this.width;
+		},
+
+		/**
+		 * Gets sprite's right edge's x pixel value.
+		 * @returns {number}
+		 */
+		get() {
+			return this.x + this.width;
+		}
+	},
+
+	/**
+	 * The "left" and "top" value are provided as conveniences,
+	 * even though they are essentially redundant (as aliases
+	 * for "x" and "y", respectively).
+	 */
+	left: {
+
+		/**
+		 * Setting sprite's left value essentially just redefines x
+		 * @param {number} newVal - The new "left" x value
+		 */
+		set(newVal) {
+			this.x = newVal;
+		},
+
+		/**
+		 * Gets sprite's "left" (i.e., "x") value
+		 * @returns {number}
+		 */
+		get() {
+			return this.x;
+		}
+	},
+
+	top: {
+
+		/**
+		 * Setting sprite's top value essentially just redefines y
+		 * @param {number} newVal - The new "top" y value
+		 */
+		set(newVal) {
+			this.y = newVal;
+		},
+
+		/**
+		 * Gets sprite's "top" (i.e., "y") value
+		 * @returns {number}
+		 */
+		get() {
+			return this.y;
 		}
 	}
 });
@@ -7427,6 +7853,18 @@ Object.defineProperty(CMSprite.prototype, "boundingRule", {
 			[this.boundingRuleTop, this.boundingRuleRight,
 				this.boundingRuleBottom, this.boundingRuleLeft] = new Array(4).fill(newRule);
 		}
+	}
+});
+
+// If a sprite's layer is changed dynamically, we need to update sprite drawing accordingly
+Object.defineProperty(CMSprite.prototype, "layer", {
+	get() {
+		return this.layerPrivate;
+	},
+
+	set(newLayer) {
+		this.layerPrivate = newLayer;
+		this.game.sprites.sort((a, b) => a.layer - b.layer);
 	}
 });
 
@@ -7618,33 +8056,35 @@ class CMFunction {
 	 *   The default assumption is a standard Cartesian "return y as a function
 	 *   of x" function, but other options can be set in options.type.
 	 * @param {object} [opts] - An object of options. All values are optional, including opts itself.
-	 * @param {string} [opts.type="cartesian"] "cartesian" (default), "polar", "parametric", "xofy" (sideways)
+	 * @param {string} [opts.type="cartesian"] - "cartesian" (default), "polar", "parametric", "xofy" (sideways)
 	 *   "cartesian" is standard. func should take a single input (x) and return single output (y)
 	 *   "yofox" is essentially Cartesian along y-axis, instead of x. func should take a single
 	 *      input (y) and return single output (x)
 	 *   "polar" is polar coordinates. func should take a single input (theta) and return single output (r)
 	 *   "parametric" is based on an extra parameter (t). func should take a single input (t) and
 	 *      return a point with an x value and a y value, e.g., func = (t) => {x: t**2, y: Math.cos(t)}
-	 * @param {string} [opts.strokeStyle] color for the graph curve
-	 * @param {string} [opts.fillStyleBelow] color for area below graph curve
-	 * @param {string} [opts.fillStyleAbove] color for area above graph curve
-	 * @param {string} [opts.lineWidth] line width for the graph curve
-	 * @param {string} [opts.name] Convenience, e.g., for drawing name to screen
-	 * @param {boolean} [opts.static] true if you know the graph will not change
-	 * @param {object} [opts.start] Object defining real number start values for x, t, etc.
-	 * @param {object} [opts.end] Object defining real number end values for x, t, etc.
-	 * @param {object} [opts.velocity] Object defining quantity to change values per frame
-	 * @param {object|array} [opts.origin] A point-like object or array with 2 values (x and y)
+	 * @param {string} [opts.strokeStyle] - color for the graph curve
+	 * @param {string} [opts.fillStyleBelow] - color for area below graph curve
+	 * @param {string} [opts.fillStyleAbove] - color for area above graph curve
+	 * @param {string} [opts.lineWidth] - line width for the graph curve
+	 * @param {string} [opts.name] - Convenience, e.g., for drawing name to screen
+	 * @param {boolean} [opts.fixed] - true if you know the graph will not change. Useful for optimizations.
+	 * @param {object} [opts.start] - Object defining real number start values for x, t, etc.
+	 * @param {object} [opts.end] - Object defining real number end values for x, t, etc.
+	 * @param {object} [opts.velocity] - Object defining quantity to change values per frame
+	 * @param {number} [opts.tStep] - For "parametric" type, defines how much t increments to next screen value
+	 * @param {number} [opts.thetaStep] - For "polar" type, defines how much theta increments to next screen value
+	 * @param {object|array} [opts.origin] - A point-like object or array with 2 values (x and y)
 	 *   representing the pixel coordinates this function should treat as the origin. If
 	 *   not provided, defaults to the current game's origin (as expected).
-	 * @param {function} [opts.onupdate] A callback called after
+	 * @param {function} [opts.onupdate] - A callback called after
 	 *   update(). Take game's frameCount as only parameter
-	 * @param {function} [opts.onbeforedraw] A callback called before this function is
+	 * @param {function} [opts.onbeforedraw] - A callback called before this function is
 	 *   drawn to the screen. Can be used e.g., to draw small background relative to this
 	 *   graph's origin.
-	 * @param {function} [opts.ondraw] A callback called after
+	 * @param {function} [opts.ondraw] - A callback called after
 	 *   draw(). Takes game's drawing context as only parameter
-	 * @param {function|array} [opts.discontinuousAt] A boolean function, taking in real values, that
+	 * @param {function|array} [opts.discontinuousAt] - A boolean function, taking in real values, that
 	 *   is true when strokes should break (i.e., at points of discontinuity), or an array of specific real
 	 *   values where these breaks should occur. If this function is not present, constructor will assume
 	 *   where breaks occur for functions with floor or ceil functions in them. Note: asymptotes are
@@ -7665,7 +8105,6 @@ class CMFunction {
 				this.continuous = false;
 
 				this.discontinuousAt = function(x, nextX) {
-					// return Math.abs(self.screenOf(x) - self.screenOf(nextX)) > 0;
 					return !self.game.almostEqual(self.screenOf(x), self.screenOf(nextX));
 				};
 			}
@@ -7709,8 +8148,8 @@ class CMFunction {
 		this.of = func; // e.g., if you name this function f, then f.of(2) is similar to f(2)
 		this.screenOf = null; // A function shifting and scaling given function (with real input) to the screen
 
-		this.tStep = 0;
-		this.thetaStep = 0;
+		this.tStep = typeof opts.tStep === "number" ? opts.tStep : 0.1;
+		this.thetaStep = typeof opts.thetaStep === "number" ? opts.thetaStep : (Math.TAU / 360);
 
 		this.strokeStyle = opts.strokeStyle || CMGame.Color.DARK_GRAY;
 		this.fillStyleBelow = opts.fillStyleBelow;
@@ -7739,7 +8178,7 @@ class CMFunction {
 		}
 
 		this.end = {
-			t: 0,
+			t: Math.max(this.game.width, this.game.height) / this.tStep,
 			x: ((this.game.width - this.origin.x) / this.game.graphScalar),
 			y: (this.origin.y / this.game.graphScalar),
 			r: 0,
@@ -7786,138 +8225,142 @@ class CMFunction {
 		this.pathBelow = null;
 
 		this.valsArray = null;
-		this.static = !!opts.static;
+		this.screenValsArray = null;
+		this.fixed = !!opts.fixed;
 
-		/**
-		// @todo Set up `static` instances to use arrays, as an optimization
-		if(this.static) {
+		if(this.fixed) {
 
 			// For a function without values changing, we can store the values once
 			switch(self.type) {
 				case "xofy":
-					self.valsArray = new Array(self.game.height - 0)
+					self.valsArray = new Array((self.game.height - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(y => self.of( self.game.xToReal( y ) ) );
+						.map(y => self.of( self.game.xToReal( y, self.origin ) ) );
+
+					self.of = function(y) {
+						return self.valsArray[Math.floor(self.game.yToScreen(y))];
+					};
+
+					self.screenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
+
+					self.screenValsArray = new Array((self.game.height - 0) / 1)
+						.fill(0)
+						.map((element, idx, fullArr) => idx)
+						.map(y => self.screenOf( self.game.xToReal( y, self.origin ) ) );
+
+					self.screenOf = function(y) {
+						return self.screenValsArray[Math.floor(self.game.yToScreen(y))];
+					};
 					break;
 				case "polar":
-					self.valsArray = new Array(360 - 0)
+					self.valsArray = new Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(theta => self.of( theta ) );
+						.map(i => self.of( i * self.thetaStep ) );
+
+					self.of = function(theta) {
+						while(theta < 0) {
+							theta += Math.TAU;
+						}
+
+						while(theta > Math.TAU) {
+							theta -= Math.TAU;
+						}
+
+						return self.valsArray[Math.floor(theta / self.thetaStep)];
+					};
+
+					self.screenOf = function(theta) {
+						return (self.of(theta) * self.game.graphScalar);
+					};
+
+					self.screenValsArray = new Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
+						.fill(0)
+						.map((element, idx, fullArr) => idx)
+						.map(i => self.screenOf( i * self.thetaStep ) );
+
+					self.screenOf = function(theta) {
+						return self.screenValsArray[Math.floor(theta / self.thetaStep)];
+					};
 					break;
 				case "parametric":
-					self.valsArray = new Array(self.end.t - self.start.t)
+					self.valsArray = new Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(t => self.of( t ) );
+						.map(i => self.of( i * self.tStep ) );
+
+					self.of = function(t) {
+						return self.valsArray[Math.floor(t)];
+					};
+
+					self.screenOf = function(t) {
+						let xyFromParam = self.of( t );
+						return self.game.toScreen(xyFromParam, self.origin);
+					};
+
+					self.screenValsArray = new Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
+						.fill(0)
+						.map((element, idx, fullArr) => idx)
+						.map(t => self.screenOf( t * self.tStep ) );
+
+					self.screenOf = function(t) {
+						return self.screenValsArray[Math.floor(t)];
+					};
 					break;
 				case "cartesian":
 				default:
-					
-					// self.valsArray = new Array(self.game.graphScalar * (self.end.x - self.start.x))
-						// .map((element, idx, fullArr)=>idx)
-						// .map(idx=>self.of( self.start.x + idx ));
-
-					self.valsArray = new Array(self.game.width - 0)
+					self.valsArray = new Array((self.game.width - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(x => self.of( self.game.xToReal( x ) ) );
+						.map(i => self.of( self.game.xToReal( i, self.origin ) ) );
+
+					self.of = function(x) {
+						return self.valsArray[Math.floor(self.game.xToScreen(x))];
+					};
+
+					self.screenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
+
+					self.screenValsArray = new Array((self.game.width - 0) / 1)
+						.fill(0)
+						.map((element, idx, fullArr) => idx)
+						.map(i => self.screenOf( self.game.xToReal( i, self.origin ) ) );
+
+					self.screenOf = function(x) {
+						return self.screenValsArray[Math.floor(self.game.xToScreen(x))];
+					};
 					break;
 			}
-
-			this.of = function(x) {
-				return self.valsArray[x];
-			};
 		}
-		*/
-
-		switch(this.type) {
-			case "xofy":
-				self.screenOf = function(y) { return self.xToScreen(self.of(y)); };
-				break;
-			case "polar":
-				self.thetaStep = typeof opts.thetaStep === "number" ? opts.thetaStep : (Math.TAU / 360);
-				self.screenOf = function(theta) {
-					return self.of(theta) * self.game.graphScalar;
-				};
-				break;
-			case "parametric":
-				self.tStep = typeof opts.tStep === "number" ? opts.tStep : 0.1;
-				self.screenOf = function(t) {
-					let xyFromParam = self.of(t);
-
-					return {
-						x: self.xToScreen(xyFromParam.x),
-						y: self.yToScreen(xyFromParam.y)
-					};
-				};
-				break;
-			case "cartesian":
-			default:
-				self.screenOf = function(x) { return self.yToScreen(self.of(x)); };
-				break;
-		}
-
-		this.scaledValsArray = null;
-
-		if(this.static) {
-			// @todo Set up `static` instances to use arrays, as an optimization
-
-			/*
-			// Basic setup - Note: these assume the graph crosses entire screen
-			// this.scaledValsArray = new Array(640)
-			//   .map({element, idx, fullArr}=>idx)
-			//   .map(x=>this.screenOf(x));
-
-			// For a function without values changing, we can store the values once
+		else
+		// Define the onscreen "screenOf" function for functions that are not "fixed" on the screen
+		{
 			switch(this.type) {
 				case "xofy":
-					self.scaledValsArray = new Array(self.game.height - 0)
-						.fill(0)
-						.map((element, idx, fullArr) => idx)
-						.map(y => self.screenOf( self.xToReal( y ) ) );
+					self.screenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
 					break;
 				case "polar":
-					self.scaledValsArray = new Array(360 - 0)
-						.fill(0)
-						.map((element, idx, fullArr) => idx)
-						.map(theta => self.screenOf( theta ) );
+					self.screenOf = function(theta) {
+						return (self.of(theta) * self.game.graphScalar);
+					};
 					break;
 				case "parametric":
-					self.scaledValsArray = new Array(self.end.t - self.start.t)
-						.fill(0)
-						.map((element, idx, fullArr) => idx)
-						.map(t => self.screenOf( t ) );
+					self.screenOf = function(t) {
+						let xyFromParam = self.of( t );
+						return self.game.toScreen(xyFromParam, self.origin);
+					};
 					break;
 				case "cartesian":
 				default:
-					self.scaledValsArray = new Array(self.game.width - 0)
-						.fill(0)
-						.map((element, idx, fullArr) => idx)
-						.map(x => self.screenOf( x ) );
+					self.screenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
 					break;
 			}
-			*/
+		}
 
-			// function(x) { return self.yToScreen(self.of(x)); };
-
-			// this.scaledValsArray = this.valsArray.map(val => self.yToScreen(self.of(x)) );
-
-			//	Not quite... self.of(x) here is going from 0 to 640, but we need it to go from xToReal...
-			/*
-			self.scaledValsArray = new Array(self.game.width - 0)
-						.fill(0)
-						.map((element, idx, fullArr) => idx)
-						.map(screenX => self.yToScreen(self.of( self.xToReal( screenX ) )) );
-
-			this.screenOf = function(input) {
-				return self.scaledValsArray[input];
-			};
-			*/
-
-			// this.buildGraphPath(this.game.ctx);
-			// this.draw = this.drawGraphPath;
+		// Define pathAbove and pathBelow
+		this.buildGraphPath(this.game.ctx);
+		if(this.fixed) {
+			this.draw = this.drawGraphPath;
 		}
 	}
 
@@ -7951,7 +8394,7 @@ class CMFunction {
 
 	/**
 	 * For optimization, prebuilds the drawing path
-	 * when dev knows it will not change. (options.static=true)
+	 * when dev knows it will not change. (options.fixed=true)
 	 * @param {CanvasRenderingContext2D} ctx - The game's drawing context
 	 */
 	buildGraphPath(ctx) {
@@ -7968,9 +8411,9 @@ class CMFunction {
 		switch(this.type) {
 			case "cartesian":
 				// Set up endpoints, bounding horizontally within visible canvas (to optimize)
-				initialI = Math.max(0, this.xToScreen( this.start.x ) );
+				initialI = Math.max(0, this.game.xToScreen(this.start.x, this.origin) );
 				initialScreenRealX = (initialI - this.origin.x) / game.graphScalar;
-				finalI = Math.min(canvas.width, this.xToScreen( this.end.x) );
+				finalI = Math.min(canvas.width, this.game.xToScreen(this.end.x, this.origin) );
 
 				this.path.moveTo(initialI, this.screenOf( initialScreenRealX ) );
 
@@ -7993,20 +8436,16 @@ class CMFunction {
 					}
 				}
 
-				if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
-					this.pathBelow = new Path2D(this.path);
-					this.pathBelow.lineTo(finalI, canvas.height + ctx.lineWidth);
-					this.pathBelow.lineTo(canvas.width, canvas.height + ctx.lineWidth);
-					this.pathBelow.lineTo(initialI, canvas.height + ctx.lineWidth);
-					this.pathBelow.closePath();
-				}
+				this.pathBelow = new Path2D(this.path);
+				this.pathBelow.lineTo(finalI, canvas.height + ctx.lineWidth);
+				this.pathBelow.lineTo(canvas.width, canvas.height + ctx.lineWidth);
+				this.pathBelow.lineTo(initialI, canvas.height + ctx.lineWidth);
+				this.pathBelow.closePath();
 
-				if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
-					this.pathAbove = new Path2D(this.path);
-					this.pathAbove.lineTo(finalI, 0 - ctx.lineWidth);
-					this.pathAbove.lineTo(initialI, 0 - ctx.lineWidth);
-					this.pathAbove.closePath();
-				}
+				this.pathAbove = new Path2D(this.path);
+				this.pathAbove.lineTo(finalI, 0 - ctx.lineWidth);
+				this.pathAbove.lineTo(initialI, 0 - ctx.lineWidth);
+				this.pathAbove.closePath();
 				break;
 			case "xofy":
 				/**
@@ -8014,9 +8453,9 @@ class CMFunction {
 				 * but we allow our index to move from 0 to game.height
 				 * and subtract from game.height when drawing the path
 				 */
-				initialI = Math.max(0, game.height - this.yToScreen( this.start.y ) );
+				initialI = Math.max(0, game.height - this.game.yToScreen( this.start.y, this.origin ) );
 				initialScreenRealY = (initialI - this.origin.y) / game.graphScalar;
-				finalI = Math.min(game.height, game.height - this.yToScreen( this.end.y) );
+				finalI = Math.min(game.height, game.height - this.game.yToScreen( this.end.y, this.origin) );
 
 				this.path.moveTo(this.screenOf( initialScreenRealY ), game.height - initialI);
 
@@ -8038,19 +8477,15 @@ class CMFunction {
 					}
 				}
 
-				if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
-					this.pathBelow = new Path2D(this.path);
-					this.pathBelow.lineTo(-ctx.lineWidth, game.height - finalI);
-					this.pathBelow.lineTo(-ctx.lineWidth, game.height - initialI);
-					this.pathBelow.closePath();
-				}
+				this.pathBelow = new Path2D(this.path);
+				this.pathBelow.lineTo(-ctx.lineWidth, game.height - finalI);
+				this.pathBelow.lineTo(-ctx.lineWidth, game.height - initialI);
+				this.pathBelow.closePath();
 
-				if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
-					this.pathAbove = new Path2D(this.path);
-					this.pathAbove.lineTo(canvas.width + ctx.lineWidth, game.height - finalI);
-					this.pathAbove.lineTo(canvas.width + ctx.lineWidth, game.height - initialI);
-					this.pathAbove.closePath();
-				}
+				this.pathAbove = new Path2D(this.path);
+				this.pathAbove.lineTo(canvas.width + ctx.lineWidth, game.height - finalI);
+				this.pathAbove.lineTo(canvas.width + ctx.lineWidth, game.height - initialI);
+				this.pathAbove.closePath();
 				break;
 			case "polar":
 				initialPoint = game.fromPolar({
@@ -8070,22 +8505,18 @@ class CMFunction {
 					this.path.lineTo( this.origin.x + point.x, this.origin.y - point.y);
 				}
 
-				if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
-					this.pathBelow = new Path2D(this.path);
-					this.pathBelow.closePath(); // if necessary
-				}
+				this.pathBelow = new Path2D(this.path);
+				this.pathBelow.closePath(); // if necessary
 
 				// Attempt to fill area outside the path. Note: may not work as expected if polar path is not closed
-				if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
-					this.pathAbove = new Path2D(this.path);
+				this.pathAbove = new Path2D(this.path);
 
-					this.pathAbove.moveTo(game.width + ctx.lineWidth, this.origin.y - initialPoint.y); // right wall
-					this.pathAbove.lineTo(game.width + ctx.lineWidth, game.height + ctx.lineWidth); // bottom right corner
-					this.pathAbove.lineTo(0 - ctx.lineWidth, game.height + ctx.lineWidth);
-					this.pathAbove.lineTo(0 - ctx.lineWidth, 0 - ctx.lineWidth);
-					this.pathAbove.lineTo(game.width + ctx.lineWidth, 0 - ctx.lineWidth);
-					this.pathAbove.lineTo(game.width + ctx.lineWidth, this.origin.y - initialPoint.y);
-				}
+				this.pathAbove.moveTo(game.width + ctx.lineWidth, this.origin.y - initialPoint.y); // right wall
+				this.pathAbove.lineTo(game.width + ctx.lineWidth, game.height + ctx.lineWidth); // bottom right corner
+				this.pathAbove.lineTo(0 - ctx.lineWidth, game.height + ctx.lineWidth);
+				this.pathAbove.lineTo(0 - ctx.lineWidth, 0 - ctx.lineWidth);
+				this.pathAbove.lineTo(game.width + ctx.lineWidth, 0 - ctx.lineWidth);
+				this.pathAbove.lineTo(game.width + ctx.lineWidth, this.origin.y - initialPoint.y);
 				break;
 			case "parametric":
 				initialPoint = this.screenOf(0);
@@ -8096,31 +8527,37 @@ class CMFunction {
 					let point = this.screenOf(tIndex);
 					this.path.lineTo( point.x, point.y);
 				}
+
+				this.pathAbove = new Path2D(this.path);
+				this.pathBelow = new Path2D(this.path);
 				break;
 		}		
 	}
 
 	/**
-	 * Draws static graph in current frame, using a
+	 * Draws static/fixed graph in current frame, using a
 	 * stored Path2D. If this CMFunction instance
-	 * is static, this function replaces the draw() method
+	 * is fixed, this function replaces the draw() method
 	 * as an optimization.
 	 * @param {CanvasRenderingContext2D} ctx - The game's drawing context
 	 */
 	drawGraphPath(ctx=this.game.offscreenCtx) {
-		if(this.pathBelow) {
+		ctx.lineWidth = this.lineWidth;
+
+		if(this.pathBelow && this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
 			ctx.fillStyle = this.fillStyleBelow;
 			ctx.fill(this.pathBelow);
 		}
 
-		if(this.pathAbove) {
+		if(this.pathAbove && this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
 			ctx.fillStyle = this.fillStyleAbove;
 			ctx.fill(this.pathAbove);
 		}
 
-		ctx.lineWidth = this.lineWidth;
-		ctx.strokeStyle = this.strokeStyle;
-		ctx.stroke(this.path);
+		if(this.strokeStyle !== CMGame.Color.TRANSPARENT) {
+			ctx.strokeStyle = this.strokeStyle;
+			ctx.stroke(this.path);
+		}
 	}
 
 	/**
@@ -8250,9 +8687,9 @@ class CMFunction {
 		 * but we allow our index to move from 0 to game.height
 		 * and subtract from game.height when drawing the path
 		 */
-		let initialI = Math.max(0, game.height - this.yToScreen( this.start.y ) );
+		let initialI = Math.max(0, game.height - this.game.yToScreen( this.start.y, this.origin) );
 		let initialScreenRealY = (initialI - this.origin.y) / game.graphScalar;
-		let finalI = Math.min(game.height, game.height - this.yToScreen( this.end.y) );
+		let finalI = Math.min(game.height, game.height - this.game.yToScreen( this.end.y, this.origin) );
 
 		// Draw the current graph
 		this.path = new Path2D();
@@ -8309,9 +8746,9 @@ class CMFunction {
 		let canvas = game.canvas;
 
 		// Set up endpoints, bounding horizontally within visible canvas (to optimize)
-		let initialI = Math.max(0, this.xToScreen( this.start.x ) );
+		let initialI = Math.max(0, this.game.xToScreen( this.start.x, this.origin ) );
 		let initialScreenRealX = (initialI - this.origin.x) / game.graphScalar;
-		let finalI = Math.min(canvas.width, this.xToScreen( this.end.x) );
+		let finalI = Math.min(canvas.width, this.game.xToScreen( this.end.x, this.origin) );
 
 		// Draw the current graph
 		this.path = new Path2D();
@@ -8401,11 +8838,11 @@ class CMFunction {
 				let pointXStyle = "color: rgb(225, 225, 0)";
 				let pointYStyle = "color: rgb(225, 225, 0)";
 
-				if(point.x < 0 || point.x > canvas.width) {
+				if(point.x < 0 || point.x > this.game.width) {
 					pointXStyle = "color: rgb(255, 95, 95)";
 				}
 
-				if(point.y < 0 || point.y > canvas.height) {
+				if(point.y < 0 || point.y > this.game.height) {
 					pointYStyle = "color: rgb(255, 95, 95)";
 				}
 
@@ -8421,8 +8858,8 @@ class CMFunction {
 		else {
 			// Cannot assume only 3 paths exist; must calculate specific point
 
-			let funcRealY = this.of( this.xToReal( point.x ));
-			let pointRealY = this.yToReal( point.y );
+			let funcRealY = this.of( this.game.xToReal( point.x, this.origin ));
+			let pointRealY = this.game.yToReal( point.y, this.origin );
 
 			// Remember, pixels are flipped upside down
 			if(pointRealY === funcRealY) {
@@ -8441,90 +8878,6 @@ class CMFunction {
 			}
 		}
 	}
-	
-	/**
-	 * Since we are allowing each CMFunction
-	 * to be defined with its own origin, we need to
-	 * allow devs to convert points and pixels
-	 * based on the current function as well. The
-	 * methods below match those of the current game
-	 * when this function's origin matches the games.
-	 */
-
-	/**
-	 * Converts a real x value to its
-	 * scaled onscreen position's
-	 * x value (in pixels)
-	 * @param {number} realX - The real x input
-	 * @returns {number}
-	 */
-	xToScreen(realX) {
-		let x = this.game.graphScalar * realX;
-
-		return this.origin.x + x;
-	}
-
-	/**
-	 * Gets graph x value from screen's x value
-	 * @param {number} screenX - The screen point's x value
-	 * @returns {number}
-	 */
-	xToReal(screenX) {
-		let x = screenX - this.origin.x;
-
-		return x / this.game.graphScalar;
-	}
-
-	/**
-	 * Converts a real y value to its
-	 * scaled onscreen position's
-	 * y value (in pixels)
-	 * @param {number} realY - The real y input
-	 * @returns {number}
-	 */
-	yToScreen(realY) {
-		let y = this.game.graphScalar * realY;
-
-		// Reflect so graph sits above x axis
-		return this.origin.y - y;
-	}
-
-	/**
-	 * Gets graph y value from screen's y value
-	 * @param {number} screenY - The screen point's y value
-	 * @returns {number}
-	 */
-	yToReal(screenY) {
-		let y = -(screenY - this.origin.y);
-
-		return y / this.game.graphScalar;
-	}
-
-	/**
-	 * A convenience method. Converts an x, y point
-	 * of real numbers to current screen.
-	 * @param {object} realPoint - A plain JS object with x and y number values
-	 * @returns {object} A point with x, y values
-	 */
-	toScreen(realPoint) {
-		return new CMPoint({
-			x: this.xToScreen(realPoint.x),
-			y: this.yToScreen(realPoint.y)
-		});
-	}
-
-	/**
-	 * A convenience method. Converts an x, y point
-	 * from the current game's screen scale to real numbers.
-	 * @param {object} screenPoint - A plain JS object with x and y number values
-	 * @returns {object} A point with x, y values
-	 */
-	toReal(screenPoint) {
-		return new CMPoint({
-			x: this.xToReal(screenPoint.x),
-			y: this.yToReal(screenPoint.y)
-		});
-	}
 
 	/**
 	 * A boolean function to keep track of where to draw
@@ -8537,6 +8890,152 @@ class CMFunction {
 	 */
 	discontinuousAt(input, nextInput) {
 		return false;
+	}
+
+	/**
+	 * Creates a copy of this function with similar options.
+	 * These options can be overridden in the passed in
+	 * newOpts argument.
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instance.
+	 * @returns {object} The newly created CMFunction instance
+	 */
+	clone(newOpts={}) {
+		newOpts.operation = "clone";
+		return this.operation("self", newOpts);
+	}
+
+	/**
+	 * Returns a new CMFunction instance representing
+	 * this one plus another one.
+	 * @param {object} otherFunc - The other function to act on
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instance.
+	 * @returns {object} The newly created CMFunction instance
+	 */
+	plus(otherFunc, newOpts={}) {
+		newOpts.operation = "plus";
+		return this.operation(otherFunc,  newOpts);
+	}
+
+	/**
+	 * Returns a new CMFunction instance representing
+	 * this one minus another one.
+	 * @param {object} otherFunc - The other function to act on
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instance.
+	 * @returns {object} The newly created CMFunction instance
+	 */
+	minus(otherFunc, newOpts={}) {
+		newOpts.operation = "minus";
+		return this.operation(otherFunc,  newOpts);
+	}
+
+	/**
+	 * Returns a new CMFunction instance representing
+	 * this one times another one.
+	 * @param {object} otherFunc - The other function to act on
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instance.
+	 * @returns {object} The newly created CMFunction instance
+	 */
+	times(otherFunc, newOpts={}) {
+		newOpts.operation = "times";
+		return this.operation(otherFunc,  newOpts);
+	}
+
+	/**
+	 * Returns a new CMFunction instance representing
+	 * this one divided by another one.
+	 * @param {object} otherFunc - The other function to act on
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instance.
+	 * @returns {object} The newly created CMFunction instance
+	 */
+	dividedBy(otherFunc, newOpts={}) {
+		newOpts.operation = "dividedBy";
+		return this.operation(otherFunc,  newOpts);
+	}
+
+	/**
+	 * Returns a new CMFunction instance representing
+	 * this one composed with another one.
+	 * @param {object} otherFunc - The other function to act on
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instance.
+	 * @returns {object} The newly created CMFunction instance
+	 */
+	composedWith(otherFunc, newOpts={}) {
+		newOpts.operation = "composedWith";
+		return this.operation(otherFunc,  newOpts);
+	}
+
+	/**
+	 * This is a convenience function provided for
+	 * DRY methods, as code is similar for various
+	 * operations.
+	 * @param {object} otherFunc - The other CMFunction instance to operate on
+	 * @param {object} [newOpts={}] - A plain JS object of options, which should
+	 *   contain any CMFunction constructor options that you want to be
+	 *   different from the current instances.
+	 */
+	operation(otherFunc, newOpts={}) {
+		let self = this,
+			opts = {};
+
+		let keys = ["type",
+			"strokeStyle",
+			"fillStyleBelow",
+			"fillStyleAbove",
+			"lineWidth",
+			"name",
+			"fixed",
+			"start",
+			"end",
+			"velocity",
+			"tStep",
+			"thetaStep",
+			"origin",
+			"onupdate",
+			"onbeforedraw",
+			"ondraw",
+			"discontinuousAt"];
+
+		for(let i = 0; i < keys.length; i++) {
+			opts[keys[i]] = newOpts[keys[i]] || this[keys[i]];
+		}
+
+		let ofFunc = null;
+		switch(newOpts.operation) {
+			case "plus":
+				ofFunc = function(input) { return self.of(input) + otherFunc.of(input); }
+				break;
+			case "minus":
+				ofFunc = function(input) { return self.of(input) - otherFunc.of(input); }
+				break;
+			case "times":
+				ofFunc = function(input) { return self.of(input) * otherFunc.of(input); }
+				break;
+			case "dividedBy":
+				ofFunc = function(input) { return self.of(input) / otherFunc.of(input); }
+				break;
+			case "composedWith":
+				ofFunc = function(input) { return self.of( otherFunc.of(input) ); }
+				break;
+			default: // Default is just a clone of starting function
+				ofFunc = function(input) { return self.of(input); };
+				break;
+		}
+
+		return new CMFunction(this.game,
+			ofFunc,
+			opts);
 	}
 }
 
@@ -8560,7 +9059,7 @@ class VennRegion extends CMSprite {
 	 *   See variation parameter in <CMGame>setNumberOfSets
 	 */
 	constructor(game, regionCode, variation=0) {
-		super(game, 0, 0, 0, "circle", null, "none", 0, true);
+		super(game, 0, 0, 0, "circle", null, "none", true);
 		this.regionCode = regionCode;
 		this.variation = variation;
 		this.filled = false;
@@ -9131,7 +9630,7 @@ class VennSet extends CMSprite {
 	 * @param {object} label - A plain JS object defining the set's label
 	 */
 	constructor(game, x, y, radius, label) {
-		super(game, x, y, radius, "circle", null, "none", 1, true);
+		super(game, x, y, radius, "circle", null, "none", {layer: 1});
 
 		this.path = null;
 		this.complementPath = null;
@@ -9273,7 +9772,7 @@ class CMVertex extends CMSprite {
 	 * @param {string} [label.fillStyle=CMGame.Color.BLACK] - Color to draw the label with
 	 */
 	constructor(game, x, y, radius, fillStyle=CMGame.Color.BLACK, label) {
-		super(game, x, y, radius, "circle", fillStyle, "none", 1, true);
+		super(game, x, y, radius, "circle", fillStyle, "none", {layer: 1});
 
 		this.degree = 0;
 		this.adjacentVertices  = [];
@@ -9377,7 +9876,7 @@ class CMEdge extends CMSprite {
 	constructor(game, vertex1=null, vertex2=null, lineWidth=1,
 			fillStyle=CMGame.Color.BLACK, label={}, directed=false, weight) {
 
-		super(game, 0, 0, lineWidth, "line", fillStyle, "none", 0, true);
+		super(game, 0, 0, lineWidth, "line", fillStyle, "none");
 
 		// vertex1 and vertex2 are the "incident" vertices to this edge
 		this.vertex1 = vertex1;
@@ -9651,31 +10150,52 @@ class CMEdge extends CMSprite {
 class CMnGon extends CMSprite {
 	/**
 	 * Creates a CMnGon instance
-	 * As this is a game sprite but not a CMEdge or CMVertex,
-	 * remember to add this with game.addSprite()
+	 * As this is a game sprite without any special extra definition,
+	 * this can be added to the game with game.addSprite(), or game.add()
 	 * @param {CMGame} game - The current CMGame instance
 	 * @param {number} n - The number of sides for this n-gon
-	 * @param {number} x - The screen x for this shape's center
-	 * @param {number} y - The screen y for this shape's center
-	 * @param {number} radius - The radius from center to each corner
-	 * @param {number} rotation - Number in radians to rotate by (clockwise, from viewer's perspective)
-	 * @param {string} [fillStyle=CMGame.Color.BLACK] - The color to fill this shape with
-	 * @param {string} [strokeStyle=CMGame.Color.TRANSPARENT] - The color to draw this outline with
-	 * @param {number} [lineWidth=1] How thick the outline should be
+	 * @param {object} [options={}] - A plain JS object of options
+	 * @param {number} [options.x] - The screen x for this shape's center. Defaults to game's center x.
+	 * @param {number} [options.y] - The screen y for this shape's center. Defaults to game's center y.
+	 * @param {number} [options.radius] - The radius from center to each corner vertex. Defaults
+	 *   to game's graphScalar (i.e., so vertices lie on unit circle).
+	 * @param {number} [options.rotation] - Number in radians to rotate by (clockwise, from viewer's
+	 *   perspective). Defaults to 0 (first point on positive x axis).
+	 * @param {string} [options.fillStyle] - The color to fill this shape with. Defaults to CMGame.Color.BLACK.
+	 * @param {string} [options.strokeStyle] - The color to draw this outline with. Defaults to CMGame.Color.TRANSPARENT.
+	 * @param {number} [options.lineWidth] How thick the outline should be. Defaults to 1.
 	 */
-	constructor(game, n=3, x=null, y=null, radius=null, rotation=0, fillStyle=CMGame.Color.BLACK,
-			strokeStyle=CMGame.Color.TRANSPARENT, lineWidth=1) {
+	constructor(game, n=3, options={}) {
 
-		if(x === null)
-			x = game.center.x;
+		let opts = {
+			x: null,
+			y: null,
+			radius: null,
+			rotation: 0,
+			fillStyle: CMGame.Color.BLACK,
+			strokeStyle: CMGame.Color.TRANSPARENT,
+			lineWidth: 1
+		};
 
-		if(y === null)
-			y = game.center.y;
+		for(let key in opts) {
+			if(options[key] === 0)
+				opts[key] = options[key];
+			else
+				opts[key] = options[key] || opts[key];
+		}
 
-		if(radius === null)
-			radius = game.graphScalar;
+		if(opts.x === null)
+			opts.x = game.center.x;
 
-		super(game, x, y, radius, "circle", function(ctx) {
+		if(opts.y === null)
+			opts.y = game.center.y;
+
+		if(opts.radius === null)
+			opts.radius = game.graphScalar;
+
+		super(game, opts.x, opts.y, opts.radius, "circle", function(ctx) {
+			ctx.lineWidth = this.lineWidth;
+
 			if(this.fillStyle !== CMGame.Color.TRANSPARENT) {
 				ctx.fillStyle = this.fillStyle;
 				ctx.fill(this.path);
@@ -9736,9 +10256,9 @@ class CMnGon extends CMSprite {
 	}
 
 	/**
-	 * Determines if a given point is on this
-	 * object. Useful for player interaction
-	 * via mouse clicks or touch points.
+	 * Determines if a given point is in this
+	 * object, or on its stroked line. Useful for player
+	 * interaction via mouse clicks or touch points.
 	 * @param {object|number} The point, or point's x value
 	 * @param {number} The point's y value
 	 * @returns {boolean}
@@ -9756,7 +10276,326 @@ class CMnGon extends CMSprite {
 			pointToCheck = pointOrX;
 		}
 
-		return this.game.ctx.isPointInPath(
+		return this.game.ctx.isPointInStroke(
+			this.path, pointToCheck.x, pointToCheck.y) || this.game.ctx.isPointInPath(
 			this.path, pointToCheck.x, pointToCheck.y);
+	}
+}
+
+/**
+ * A class for creating and managing arbitrary 2D polygons,
+ * e.g., for vector-graphics retro games.
+ */
+class CMPolygon extends CMSprite {
+	/**
+	 * Creates a CMPolygon instance
+	 * As this is a game sprite without any special extra definition,
+	 * this can be added to the game with game.addSprite(), or game.add()
+	 * @param {object} game - The current CMGame instance
+	 * @param {array} points - An array of point-like objects (with x and y number values)
+	 * @param {object} [options] - A plain JS object of options
+	 * @param {string} [options.strokeStyle] - A color to draw point-connecting lines with
+	 * @param {string} [options.fillStyle] - A color to fill the created shapes with
+	 * @param {number} [options.lineWidth] - The pixel width of the point-connecting lines
+	 */
+	constructor(game, points, options={}) {
+		let x = points.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.x), game.width);
+		let y = points.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.y), game.height);
+		let right = points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.x), 0);
+		let bottom = points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.y), 0);
+		let width = right - x;
+		let height = bottom - y;
+
+		super(game, x, y, width, height, function(ctx) {
+			ctx.lineWidth = this.lineWidth;
+
+			if(this.fillStyle !== CMGame.Color.TRANSPARENT) {
+				ctx.fillStyle = this.fillStyle;
+				ctx.fill(this.path);
+			}
+
+			if(this.strokeStyle !== CMGame.Color.TRANSPARENT) {
+				ctx.strokeStyle = this.strokeStyle;
+				ctx.stroke(this.path);
+			}
+		});
+
+		this.x = this.left = x;
+		this.y = this.top = y;
+
+		this.oldX = this.newX = this.x;
+		this.oldY = this.newY = this.y;
+
+		this.right = right;
+		this.bottom = bottom;
+		this.width = width;
+		this.height = height;
+
+		let opts = {
+			fillStyle: CMGame.Color.TRANSPARENT,
+			strokeStyle: CMGame.Color.GREEN,
+			lineWidth: 1
+		};
+
+		for(let opt in opts) {
+			opts[opt] = options[opt] || opts[opt];
+		}
+
+		this.game = game;
+		this.points = points;
+		this.numPoints = points.length;
+
+		this.fillStyle = opts.fillStyle;
+		this.strokeStyle = opts.strokeStyle;
+		this.lineWidth = opts.lineWidth;
+
+		this.shape = "polygon";
+		this.path = new Path2D();
+		this.rebuildPath();
+	}
+
+	update(frameCount) {
+		super.update(frameCount);
+
+		if(this.velocity.x !== 0 || this.velocity.y !== 0) {
+
+			for(let i = 0; i < this.numPoints; i++) {
+				this.points[i].x += this.velocity.x;
+				this.points[i].y += this.velocity.y;
+			}
+
+			this.left = this.points.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.x), game.width);
+			this.top = this.points.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.y), game.height);
+			this.right = this.points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.x), 0);
+			this.bottom = this.points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.y), 0);
+			this.rebuildPath();
+		}
+
+		this.onupdate(frameCount);
+	}
+
+	/**
+	 * Sets up the drawing path, based on shape's
+	 * center, radius, rotation, and number of corners
+	 */
+	rebuildPath() {
+		this.path = new Path2D();
+		for(let i = 0; i < this.numPoints; i++) {
+			this.path.lineTo(
+				this.points[i].x,
+				this.points[i].y
+			);
+		}
+
+		this.path.closePath();
+	}
+
+	/**
+	 * Determines if a given point is in this
+	 * object or its bounding lines. Useful for player
+	 * interaction via mouse clicks or touch points.
+	 * @param {object|number} The point, or point's x value
+	 * @param {number} The point's y value
+	 * @returns {boolean}
+	 */
+	containsPoint(pointOrX, y) {
+		let pointToCheck = null;
+
+		if(typeof pointOrX === "number") {
+			pointToCheck = {
+				x: pointOrX,
+				y: y
+			};
+		}
+		else { // single point
+			pointToCheck = pointOrX;
+		}
+
+		return (this.game.ctx.isPointInStroke(
+			this.path, pointToCheck.x, pointToCheck.y) ||
+			this.game.ctx.isPointInPath(this.path, pointToCheck.x, pointToCheck.y));
+	}
+
+	/**
+	 * Manages screen boundaries for "rect" shape sprite.
+	 * @param {object} [rectToBound=this] - A custom "rectangle" used as a "hit box"
+	 */
+	boundAsRect(rectToBound=this) {
+
+		if(this.hasEnteredScreen) {
+			if(rectToBound.x <= 0) { // left wall
+				switch(this.boundingRuleLeft) {
+					case "wrap":
+						if(rectToBound.x + rectToBound.width <= 0) {
+							this.x += this.game.width;
+
+							for(let i = 0; i < this.numPoints; i++) {
+								this.points[i].x += this.game.width;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.x + this.width < 0) {
+								this.x += this.game.width;
+
+								for(let i = 0; i < this.numPoints; i++) {
+									this.points[i].x += this.game.width;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.x = 0;
+						this.velocity.x = Math.abs(this.velocity.x);
+						break;
+					case "fence":
+						this.x = 0;
+						break;
+					case "destroy":
+						if(rectToBound.x + rectToBound.width < 0)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleLeft === "function") {
+							this.boundingRuleLeft.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+			else
+			if(rectToBound.x + rectToBound.width >= this.game.width) { // right wall
+				switch(this.boundingRuleRight) {
+					case "wrap":
+						if(rectToBound.x >= this.game.width) {
+							this.x -= this.game.width;
+							
+							for(let i = 0; i < this.numPoints; i++) {
+								this.points[i].x -= this.game.width;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.x > this.game.width) {
+								this.x -= this.game.width;
+								
+								for(let i = 0; i < this.numPoints; i++) {
+									this.points[i].x -= this.game.width;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.x = this.game.width - rectToBound.width;
+						this.velocity.x = -Math.abs(this.velocity.x);
+						break;
+					case "fence":
+						this.x = this.game.width - rectToBound.width;
+						break;
+					case "destroy":
+						if(rectToBound.x > this.game.width)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleRight === "function") {
+							this.boundingRuleRight.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+			else
+			if(rectToBound.y <= 0) { // top wall
+				switch(this.boundingRuleTop) {
+					case "wrap":
+						if(rectToBound.y + rectToBound.height <= 0) {
+							this.y += this.game.height;
+
+							for(let i = 0; i < this.numPoints; i++) {
+								this.points[i].y += this.game.height;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.y + this.height < 0) {
+								this.y += this.game.height;
+
+								for(let i = 0; i < this.numPoints; i++) {
+									this.points[i].y += this.game.height;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.y = 0;
+						this.velocity.y = Math.abs(this.velocity.y);
+						break;
+					case "fence":
+						this.y = 0;
+						break;
+					case "destroy":
+						if(rectToBound.y + rectToBound.height < 0)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleTop === "function") {
+							this.boundingRuleTop.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+			else
+			if(rectToBound.y + rectToBound.height >= this.game.height) { // bottom wall
+				switch(this.boundingRuleBottom) {
+					case "wrap":
+						if(rectToBound.y >= this.game.height) {
+							this.y -= this.game.height;
+							for(let i = 0; i < this.numPoints; i++) {
+								this.points[i].y -= this.game.height;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.y > this.game.height) {
+								this.y -= this.game.height;
+
+								for(let i = 0; i < this.numPoints; i++) {
+									this.points[i].y -= this.game.height;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.y = this.game.height - rectToBound.height;
+						this.velocity.y = -Math.abs(this.velocity.y);
+						break;
+					case "fence":
+						this.y = this.game.height - rectToBound.height;
+						break;
+					case "destroy":
+						if(rectToBound.y > this.game.height)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleBottom === "function") {
+							this.boundingRuleBottom.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+		}
+
+		if(this.x > this.game.width ||
+				this.y > this.game.height ||
+				this.x + this.width < 0 ||
+				this.y + this.height < 0) {
+			this.onscreen = false;
+		}
+		else {
+			this.hasEnteredScreen = true;
+			this.onscreen = true;
+		}
 	}
 }
