@@ -75,9 +75,9 @@
 	top: 6.7vh;
 	left: calc(50% - 25vh);
 	border-radius: 5.3vh;
-	min-height: 6vmin;
-	font-size: 4vmin;
-	line-height: 6vmin;
+	min-height: 24px;
+	font-size: 16px;
+	line-height: 24px;
 	text-align: center;
 	padding: 4px 15px;
 	box-sizing: border-box;
@@ -226,13 +226,13 @@ html, body {
 	/* Page should fill the screen for appropriate size detection */
 	min-width: 100vw;
 	min-height: 100vh;
-	overflow: hidden;
 
 	-webkit-perspective: 5000px;
 	perspective: 5000px;
 }
 
 body {
+	overflow: hidden;
 	margin: 0;
 }
 
@@ -242,11 +242,53 @@ html.cm-gradient-dark {
 
 /* Mainly used for body */
 .cm-gradient-dark, html.cm-gradient-dark body {
-	background: linear-gradient(180deg, rgb(255 255 255), rgb(255 255 255 / 0%));
+	background: linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(255 255 255 / 0%));
 }
 
 h1, h2, h3, h4, h5, h6, .cm-center-text {
 	text-align: center;
+}
+
+h1 {
+	margin-top: 0;
+	padding-top: 0.67em;
+	margin-bottom: 0;
+	padding-bottom: 0.67em;	
+}
+
+h2 {
+	margin-top: 0;
+	padding-top: 0.83em;
+	margin-bottom: 0;
+	padding-bottom: 0.83em;	
+}
+
+h3 {
+	margin-top: 0;
+	padding-top: 1em;
+	margin-bottom: 0;
+	padding-bottom: 1em;
+}
+
+h4 {
+	margin-top: 0;
+	padding-top: 1.33em;
+	margin-bottom: 0;
+	padding-bottom: 1.33em;
+}
+
+h5 {
+	margin-top: 0;
+	padding-top: 1.33em;
+	margin-bottom: 0;
+	padding-bottom: 1.33em;
+}
+
+h6 {
+	margin-top: 0;
+	padding-top: 1.33em;
+	margin-bottom: 0;
+	padding-bottom: 1.33em;	
 }
 
 #cmWrapper {
@@ -347,6 +389,8 @@ article, section, div {
 p {
 	max-width: 600px;
 	margin: 2em auto;
+	padding: 0 7.5vw;
+	box-sizing: border-box;
 }
 
 p:not(.cm-center-text) {
@@ -638,8 +682,9 @@ label .cm-play-button {
 }
 
 .cm-overlay {
-	width: 100vw;
-	height: 100vh;
+	min-width: 100vw;
+	min-height: 100vh;
+	height: 100%;
 	z-index: 2000;
 	position: fixed;
 	top: 0;
@@ -649,7 +694,6 @@ label .cm-play-button {
 
 #cmAlert {
     width: 360px;
-    position: absolute;
     top: 20px;
     left: calc(50vw - 360px / 2);
     text-align: center;
@@ -657,6 +701,11 @@ label .cm-play-button {
     background: rgb(250, 251, 255);
     box-shadow: 4px 4px 10px rgb(0, 15, 33, .55);
     border-radius: 4px;
+	padding-bottom: 1.125em;
+
+	position: fixed; /* fallback */
+    position: -webkit-sticky;
+	position: sticky;
 }
 
 #cmAlert h3 {
@@ -695,8 +744,13 @@ label .cm-play-button {
 	margin-left: 8px;
 }
 
-#cmAlert p:last-of-type {
-	margin-bottom: 1.125em;
+.cm-footer {
+	text-align: center;
+	position: fixed;
+	bottom: 0;
+	width: 100vw;
+	padding: 16px 7.5vw;
+	box-sizing: border-box;
 }
 
 /* vmin can shrink on small screens - 16px should be your minimum font for accessibility */
@@ -736,6 +790,13 @@ label .cm-play-button {
 	#cmLoading > h5,
 	#cmLoading > h6 {
 		font-size: 1.75em;
+	}
+}
+
+@media (max-width: 640px) {
+	.cm-gradient-dark, html.cm-gradient-dark body {
+		/* Keep it a little dark at the top for when extra margin is added above canvas */
+		background: linear-gradient(180deg, rgb(255 255 255 / 20%) 0%, rgb(255 255 255 / 96%) 20%, rgb(255 255 255 / 0%));
 	}
 }
 
