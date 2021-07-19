@@ -253,7 +253,9 @@ h1 {
 	margin-top: 0;
 	padding-top: 0.67em;
 	margin-bottom: 0;
-	padding-bottom: 0.67em;	
+	padding-bottom: 0.67em;
+
+	font-size: 2em;
 }
 
 h2 {
@@ -263,11 +265,19 @@ h2 {
 	padding-bottom: 0.83em;	
 }
 
+h1 + h2 {
+	padding-top: 0.21em;
+}
+
 h3 {
 	margin-top: 0;
 	padding-top: 1em;
 	margin-bottom: 0;
 	padding-bottom: 1em;
+}
+
+h2 + h3 {
+	padding-top: 0.25em;
 }
 
 h4 {
@@ -277,6 +287,10 @@ h4 {
 	padding-bottom: 1.33em;
 }
 
+h3 + h4 {
+	padding-top: 0.33em;
+}
+
 h5 {
 	margin-top: 0;
 	padding-top: 1.33em;
@@ -284,11 +298,19 @@ h5 {
 	padding-bottom: 1.33em;
 }
 
+h4 + h5 {
+	padding-top: 0.33em;
+}
+
 h6 {
 	margin-top: 0;
 	padding-top: 1.33em;
 	margin-bottom: 0;
 	padding-bottom: 1.33em;	
+}
+
+h5 + h6 {
+	padding-top: 0.33em;
 }
 
 #cmWrapper {
@@ -306,38 +328,6 @@ h6 {
 /* If another element must allow pointer events, add class "cm-pointer-events" */
 #cmWrapper *:not(button):not(a):(.cm-pointer-events) {
 	pointer-events: none;
-}
-
-.cm-shadow-white {
-	box-shadow: 1px 1px 10px 5.5px rgba(255, 255, 255, 0.75);
-}
-
-.cm-shadow-almost_white {
-	box-shadow: 1px 1px 10px 5.5px rgba(250, 250, 250, 0.75);
-}
-
-.cm-shadow-black {
-	box-shadow: 1px 1px 10px 5.5px rgba(0, 0, 0, 0.75);	
-}
-
-.cm-shadow-almost_black {
-	box-shadow: 1px 1px 10px 5.5px rgba(15, 23, 33, 0.75);	
-}
-
-.cm-small-shadow-white {
-	box-shadow: 0px 0px 5px 2.75px rgba(255, 255, 255, 0.75);
-}
-
-.cm-small-shadow-almost_white {
-	box-shadow: 0px 0px 5px 2.75px rgba(250, 250, 250, 0.75);
-}
-
-.cm-small-shadow-black {
-	box-shadow: 0px 0px 5px 2.75px rgba(0, 0, 0, 0.75);	
-}
-
-.cm-small-shadow-almost_black {
-	box-shadow: 0px 0px 5px 2.75px rgba(15, 23, 33, 0.75);	
 }
 
 #cmBackgroundCanvas {
@@ -393,8 +383,20 @@ p {
 	box-sizing: border-box;
 }
 
+p:first-of-type {
+	margin-top: 1em;
+}
+
+#cmAlert p {
+	padding: 0 44px;
+}
+
 p:not(.cm-center-text) {
 	text-indent: .75em;
+}
+
+h1 + p {
+	margin-top: 0;
 }
 
 #cmTitle {
@@ -404,6 +406,26 @@ p:not(.cm-center-text) {
 	top: 0;
 	width: 100vw;
 	height: 100vh;
+}
+
+select {
+    padding: 8px 6px;
+    min-width: 100px;
+    text-align: center;
+    border-radius: 3px;
+    border-color: rgb(200, 200, 200);
+    font-size: 1em;
+    line-height: 1.5em;
+}
+
+button {
+	border-radius: 4px;
+	box-sizing: border-box;
+	min-width: 66px;
+	font-size: 1em;
+	min-height: 2.5em;
+	box-shadow: 1px 1px 3px rgb(0 0 0 / 25%);
+	border-color: rgb(235, 235, 235);
 }
 
 /**
@@ -437,7 +459,7 @@ label .cm-play-button {
 }
 
 /* Style triangle "play" icon in play button */
-#playBtn .cm-play {
+.cm-play-button .cm-play {
 	background: transparent;
 	box-sizing: border-box;
 	width: 32px;
@@ -445,6 +467,18 @@ label .cm-play-button {
 	border-style: solid;
 	border-width: 16px 0 16px 32px;
 	border-color: transparent transparent transparent rgb(250, 250, 250);
+}
+
+/* Define this before background colors, so easy to override */
+.cm-overlay {
+	min-width: 100vw;
+	min-height: 100vh;
+	height: 100%;
+	z-index: 2000;
+	position: fixed;
+	top: 0;
+	left: 0;
+	background: rgba(0, 15, 33, 0.5);
 }
 
 .cm-variable {
@@ -455,6 +489,39 @@ label .cm-play-button {
 
 .cm-indent {
 	text-indent: .5em;
+}
+
+/* These are generally used for the <canvas> element */
+.cm-shadow-white {
+	box-shadow: 1px 1px 10px 5.5px rgba(255, 255, 255, 0.75);
+}
+
+.cm-shadow-almost_white {
+	box-shadow: 1px 1px 10px 5.5px rgba(250, 250, 250, 0.75);
+}
+
+.cm-shadow-black {
+	box-shadow: 1px 1px 10px 5.5px rgba(0, 0, 0, 0.75);	
+}
+
+.cm-shadow-almost_black {
+	box-shadow: 1px 1px 10px 5.5px rgba(15, 23, 33, 0.75);	
+}
+
+.cm-small-shadow-white {
+	box-shadow: 0px 0px 5px 2.75px rgba(255, 255, 255, 0.75);
+}
+
+.cm-small-shadow-almost_white {
+	box-shadow: 0px 0px 5px 2.75px rgba(250, 250, 250, 0.75);
+}
+
+.cm-small-shadow-black {
+	box-shadow: 0px 0px 5px 2.75px rgba(0, 0, 0, 0.75);	
+}
+
+.cm-small-shadow-almost_black {
+	box-shadow: 0px 0px 5px 2.75px rgba(15, 23, 33, 0.75);	
 }
 
 .cm-fuschia {
@@ -565,7 +632,8 @@ label .cm-play-button {
 	background-color: rgba(0, 0, 0, 0.85);
 }
 
-.cm-transparent: {
+.cm-transparent,
+.cm-none {
 	background-color: rgba(0, 0, 0, 0);
 }
 
@@ -677,19 +745,9 @@ label .cm-play-button {
 	color: rgba(0, 0, 0, 0.85);
 }
 
-.cm-text-transparent: {
+.cm-text-transparent,
+.cm-text-none {
 	color: rgba(0, 0, 0, 0);
-}
-
-.cm-overlay {
-	min-width: 100vw;
-	min-height: 100vh;
-	height: 100%;
-	z-index: 2000;
-	position: fixed;
-	top: 0;
-	left: 0;
-	background: rgba(0, 15, 33, 0.5);
 }
 
 #cmAlert {
@@ -732,10 +790,11 @@ label .cm-play-button {
 
 #cmAlert button {
 	font: 16px OpenSans, Arial, sans-serif;
+	line-height: 24px;
 	border: none;
 	border-radius: 6px;
-	width: 70px;
-	height: 30px;
+	min-width: 70px;
+	min-height: 30px;
 	bottom: 10px;
 	box-shadow: 1px 1px 3px rgba(0, 15, 33, 0.55);
 }
