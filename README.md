@@ -227,13 +227,13 @@ game.playSound("laser_beam");
 
 `orientation` - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
 
-`tickStyle` - A color string for the Cartesian grid tick marks on the axes. Defaults to CMGame.Color.DARK_GRAY.
+`tickStyle` - A color string for the Cartesian grid tick marks on the axes. Defaults to CMColor.DARK_GRAY.
 
-`xAxisStyle` - A color string for the line defining the x-axis. Defaults to CMGame.Color.GRAY.
+`xAxisStyle` - A color string for the line defining the x-axis. Defaults to CMColor.GRAY.
 
-`yAxisStyle` - A color string for the line defining the y-axis. Defaults to CMGame.Color.GRAY.
+`yAxisStyle` - A color string for the line defining the y-axis. Defaults to CMColor.GRAY.
 
-`gridStyle` - A color string for the Cartesian grid graph lines. Defaults to CMGame.Color.LIGHT_GRAY.
+`gridStyle` - A color string for the Cartesian grid graph lines. Defaults to CMColor.LIGHT_GRAY.
 
 `gridlineWidth` - The lineWidth (in pixels) used to draw the graph gridlines. Defaults to 1.
 
@@ -253,15 +253,15 @@ game.playSound("laser_beam");
 
 `doodleOptions.lineWidth` - Number of pixels wide these drawing lines should be.
 
-`doodleOptions.strokeStyle` - Color string used to draw the new doodle. Default is CMGame.Color.BLACK.
+`doodleOptions.strokeStyle` - Color string used to draw the new doodle. Default is CMColor.BLACK.
 
-`doodleOptions.fillStyleAbove` - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.fillStyleAbove` - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMColor.NONE.
 
-`doodleOptions.fillStyleBelow` - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.fillStyleBelow` - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMColor.NONE.
 
-`doodleOptions.fillStyleLeft` - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.fillStyleLeft` - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMColor.NONE.
 
-`doodleOptions.fillStyleRight` - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
+`doodleOptions.fillStyleRight` - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMColor.NONE.
 
 ```javascript
 
@@ -777,7 +777,7 @@ var path = new CMFunction(
   function(theta) { return Math.sin(theta) },
   {
     type: "polar", // polar functions are very useful for enemy paths, because of their repeating nature
-    strokeStyle: CMGame.Color.TRANSPARENT // Don't show path sprite is following
+    strokeStyle: CMColor.NONE // Don't show path sprite is following
   }
 });
 
@@ -1150,17 +1150,17 @@ ctx.font = game.font.rel(12) + "px Arial"; // If current screen has canvas scale
 
 ```
 
-While drawing, you may want to refer to the predefined modern color palette, with CMGame.Color. This has many constant values represented by the color name in all caps. Color names are as expected (RED, ORANGE, BROWN, etc.), with multiple words being separated by an underscore (SKY_BLUE, etc.).
+While drawing, you may want to refer to the predefined modern color palette, with CMColor. This has many constant values represented by the color name in all caps. Color names are as expected (RED, ORANGE, BROWN, etc.), with multiple words being separated by an underscore (SKY_BLUE, etc.).
 
 ```javascript
 
-ctx.fillStyle = CMGame.Color.BLUE;
+ctx.fillStyle = CMColor.BLUE;
 
 ```
 
-For consistency, it is best to use CMGame.Color.TRANSPARENT rather than "transparent", "rgba(0, 0, 0, 0)", etc. This way the game can reliably check for transparent values before wasting resources on drawing.
+For consistency, it is best to use CMColor.NONE rather than "transparent", "rgba(0, 0, 0, 0)", etc. This way the game can reliably check for transparent values before wasting resources on drawing.
 
-If you have HTML elements that you want to use the same color palette, you can add corresponding classes, all lowercase, replacing CMGame.Color with `.cm-` to use the color as a background, or `.cm-text-` to use the color as the text color.
+If you have HTML elements that you want to use the same color palette, you can add corresponding classes, all lowercase, replacing CMColor with `.cm-` to use the color as a background, or `.cm-text-` to use the color as the text color.
 
 ```html
 
