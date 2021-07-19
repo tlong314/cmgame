@@ -49,7 +49,7 @@ var game = new CMGame({
 
 // These options add some color and animation to the graph
 var options = {
-	strokeStyle: CMGame.Color.ORANGE, // Use built in "orange" color
+	strokeStyle: CMColor.ORANGE, // Use built in "orange" color
 	start: {
 		x: -8 // Initially, graph will start at x=-8 (-8 here is the "real" number, not canvas pixel)
 	},
@@ -76,7 +76,7 @@ game.addFunction(basicFunc);
 
 // Add to the drawing by setting an ondraw function
 game.ondraw = function(ctx) { // ctx is the drawing "context"
-	ctx.fillStyle = CMGame.Color.ORANGE;
+	ctx.fillStyle = CMColor.ORANGE;
 	ctx.font = "20px Arial"; // Set font to 20px. Actual font family doesn't matter here.
 
 	// Easily write out function with variables in different font
