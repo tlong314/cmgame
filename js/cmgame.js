@@ -430,16 +430,18 @@ Object.defineProperties(CMRandom, {
 	/**
 	 * Randomly picks an opaque rgb color string from
 	 * our predefined swatch, including grayscale colors
-	 * To avoid grayscale, use CMGame.colorscale
+	 * To avoid grayscale, use CMColorscale
 	 * @returns {string}
 	 */
 	color: {
 		get: function() {
-			let colorArray = Object.keys(CMGame.Color).filter((name) => {
-				return (name.indexOf("TRANS") === -1);
+			let colorArray = Object.keys(CMColor).filter((name) => {
+				return (name.indexOf("TRANS") === -1 &&
+					name.indexOf("NONE") === -1 &&
+					name.indexOf("CLEAR") === -1);
 			});
 
-			return CMGame.Color[colorArray[CMRandom.range(0, colorArray.length)]];
+			return CMColor[colorArray[CMRandom.range(0, colorArray.length)]];
 		}
 	},
 
@@ -451,11 +453,11 @@ Object.defineProperties(CMRandom, {
 	 */
 	colorscale: {
 		get: function() {
-			let colorArray = Object.keys(CMGame.Color).filter((name) => {
-				return !(name.match(/GRAY|BLACK|WHITE|TRANS/));
+			let colorArray = Object.keys(CMColor).filter((name) => {
+				return !(name.match(/GRAY|BLACK|WHITE|SAND|TRANS|NONE|CLEAR/));
 			});
 
-			return CMGame.Color[colorArray[CMRandom.range(0, colorArray.length)]];
+			return CMColor[colorArray[CMRandom.range(0, colorArray.length)]];
 		}
 	},
 
@@ -466,11 +468,11 @@ Object.defineProperties(CMRandom, {
 	 */
 	grayscale: {
 		get: function() {
-			let colorArray = Object.keys(CMGame.Color).filter((name) => {
+			let colorArray = Object.keys(CMColor).filter((name) => {
 				return !!(name.match(/GRAY|BLACK|WHITE/));
 			});
 
-			return CMGame.Color[colorArray[CMRandom.range(0, colorArray.length)]];
+			return CMColor[colorArray[CMRandom.range(0, colorArray.length)]];
 		}
 	},
 
@@ -700,48 +702,48 @@ class CMDoodle {
 	/**
 	 * Creates a CMDoodle instance
 	 * @param {object} game - The current CMGame instance
-	 * @param {object} [opts] - A plain JS object of drawing options
-	 * @param {object} [opts.startPoint] - The screen (x, y) position of the initial point drawn
-	 * @param {number} [opts.lineWidth] - Thickness (in pixels) of the drawn curves
-	 * @param {string} [opts.strokeStyle] - Color string for curve color
-	 * @param {string} [opts.fillStyle] - Color string to "fill" closed area with
-	 * @param {string} [opts.fillStyleAbove] - Color string to fill screen above this drawn curve
-	 * @param {string} [opts.fillStyleBelow] - Color string to fill screen below this drawn curve
-	 * @param {string} [opts.fillStyleLeft] - Color string to fill screen left of this drawn curve
-	 * @param {string} [opts.fillStyleRight] - Color string to fill screen right of this drawn curve
+	 * @param {object} [options] - A plain JS object of drawing options
+	 * @param {object} [options.startPoint] - The screen (x, y) position of the initial point drawn
+	 * @param {number} [options.lineWidth] - Thickness (in pixels) of the drawn curves
+	 * @param {string} [options.strokeStyle] - Color string for curve color
+	 * @param {string} [options.fillStyle] - Color string to "fill" closed area with
+	 * @param {string} [options.fillStyleAbove] - Color string to fill screen above this drawn curve
+	 * @param {string} [options.fillStyleBelow] - Color string to fill screen below this drawn curve
+	 * @param {string} [options.fillStyleLeft] - Color string to fill screen left of this drawn curve
+	 * @param {string} [options.fillStyleRight] - Color string to fill screen right of this drawn curve
 	 */
-	constructor(game, opts) {
+	constructor(game, options) {
 		this.game = game;
 
-		let options = {};
+		let opts = {};
 		let defaults = {
 			startPoint: null,
 			lineWidth: Math.max(game.ctx.lineWidth, 1),
-			strokeStyle: CMGame.Color.BLACK,
-			fillStyle: CMGame.Color.TRANSPARENT,
-			fillStyleAbove: CMGame.Color.TRANSPARENT,
-			fillStyleBelow: CMGame.Color.TRANSPARENT,
-			fillStyleLeft: CMGame.Color.TRANSPARENT,
-			fillStyleRight: CMGame.Color.TRANSPARENT
+			strokeStyle: CMColor.BLACK,
+			fillStyle: CMColor.NONE,
+			fillStyleAbove: CMColor.NONE,
+			fillStyleBelow: CMColor.NONE,
+			fillStyleLeft: CMColor.NONE,
+			fillStyleRight: CMColor.NONE
 		};
 
 		for(let key in defaults) {
-			if(typeof opts[key] !== "undefined") {
-				options[key] = opts[key];
+			if(typeof options[key] !== "undefined") {
+				opts[key] = options[key];
 			}
 			else {
-				options[key] = defaults[key];
+				opts[key] = defaults[key];
 			}
 		}
 
-		this.startPoint = options.startPoint;
-		this.lineWidth = options.lineWidth;
-		this.strokeStyle = options.strokeStyle;
-		this.fillStyleAbove = options.fillStyleAbove;
-		this.fillStyleBelow = options.fillStyleBelow;
-		this.fillStyleLeft = options.fillStyleLeft;
-		this.fillStyleRight = options.fillStyleRight;
-		this.fillStyle = options.fillStyle;
+		this.startPoint = opts.startPoint;
+		this.lineWidth = opts.lineWidth;
+		this.strokeStyle = opts.strokeStyle;
+		this.fillStyleAbove = opts.fillStyleAbove;
+		this.fillStyleBelow = opts.fillStyleBelow;
+		this.fillStyleLeft = opts.fillStyleLeft;
+		this.fillStyleRight = opts.fillStyleRight;
+		this.fillStyle = opts.fillStyle;
 
 		this.points = [ this.startPoint ];
 
@@ -850,20 +852,20 @@ class CMDoodle {
 	 * @returns {boolean}
 	 */
 	containsPoint(xOrPoint, y) {
-		let point = {};
+		let pointToCheck = {};
 		if(typeof xOrPoint === "number") {
-			point = {
+			pointToCheck = {
 				x: xOrPoint,
 				y: y
 			};
 		}
 		else {
-			point = xOrPoint;
+			pointToCheck = xOrPoint;
 		}
 
 		this.game.ctx.save();
 		this.game.ctx.lineWidth = this.lineWidth;
-		let isPointHere = game.ctx.isPointInPath(this.path, point.x, point.y);
+		let isPointHere = game.ctx.isPointInPath(this.path, pointToCheck.x, pointToCheck.y);
 		this.game.ctx.restore();
 		return isPointHere;
 	}
@@ -896,7 +898,7 @@ class CMDoodle {
 		let topPoint = [p1, p2].sort((a, b) => a.y - b.y)[0]; // on "inverted" screen y values
 		let bottomPoint = [p1, p2].sort((a, b) => b.y - a.y)[0]; // on "inverted" screen y values
 
-		if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleBelow && this.fillStyleBelow !== CMColor.NONE) {
 			this.pathBelow = new Path2D(this.path);
 
 			// moving right...
@@ -916,7 +918,7 @@ class CMDoodle {
 			this.pathBelow.closePath();
 		}
 
-		if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleAbove && this.fillStyleAbove !== CMColor.NONE) {
 
 			this.pathAbove = new Path2D(this.path);
 
@@ -933,7 +935,7 @@ class CMDoodle {
 			this.pathAbove.closePath();
 		}
 
-		if(this.fillStyleLeft && this.fillStyleLeft !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleLeft && this.fillStyleLeft !== CMColor.NONE) {
 			this.pathLeft = new Path2D(this.path);
 
 			// moving down on the screen... (screen "y" is inscreasing)
@@ -949,7 +951,7 @@ class CMDoodle {
 			this.pathLeft.closePath();
 		}
 
-		if(this.fillStyleRight && this.fillStyleRight !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleRight && this.fillStyleRight !== CMColor.NONE) {
 			this.pathRight = new Path2D(this.path);
 
 			// moving down on the screen... (screen "y" is inscreasing)
@@ -996,7 +998,7 @@ class CMDoodle {
 			ctx.lineWidth = this.lineWidth;
 			ctx.strokeStyle = this.strokeStyle;
 
-			if(this.fillStyle && this.fillStyle !== CMGame.Color.TRANSPARENT) {
+			if(this.fillStyle && this.fillStyle !== CMColor.NONE) {
 				ctx.fillStyle = this.fillStyle;
 				ctx.fill(this.path);
 			}
@@ -1144,117 +1146,133 @@ class CMSwipe {
 class CMGame {
 	/**
 	 * Creates a CMGame instance. This essentially creates the current game.
-	 * @param {object} [opts] - A plain JS object of options. All are optional, including this object.
-	 * @param {object|string} [opts.startBtn] - An HTML element (or CSS selector for that element) that will be used to start the game. Defaults to null, and game starts on first user interaction.
-	 * @param {boolean} [opts.opts.fullscreen] - If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
-	 * @param {string} [opts.orientation] - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
-	 * @param {object|string} [opts.enterFullscreenBtn] - An HTML element (or CSS selector for that element) to be used to enter fullscreen when user clicks. Default is null.
-	 * @param {object|string} [opts.exitFullscreenBtn] - An HTML element (or CSS selector for that element) to be used to exit fullscreen when user clicks. Default is null.
-	 * @param {object|string} [opts.screenshotBtn] - An HTML element (or CSS selector for that element) to be used to capture an in-game screenshot when user clicks.
-	 * @param {string} [opts.type] - A string describing the type of math game. Available options are "graph" (standard 2D Cartesian graph system), "venn" (Venn Diagrams), "graphtheory" (A system of vertices and edges, as presented in Graph Theory), or "none" (no math-specific resources, in case you just want to use this to make a basic game or animation). Since this engine is geared toward math games, "graph" is the default.
-	 * @param {object} [opts.images] - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path.
-	 * @param {object} [opts.audios] - A plain JS object of audio files that may need preloading. You can define these similar to images, by providing your string identifier in an object, or by listing the full file paths in an array, but you reference them using CMGame methods rather than accessing directly game.playSound(soundPath). This allows us internally to load the best playback option for the current environment.
-	 * @param {function} [opts.onload] - A function to call when the game's constructor has completed setup. Thus this only occurs as a constructor option, and is never used again in game's lifecycle.
-	 * @param {array} [opts.hideOnStart] - An array of HTML elements (or CSS selectors defining each) to be hidden from the screen when the game starts (e.g., when user presses Start button)
-	 * @param {number} [opts.tickDistance] - How many pixels apart x-axis (and y-axis) tick marks are from each other. Default is 20.
-	 * @param {number} [opts.gridlineDistance] - How many pixels apart graph gridlines should be (vertically or horizontally). Default is 20.
-	 * @param {number} [opts.graphScalar] - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
-	 * @param {number} [opts.tickFontSize] - Font size to draw tick marks. Default is based on tickDistance.
-	 * @param {function} [opts.tickLabelIf] - A function to check, taking current tick value as only parameter, returning true if label should be drawn or custom string to draw, or
+	 * @param {object} [options] - A plain JS object of options. All are optional, including this object.
+	 * @param {object|string} [options.startBtn] - An HTML element (or CSS selector for that element) that will be used to start the game. Defaults to null, and game starts on first user interaction.
+	 * @param {boolean} [options.options.fullscreen] - If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
+	 * @param {string} [options.orientation] - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
+	 * @param {object|string} [options.enterFullscreenBtn] - An HTML element (or CSS selector for that element) to be used to enter fullscreen when user clicks. Default is null.
+	 * @param {object|string} [options.exitFullscreenBtn] - An HTML element (or CSS selector for that element) to be used to exit fullscreen when user clicks. Default is null.
+	 * @param {object|string} [options.screenshotBtn] - An HTML element (or CSS selector for that element) to be used to capture an in-game screenshot when user clicks.
+	 * @param {string} [options.type] - A string describing the type of math game. Available options are "graph" (standard 2D Cartesian graph system), "venn" (Venn Diagrams), "graphtheory" (A system of vertices and edges, as presented in Graph Theory), or "none" (no math-specific resources, in case you just want to use this to make a basic game or animation). Since this engine is geared toward math games, "graph" is the default.
+	 * @param {object} [options.images] - A plain JS object of images that may need preloading. Define these with the key being how you want to access the image later, and the value being the image's source path.
+	 * @param {object} [options.audios] - A plain JS object of audio files that may need preloading. You can define these similar to images, by providing your string identifier in an object, or by listing the full file paths in an array, but you reference them using CMGame methods rather than accessing directly game.playSound(soundPath). This allows us internally to load the best playback option for the current environment.
+	 * @param {function} [options.onload] - A function to call when the game's constructor has completed setup. Thus this only occurs as a constructor option, and is never used again in game's lifecycle.
+	 * @param {array} [options.hideOnStart] - An array of HTML elements (or CSS selectors defining each) to be hidden from the screen when the game starts (e.g., when user presses Start button)
+	 * @param {number} [options.tickDistance] - How many pixels apart x-axis (and y-axis) tick marks are from each other. Default is 20.
+	 * @param {number} [options.gridlineDistance] - How many pixels apart graph gridlines should be (vertically or horizontally). Default is 20.
+	 * @param {number} [options.graphScalar] - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
+	 * @param {number} [options.tickFontSize] - Font size to draw tick marks. Default is based on tickDistance.
+	 * @param {function} [options.tickLabelIf] - A function to check, taking current tick value as only parameter, returning true if label should be drawn or custom string to draw, or
 	 *   false to draw nothing. Defaults to drawing all values on tick marks.
-	 * @param {function} [opts.tickLabelIfX] - Similar to opts.tickLabelIf, but only for x-axis values. Defaults to opts.tickLabelIf.
-	 * @param {function} [opts.tickLabelIfY] - Similar to opts.tickLabelIf, but only for y-axis values. Defaults to opts.tickLabelIf.
-	 * @param {boolean} [opts.soundOn] - true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
-	 * @param {boolean} [opts.musicOn] - true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
-	 * @param {string} [opts.saveName] - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke save() or load() methods this value is never used)
-	 * @param {number} [opts.frameCap] - During each animation cycle, the game stores an internal frameCount variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this frameCap to some positive integer, because the default is Infinity.
-	 * @param {number} [opts.width] - Desired game width in pixels (defaults to canvas width)
-	 * @param {number} [opts.height] - Desired game height in pixels (defaults to canvas height)
-	 * @param {boolean} [opts.overrideStyles] - If true, suppresses warnings when dev does not include CMGame stylesheet. Default is false.
-	 * @param {boolean} [opts.overrideResize] - If true, gives dev full command of canvas sizing and positioning. Default is false.
-	 * @param {boolean} [opts.allowContextMenu] - If true, lets right-click show context (e.g., to let user download canvas as an image). Default is false.
-	 * @param {number[]} [opts.originByRatio] - An array allowing you to define the Cartesian "origin" on screen based on game dimensions. This array has 2 elements: the first is a scalar to multiply by the canvas width to get the origin's x position on screen. The second element does the same with y using the game's height. Defaults to [0.5, 0.5] (i.e., the center point on the screen, or [half the width, half the height].
-	 * @param {number[]|object} [opts.origin] - An array, similar to originByRatio, but takes in actual x and y position, rather than scalars; or an object with x and y values. Defaults to game's center point.
-	 * @param {object|string} [opts.wrapper] - An HTML element (or CSS selector for that element) to be used as the canvas "host" or "wrapper" element, used for CSS scaling. If this option is not present, the game looks for an element with id "cmWrapper". If none is found, the game creates and adds a new div to take the role. Default is null.
-	 * @param {object|string} [opts.canvas] - An HTML element (or CSS selector for that element) to be used as the visible output canvas element for all game drawing. If this option is not present, the game looks for an element with id "cmCanvas". If none is found, the game creates and adds a new div to take the role. Default is null.
-	 * @param {object|string} [opts.backgroundCanvas] - An HTML element (or CSS selector for that element) to be used as the output canvas element for the game's background. If this option is not present, we assume there is no background canvas. Default is null.
-	 * @param {object|string} [opts.pressElement:]An HTML element (or CSS selector for that element) defining the element to be used for mouse/touch events. Defaults to the game's canvas (as expected). This option should only be used if you need touch/mouse events handled outside the actual game.
-	 * @param {string} [opts.tickStyle] - A color string for the Cartesian grid tick marks on the axes. Defaults to CMGame.Color.DARK_GRAY.
-	 * @param {string} [opts.xAxisStyle] - A color string for the line defining the x-axis. Defaults to CMGame.Color.GRAY.
-	 * @param {string} [opts.yAxisStyle] - A color string for the line defining the y-axis. Defaults to CMGame.Color.GRAY.
-	 * @param {string} [opts.gridStyle] - A color string for the Cartesian grid graph lines. Defaults to CMGame.Color.LIGHT_GRAY.
-	 * @param {string} [opts.gridlineWidth] - The lineWidth to use for drawn Cartesian grid graph lines
-	 * @param {boolean} [opts.ignoreNumLock] - A boolean, for keyboard-based games. true if you want numpad arrows to always register as direction (even when NumLock is on); false if you want NumLock to force those keys to register as numbers. Default is false.
-	 * @param {boolean} [opts.multiTouch] - A boolean; true if you want every touch to register a new event even if touches are simultaneous. false to allow one touch/mouse press event at a time. Default is false, as this allows desktop and mobile experiences to be similar.
-	 * @param {object} [opts.doodleOptions] - A plain JS object defining whether the user can draw in the current game.
-	 * @param {boolean} [opts.doodleOptions.enabled] - Whether or not user can current "doodle" on the game screen. Defaults to false.
-	 * @param {number} [opts.doodleOptions.lineWidth] - Number of pixels wide these drawing lines should be.
-	 * @param {string} [opts.doodleOptions.strokeStyle] - Color string used to draw the new doodle. Default is CMGame.Color.BLACK.
-	 * @param {string} [opts.doodleOptions.fillStyleAbove] - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	 * @param {string} [opts.doodleOptions.fillStyleBelow] - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	 * @param {string} [opts.doodleOptions.fillStyleLeft] - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	 * @param {string} [opts.doodleOptions.fillStyleRight] - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMGame.Color.TRANSPARENT.
-	 * @param {function} [opts.ontouchstart] - Custom callback called for touchstart event. Generally use onpressstart instead.
-	 * @param {function} [opts.ontouchmove] - Custom callback called for touchmove event. Generally use onpressmove instead.
-	 * @param {function} [opts.ontouchend] - Custom callback called for touchend event. Generally use onpressend instead.
-	 * @param {function} [opts.onmousedown] - Custom callback called for mousestart event. Generally use onpressstart instead.
-	 * @param {function} [opts.onmousemove] - Custom callback called for mousemove event. Generally use onpressmove instead.
-	 * @param {function} [opts.onmouseup] - Custom callback called for mouseend event. Generally use onpressend instead.
-	 * @param {function} [opts.onclick] - Custom callback called for a click event. Generally use onpressstart instead.
-	 * @param {function} [opts.onrightclick] - Custom callback called for a click event when right (or auxiliary) mouse button is
+	 * @param {function} [options.tickLabelIfX] - Similar to options.tickLabelIf, but only for x-axis values. Defaults to options.tickLabelIf.
+	 * @param {function} [options.tickLabelIfY] - Similar to options.tickLabelIf, but only for y-axis values. Defaults to options.tickLabelIf.
+	 * @param {number} [options.tickFontSize] - Preferred font size (in pixels) of font displaying tick values 
+	 * @param {boolean} [options.soundOn] - true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
+	 * @param {boolean} [options.musicOn] - true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
+	 * @param {string} [options.saveName] - A string to use as the localStorage key for saving this game's state details. Essentially your "save file name". If not provided, one will be generated. (If you do not invoke save() or load() methods this value is never used)
+	 * @param {number} [options.frameCap] - During each animation cycle, the game stores an internal frameCount variable tracking how many animation frames have passed. The dev may find this useful for certain cases like animations. If the game is long, you may want to prevent this value from becoming unbounded, by setting this frameCap to some positive integer, because the default is Infinity.
+	 * @param {number} [options.width] - Desired game width in pixels (defaults to canvas width)
+	 * @param {number} [options.height] - Desired game height in pixels (defaults to canvas height)
+	 * @param {boolean} [options.overrideStyles] - If true, suppresses warnings when dev does not include CMGame stylesheet. Default is false.
+	 * @param {boolean} [options.overrideResize] - If true, gives dev full command of canvas sizing and positioning. Default is false.
+	 * @param {boolean} [options.allowContextMenu] - If true, lets right-click show context (e.g., to let user download canvas as an image). Default is false.
+	 * @param {number[]} [options.originByRatio] - An array allowing you to define the Cartesian "origin" on screen based on game dimensions. This array has 2 elements: the first is a scalar to multiply by the canvas width to get the origin's x position on screen. The second element does the same with y using the game's height. Defaults to [0.5, 0.5] (i.e., the center point on the screen, or [half the width, half the height].
+	 * @param {number[]|object} [options.origin] - An array, similar to originByRatio, but takes in actual x and y position, rather than scalars; or an object with x and y values. Defaults to game's center point.
+	 * @param {object|string} [options.wrapper] - An HTML element (or CSS selector for that element) to be used as the canvas "host" or "wrapper" element, used for CSS scaling. If this option is not present, the game looks for an element with id "cmWrapper". If none is found, the game creates and adds a new div to take the role. Default is null.
+	 * @param {object|string} [options.canvas] - An HTML element (or CSS selector for that element) to be used as the visible output canvas element for all game drawing. If this option is not present, the game looks for an element with id "cmCanvas". If none is found, the game creates and adds a new div to take the role. Default is null.
+	 * @param {object|string} [options.backgroundCanvas] - An HTML element (or CSS selector for that element) to be used as the output canvas element for the game's background. If this option is not present, we assume there is no background canvas. Default is null.
+	 * @param {object|string} [options.pressElement:]An HTML element (or CSS selector for that element) defining the element to be used for mouse/touch events. Defaults to the game's canvas (as expected). This option should only be used if you need touch/mouse events handled outside the actual game.
+	 * @param {string} [options.tickStyle] - A color string for the Cartesian grid tick marks on the axes. Defaults to CMColor.DARK_GRAY.
+	 * @param {string} [options.xAxisStyle] - A color string for the line defining the x-axis. Defaults to CMColor.GRAY.
+	 * @param {string} [options.yAxisStyle] - A color string for the line defining the y-axis. Defaults to CMColor.GRAY.
+	 * @param {string} [options.gridStyle] - A color string for the Cartesian grid graph lines. Defaults to CMColor.LIGHT_GRAY.
+	 * @param {string} [options.gridlineWidth] - The lineWidth to use for drawn Cartesian grid graph lines
+	 * @param {boolean} [options.ignoreNumLock] - A boolean, for keyboard-based games. true if you want numpad arrows to always register as direction (even when NumLock is on); false if you want NumLock to force those keys to register as numbers. Default is false.
+	 * @param {boolean} [options.multiTouch] - A boolean; true if you want every touch to register a new event even if touches are simultaneous; false to allow one touch/mouse press event at a time. Default is false, as this allows desktop and mobile experiences to be similar.
+	 * @param {object} [options.doodleOptions] - A plain JS object defining whether the user can draw in the current game.
+	 * @param {boolean} [options.doodleOptions.enabled] - Whether or not user can current "doodle" on the game screen. Defaults to false.
+	 * @param {number} [options.doodleOptions.lineWidth] - Number of pixels wide these drawing lines should be.
+	 * @param {string} [options.doodleOptions.strokeStyle] - Color string used to draw the new doodle. Default is CMColor.BLACK.
+	 * @param {string} [options.doodleOptions.fillStyleAbove] - Color to (try and) fill above the drawn line. May be buggy. Defaults to CMColor.NONE.
+	 * @param {string} [options.doodleOptions.fillStyleBelow] - Color to (try and) fill below the drawn line. May be buggy. Defaults to CMColor.NONE.
+	 * @param {string} [options.doodleOptions.fillStyleLeft] - Color to (try and) fill to the left of the drawn line. May be buggy. Defaults to CMColor.NONE.
+	 * @param {string} [options.doodleOptions.fillStyleRight] - Color to (try and) fill to the right of the drawn line. May be buggy. Defaults to CMColor.NONE.
+	 * @param {function} [options.ontouchstart] - Custom callback called for touchstart event. Generally use onpressstart instead.
+	 * @param {function} [options.ontouchmove] - Custom callback called for touchmove event. Generally use onpressmove instead.
+	 * @param {function} [options.ontouchend] - Custom callback called for touchend event. Generally use onpressend instead.
+	 * @param {function} [options.onmousedown] - Custom callback called for mousestart event. Generally use onpressstart instead.
+	 * @param {function} [options.onmousemove] - Custom callback called for mousemove event. Generally use onpressmove instead.
+	 * @param {function} [options.onmouseup] - Custom callback called for mouseend event. Generally use onpressend instead.
+	 * @param {function} [options.onclick] - Custom callback called for a click event. Generally use onpressstart instead.
+	 * @param {function} [options.onrightclick] - Custom callback called for a click event when right (or auxiliary) mouse button is
 	 *   clicked. Generally use onpressstart instead. You can check for right click with: this.mouseStateString === "00010"
-	 * @param {function} [opts.onpressstart] - Callback to perform when canvas is touched or mouse is pressed
-	 * @param {function} [opts.onpressmove] - Callback to perform when finger on canvas is moved or mouse is moved while pressed
-	 * @param {function} [opts.onpressend] - Callback to perform when finger on canvas is lifted or mouse is released
-	 * @param {function} [opts.onswipe] - Callback to perform when finger on canvas is moved or mouse is moved while
+	 * @param {function} [options.onpressstart] - Callback to perform when canvas is touched or mouse is pressed
+	 * @param {function} [options.onpressmove] - Callback to perform when finger on canvas is moved or mouse is moved while pressed
+	 * @param {function} [options.onpressend] - Callback to perform when finger on canvas is lifted or mouse is released
+	 * @param {function} [options.onswipe] - Callback to perform when finger on canvas is moved or mouse is moved while
 	 *   pressed and distance is at least CMGame.PIXELS_FOR_SWIPE. Callback takes a CMSwipe instance as only argument.
-	 * @param {function} [opts.ondblclick] - Callback to perform if canvas is double-clicked with mouse or finger
-	 * @param {function} [opts.onkeydown] - Callback to perform when keyboard key is pressed. Argument is key event, with additional
+	 * @param {function} [options.ondblclick] - Callback to perform if canvas is double-clicked with mouse or finger
+	 * @param {function} [options.onkeydown] - Callback to perform when keyboard key is pressed. Argument is key event, with additional
 	 *   property "direction" which maps arrow keys and standard ASDW keys to "left", "down", "right", "up"
-	 * @param {function} [opts.onkeyup] - Callback to perform when keyboard key is released. Argument is key event, with additional
+	 * @param {function} [options.onkeyup] - Callback to perform when keyboard key is released. Argument is key event, with additional
 	 *   property "direction" which maps arrow keys and standard ASDW keys to "left", "down", "right", "up"
-	 * @param {function} [opts.onbeforestart] - Callback to perform just before .start() actions are applied (like hiding elements and starting animations)
-	 * @param {function} [opts.onstart] - Callback to perform just as game starts (elements are hidden, first animation frame has been requested)
-	 * @param {function} [opts.onbeforeupdate] - Callback to perform just before state is updated for current animation frame
-	 * @param {function} [opts.onupdate] - Callback to perform at the end of each update() call for this CMGame instance
-	 * @param {function} [opts.onbeforedraw] - Callback to perform just before a frame is drawn, but immediately after previous is cleared
-	 * @param {function} [opts.ondraw] - Callback to perform at the end of each draw() call for this CMGame instance
-	 * @param {function} [opts.onload] - Callback to perform after all other process in this constructor have been performed, except those involved in "debug"
+	 * @param {function} [options.onbeforestart] - Callback to perform just before .start() actions are applied (like hiding elements and starting animations)
+	 * @param {function} [options.onstart] - Callback to perform just as game starts (elements are hidden, first animation frame has been requested)
+	 * @param {function} [options.onbeforeupdate] - Callback to perform just before state is updated for current animation frame
+	 * @param {function} [options.onupdate] - Callback to perform at the end of each update() call for this CMGame instance
+	 * @param {function} [options.onbeforedraw] - Callback to perform just before a frame is drawn, but immediately after previous is cleared
+	 * @param {function} [options.ondraw] - Callback to perform at the end of each draw() call for this CMGame instance
+	 * @param {function} [options.onload] - Callback to perform after all other process in this constructor have been performed, except those involved in "debug"
+	 * @param {boolean} [options.debug] - Set to true when testing/debugging. This hides loading screens,
+	 *   and immediately starts game (no need for button clicks, etc.), and changes some hidden
+	 *   screen elements (like graph grid) to show slightly.
+	 * @param {object} [options.debugOptions] - When `debug` is set to true, any options that are set in
+	 *   this plain JavaScript object will replace the property with the same key passed into the constructor.
 	 * @returns {object} The created CMGame instance for chaining
 	 */
-	constructor(opts={}) {
+	constructor(options={}) {
 		let self = this;
+
+		this.debug = !!options.debug;
+
+		if(this.debug && typeof options.debugOptions === "object") {
+			for(let key of Object.keys(options.debugOptions)) {
+				if(key !== "debugOptions") {
+					options[key] = options.debugOptions[key];
+				}
+			}
+		}
 
 		this.images = {};
 		this.audios = {}; // Used internally as a fallback when `fetch` won't happen
 		this.audioMap = new Map(); // Main audio object; used for best performance
 
-		if(Array.isArray(opts.images)) {
-			for(let i = 0; i < opts.images.length; i++) {
-				let keyString = CMGame.trimFilename( opts.images[i] );
+		if(Array.isArray(options.images)) {
+			for(let i = 0; i < options.images.length; i++) {
+				let keyString = CMGame.trimFilename( options.images[i] );
 
 				// Allow dev to access item by clipped filename or index in their array
 				this.images[i] = this.images[keyString] =
-						new CMImage(opts.images[i]);
+						new CMImage(options.images[i]);
 			}
 		}
 		else {
-			for(let key in opts.images) {
-				this.images[key] = new CMImage(opts.images[key]);
+			for(let key in options.images) {
+				this.images[key] = new CMImage(options.images[key]);
 			}
 		}
 
 		// Note: this.audios is mainly used internally. Use playAudio(), etc.
-		if(Array.isArray(opts.audios)) {
-			for(let i = 0; i < opts.audios.length; i++) {
-				let keyString = CMGame.trimFilename( opts.audios[i] );
+		if(Array.isArray(options.audios)) {
+			for(let i = 0; i < options.audios.length; i++) {
+				let keyString = CMGame.trimFilename( options.audios[i] );
 				this.audios[i] = this.audios[keyString] =
-						new CMAudio(opts.audios[i], null, this);
+						new CMAudio(options.audios[i], null, this);
 			}
 		}
 		else {
-			for(let key in opts.audios) {
-				this.audios[key] = new CMAudio(opts.audios[key], key, this);
+			for(let key in options.audios) {
+				this.audios[key] = new CMAudio(options.audios[key], key, this);
 			}
 		}
 
@@ -1266,7 +1284,7 @@ class CMGame {
 		 * CSS by adding an "overrideStyles: true" option
 		 * to the CMGame constructor options.
 		 */
-		if(typeof opts.overrideStyles === "undefined") {
+		if(typeof options.overrideStyles === "undefined") {
 			if(![... document.styleSheets].find(stylesheet => stylesheet.href.match("cmgame.css") ) ) {
 				let cmgStylesheet = document.createElement("link");
 				cmgStylesheet.rel = "stylesheet";
@@ -1298,89 +1316,105 @@ class CMGame {
 		}
 
 		// Note: even after setting sound and music on, will not play until user interaction with page
-		this.soundOn = opts.soundOn || false;
-		this.musicOn = opts.musicOn || false;
-		this.orientation = opts.orientation || null;
-		this.saveName = opts.saveName || "";
-		this.state = opts.state || {};
+		this.soundOn = options.soundOn || false;
+		this.musicOn = options.musicOn || false;
+		this.orientation = options.orientation || null;
+		this.saveName = options.saveName || "";
+		this.state = options.state || {};
 
-		this.multiTouch = !!opts.multiTouch;
+		this.multiTouch = !!options.multiTouch;
 
-		this.gridStyle = CMGame.Color.LIGHT_GRAY;
-		this.xAxisStyle = CMGame.Color.GRAY;
-		this.yAxisStyle = CMGame.Color.GRAY;
-		this.tickStyle = CMGame.Color.DARK_GRAY;
+		this.gridStyle = CMColor.LIGHT_GRAY;
+		this.xAxisStyle = CMColor.GRAY;
+		this.yAxisStyle = CMColor.GRAY;
+		this.tickStyle = CMColor.DARK_GRAY;
 		this.gridlineWidth = 1;
+
+		if(typeof options.tickFontSize === "number") {
+			this.tickFontSize = options.tickFontSize;
+		}
 
 		this.tickLabelIf = null;
 		this.tickLabelIfX = null;
 		this.tickLabelIfY = null;
 
-		if(typeof opts.tickLabelIf === "function") {
-			this.tickLabelIf = opts.tickLabelIf;
+		if(typeof options.tickLabelIf === "function") {
+			this.tickLabelIf = options.tickLabelIf;
 		}
 		else
-		if(Array.isArray(opts.tickLabelIf)) {
+		if(Array.isArray(options.tickLabelIf)) {
 			this.tickLabelIf = function(input) {
-				return opts.tickLabelIf.includes(input);
+				return options.tickLabelIf.includes(input);
 			};
+		}
+		else
+		if(typeof options.tickLabelIf === "boolean") {
+			this.tickLabelIf = function(input) { return options.tickLabelIf; };
 		}
 		else {
 			this.tickLabelIf = function(input) { return true; };
 		}
 
-		if(typeof opts.tickLabelIfX === "function") {
-			this.tickLabelIfX = opts.tickLabelIfX;
+		if(typeof options.tickLabelIfX === "function") {
+			this.tickLabelIfX = options.tickLabelIfX;
 		}
 		else
-		if(Array.isArray(opts.tickLabelIfX)) {
+		if(Array.isArray(options.tickLabelIfX)) {
 			this.tickLabelIfX = function(input) {
-				return opts.tickLabelIfX.includes(input);
+				return options.tickLabelIfX.includes(input);
 			};
 		}
-		else {
+		else
+		if(typeof options.tickLabelIfX === "boolean") {
+			this.tickLabelIfX = function(input) { return options.tickLabelIfX; };
+		}
+		else { // Default to letting tickLabelIf define X as well
 			this.tickLabelIfX = this.tickLabelIf;
 		}
 
-		if(typeof opts.tickLabelIfY === "function") {
-			this.tickLabelIfY = opts.tickLabelIfY;
+		if(typeof options.tickLabelIfY === "function") {
+			this.tickLabelIfY = options.tickLabelIfY;
 		}
 		else
-		if(Array.isArray(opts.tickLabelIfY)) {
+		if(Array.isArray(options.tickLabelIfY)) {
 			this.tickLabelIfY = function(input) {
-				return opts.tickLabelIfY.includes(input);
+				return options.tickLabelIfY.includes(input);
 			};
 		}
-		else {
+		else
+		if(typeof options.tickLabelIfY === "boolean") {
+			this.tickLabelIfY = function(input) { return options.tickLabelIfY; };
+		}
+		else { // Default to letting tickLabelIf define Y as well
 			this.tickLabelIfY = this.tickLabelIf;
 		}
 
-		if(typeof opts.gridStyle !== "undefined") {
-			this.gridStyle = opts.gridStyle;
+		if(typeof options.gridStyle !== "undefined") {
+			this.gridStyle = options.gridStyle;
 		}
 
-		if(typeof opts.gridlineWidth !== "undefined") {
-			this.gridStyle = opts.gridlineWidth;
+		if(typeof options.gridlineWidth !== "undefined") {
+			this.gridStyle = options.gridlineWidth;
 		}
 
-		if(typeof opts.xAxisStyle !== "undefined") {
-			this.xAxisStyle = opts.xAxisStyle;
+		if(typeof options.xAxisStyle !== "undefined") {
+			this.xAxisStyle = options.xAxisStyle;
 		}
 
-		if(typeof opts.yAxisStyle !== "undefined") {
-			this.yAxisStyle = opts.yAxisStyle;
+		if(typeof options.yAxisStyle !== "undefined") {
+			this.yAxisStyle = options.yAxisStyle;
 		}
 
-		if(typeof opts.tickStyle !== "undefined") {
-			this.tickStyle = opts.tickStyle;
+		if(typeof options.tickStyle !== "undefined") {
+			this.tickStyle = options.tickStyle;
 		}
 
 		this.fullscreen = false;
-		if(typeof opts.fullscreen !== "undefined") {
-			this.fullscreen = opts.fullscreen;
+		if(typeof options.fullscreen !== "undefined") {
+			this.fullscreen = options.fullscreen;
 		}
 
-		this.type = opts.type || "graph";
+		this.type = options.type || "graph";
 
 		/**
 		 * `ignoreNumLock` being true always
@@ -1389,22 +1423,22 @@ class CMGame {
 		 * as arrows only when NumLock is off.
 		 */
 		this.ignoreNumLock = false;
-		if(typeof opts.ignoreNumLock !== "undefined") {
-			this.ignoreNumLock = !!opts.ignoreNumLock;
+		if(typeof options.ignoreNumLock !== "undefined") {
+			this.ignoreNumLock = !!options.ignoreNumLock;
 		}
 
 		// origin defaults to middle of canvas
-		this.originByRatio = opts.originByRatio || [0.5, 0.5];
+		this.originByRatio = options.originByRatio || [0.5, 0.5];
 
 		this.sprites = []; /* CMSprite */
 		this.functions = []; /* CMFunction */
-		this.tickDistance = (typeof opts.tickDistance === "number") ? opts.tickDistance : 20;
-		this.gridlineDistance = (typeof opts.gridlineDistance === "number") ?
-			opts.gridlineDistance :
+		this.tickDistance = (typeof options.tickDistance === "number") ? options.tickDistance : 20;
+		this.gridlineDistance = (typeof options.gridlineDistance === "number") ?
+			options.gridlineDistance :
 				(this.tickDistance >= 40 ? this.tickDistance / 2 :
 					this.tickDistance);
 
-		this.graphScalar = opts.graphScalar || this.gridlineDistance;
+		this.graphScalar = options.graphScalar || this.gridlineDistance;
 		this.screenScalar = 1.0; // CSS scaling for display; separate from graph - do not override
 
 		this.mouseState = new Array(5).fill(0);
@@ -1416,7 +1450,7 @@ class CMGame {
 		this.frameCount = 0;
 
 		// The default here is arbitrary. For a long game letting this go indefinitely could hurt performance
-		this.frameCap = (typeof opts.frameCap === "number") ? opts.frameCap : 100000;
+		this.frameCap = (typeof options.frameCap === "number") ? options.frameCap : 100000;
 
 		this.leftMousePressed = false; // Detects if mouse is down to simulate a finger swipe
 		this.rightMousePressed = false;
@@ -1435,17 +1469,17 @@ class CMGame {
 		this.latestSwipePath = []; // Similar to latestSwipeStrings, but discarding consecutive repeats
 		this.latestSwipePath8 = []; // Similar to latestSwipePath, with 8 directions
 
-		this.hideOnStart = opts.hideOnStart || [];
+		this.hideOnStart = options.hideOnStart || [];
 
 		this.wrapper = null;
-		switch(typeof opts.wrapper) {
+		switch(typeof options.wrapper) {
 			case "object":
-				this.wrapper = opts.wrapper;
+				this.wrapper = options.wrapper;
 				break;
 			case "string":
-				this.wrapper = document.querySelector(opts.wrapper);
+				this.wrapper = document.querySelector(options.wrapper);
 				if(this.canvas === null) {
-					console.error(opts.wrapper + " is not a valid CSS selector, or returned null");
+					console.error(options.wrapper + " is not a valid CSS selector, or returned null");
 				}
 				break;
 			default: {
@@ -1461,14 +1495,14 @@ class CMGame {
 		}
 
 		this.canvas = null;
-		switch(typeof opts.canvas) {
+		switch(typeof options.canvas) {
 			case "object":
-				this.canvas = opts.canvas;
+				this.canvas = options.canvas;
 				break;
 			case "string":
-				this.canvas = document.querySelector(opts.canvas);
+				this.canvas = document.querySelector(options.canvas);
 				if(this.canvas === null) {
-					console.error(opts.canvas + " is not a valid CSS selector, or returned null");
+					console.error(options.canvas + " is not a valid CSS selector, or returned null");
 				}
 				break;
 			default: {
@@ -1479,18 +1513,18 @@ class CMGame {
 		}
 
 		if(this.canvas) { // some DOM element exists, so use its dimensions
-			if(typeof opts.width === "undefined") {
-				opts.width = this.canvas.width;
+			if(typeof options.width === "undefined") {
+				options.width = this.canvas.width;
 			}
 
-			if(typeof opts.height === "undefined") {
-				opts.height = this.canvas.height;
+			if(typeof options.height === "undefined") {
+				options.height = this.canvas.height;
 			}
 		}
 		else { // no <canvas> in HTML, and no option specified. Build our own.
 			this.canvas = document.createElement("canvas");
-			opts.width = opts.width || 640;
-			opts.height = opts.height || 480;
+			options.width = options.width || 640;
+			options.height = options.height || 480;
 			this.canvas.classList.add("cm-shadow-almost_black");
 		}
 
@@ -1507,14 +1541,14 @@ class CMGame {
 
 		// For complex backgrounds, a "background canvas" layer can be used
 		this.backgroundCanvas = null;
-		switch(typeof opts.backgroundCanvas) {
+		switch(typeof options.backgroundCanvas) {
 			case "object":
-				this.backgroundCanvas = opts.backgroundCanvas;
+				this.backgroundCanvas = options.backgroundCanvas;
 				break;
 			case "string":
-				this.backgroundCanvas = document.querySelector(opts.backgroundCanvas);
+				this.backgroundCanvas = document.querySelector(options.backgroundCanvas);
 				if(this.backgroundCanvas === null) {
-					console.error(opts.backgroundCanvas + " is not a valid CSS selector, or returned null");
+					console.error(options.backgroundCanvas + " is not a valid CSS selector, or returned null");
 				}
 				break;
 			default:
@@ -1530,8 +1564,8 @@ class CMGame {
 		}
 
 		// store initial <canvas> dimensions for screen resizing
-		this.canvasReferenceWidth = opts.width || 640;
-		this.canvasReferenceHeight = opts.height || 480;
+		this.canvasReferenceWidth = options.width || 640;
+		this.canvasReferenceHeight = options.height || 480;
 		this.width = this.canvasReferenceWidth;
 		this.height = this.canvasReferenceHeight;
 
@@ -1568,17 +1602,17 @@ class CMGame {
 
 		// store origin an center as CMPoints in case we wish to check for instance this.origin.isPoint( this.center );
 		this.origin = null;
-		if(Array.isArray(opts.origin)) {
+		if(Array.isArray(options.origin)) {
 			this.origin = new CMPoint(
-				opts.origin[0],
-				opts.origin[1],
+				options.origin[0],
+				options.origin[1],
 				0);
 		}
 		else
-		if(typeof opts.origin === "object") {
+		if(typeof options.origin === "object") {
 			this.origin = new CMPoint(
-				opts.origin.x,
-				opts.origin.y,
+				options.origin.x,
+				options.origin.y,
 				0
 			);
 		}
@@ -1600,7 +1634,7 @@ class CMGame {
 		this.passiveFlag = false; // Actual options to pass in for touch events (differs for iOS, arrgh)
 
 		/** Dev may want to allow context menu for downloading screenshot */
-		if(!opts.allowContextMenu) {
+		if(!options.allowContextMenu) {
 
 			/**
 			 * Prevent menu on right-click or mobile device "long press", but
@@ -1656,7 +1690,7 @@ class CMGame {
 						 *
 						 * Another option is to suggest users to disable haptic/3D touch and
 						 * vibration directly from their iOS device settings:
-						 * Settings-> Haptic & 3D Touch -> Off (also Vibration -> Off)
+						 *   Settings -> Haptic & 3D Touch -> Off (also Vibration -> Off)
 						 */
 						if(!self.running_iOS) {
 							self.passiveFlag = { passive: true };
@@ -1677,12 +1711,12 @@ class CMGame {
 		 * document, or a custom "controller".
 		 */
 		this.pressElement = null;
-		switch(typeof opts.pressElement) {
+		switch(typeof options.pressElement) {
 			case "object":
-				this.pressElement = opts.pressElement;
+				this.pressElement = options.pressElement;
 				break;
 			case "string":
-				this.pressElement = document.querySelector(opts.pressElement);
+				this.pressElement = document.querySelector(options.pressElement);
 				break;
 			default: {
 				this.pressElement = this.canvas;
@@ -1694,7 +1728,16 @@ class CMGame {
 		this.pressElement.addEventListener("mousedown", self.mouseDown.bind(self), false);
 		this.pressElement.addEventListener("touchmove", self.touchMove.bind(self), self.passiveFlag);
 		this.pressElement.addEventListener("mousemove", self.mouseMove.bind(self), false);
-		this.pressElement.addEventListener("touchend", self.touchEnd.bind(self), false);
+		this.pressElement.addEventListener("touchend", function(e) {
+			/**
+			 * Preventing default should generally prevent a touch
+			 * registering as a mouse click.
+			 */
+			if(e.cancelable && !options.allowContextMenu)
+				e.preventDefault();
+
+			self.touchEnd.call(self, e);
+		}, false);
 		this.pressElement.addEventListener("mouseup", self.mouseUp.bind(self), false);
 		this.pressElement.addEventListener("click", self.click.bind(self), false);
 		this.pressElement.addEventListener("dblclick", self.dblClick.bind(self), false);
@@ -1702,7 +1745,7 @@ class CMGame {
 		window.addEventListener("keydown", self.keyDown.bind(self), false);
 		window.addEventListener("keyup", self.keyUp.bind(self), false);
 
-		if(!opts.overrideResize) {
+		if(!options.overrideResize) {
 			window.addEventListener("resize", self.resizeCanvas.bind(self), false);
 			this.resizeCanvas.call(this); // for loaded screen size
 		}
@@ -1734,12 +1777,12 @@ class CMGame {
 		this.runCycle = this.updateAndDraw.bind(this);
 
 		this.startBtn = null;
-		switch(typeof opts.startBtn) {
+		switch(typeof options.startBtn) {
 			case "object":
-				this.startBtn = opts.startBtn;
+				this.startBtn = options.startBtn;
 				break;
 			case "string":
-				this.startBtn = document.querySelector(opts.startBtn);
+				this.startBtn = document.querySelector(options.startBtn);
 				break;
 			default: {
 				this.startBtn = this.canvas;
@@ -1755,9 +1798,9 @@ class CMGame {
 		this.enterFullscreenBtn = null;
 		this.exitFullscreenBtn = null;
 
-		switch(typeof opts.enterFullscreenBtn) {
+		switch(typeof options.enterFullscreenBtn) {
 			case "object":
-				this.enterFullscreenBtn = opts.enterFullscreenBtn;
+				this.enterFullscreenBtn = options.enterFullscreenBtn;
 
 				// defining the triggering element assumes you want fullscreen
 				if(typeof this.fullscreen === "undefined") {
@@ -1765,7 +1808,7 @@ class CMGame {
 				}
 				break;
 			case "string":
-				this.enterFullscreenBtn = document.querySelector(opts.enterFullscreenBtn);
+				this.enterFullscreenBtn = document.querySelector(options.enterFullscreenBtn);
 
 				// defining the triggering element assumes you want fullscreen
 				if(typeof this.fullscreen === "undefined") {
@@ -1778,12 +1821,12 @@ class CMGame {
 			}
 		}
 
-		switch(typeof opts.exitFullscreenBtn) {
+		switch(typeof options.exitFullscreenBtn) {
 			case "object":
-				this.exitFullscreenBtn = opts.exitFullscreenBtn;
+				this.exitFullscreenBtn = options.exitFullscreenBtn;
 				break;
 			case "string":
-				this.exitFullscreenBtn = document.querySelector(opts.exitFullscreenBtn);
+				this.exitFullscreenBtn = document.querySelector(options.exitFullscreenBtn);
 				break;
 			default: {
 				this.exitFullscreenBtn = null; // default to user agent's exit process
@@ -1812,8 +1855,8 @@ class CMGame {
 		documentBody.appendChild(this.screenshotLink);
 
 		this.screenshotBtn = null;
-		if(opts.screenshotBtn) {
-			this.screenshotBtn = document.querySelector(opts.screenshotBtn);
+		if(options.screenshotBtn) {
+			this.screenshotBtn = document.querySelector(options.screenshotBtn);
 
 			this.screenshotBtn.addEventListener("click", (e) => {
 				e.preventDefault();
@@ -1875,7 +1918,7 @@ class CMGame {
 			this.vennSets = new Map(); // VennSet
 			this.vennRegions = new Map(); // VennRegion
 
-			this.setNumberOfSets(opts.numSets || 0, opts.variation || 0);
+			this.setNumberOfSets(options.numSets || 0, options.variation || 0);
 
 			/** Updates game state in current frame*/
 			this.update = function(frameCount) {
@@ -1912,7 +1955,7 @@ class CMGame {
 					vset.draw(ctx);
 				}
 
-				ctx.fillStyle = CMGame.Color.BLACK;
+				ctx.fillStyle = CMColor.BLACK;
 				let fontSize = Math.floor(this.width / 16);
 				ctx.font = `italic ${fontSize}px Times New Roman, serif`;
 				ctx.fillText("U", this.canvas.width - fontSize * 1.5, fontSize * 1.25);
@@ -2014,11 +2057,11 @@ class CMGame {
 		}
 
 		this.doodleOptions = {};
-		if(opts.doodleOptions) {
-			this.doodleOptions = opts.doodleOptions;
+		if(options.doodleOptions) {
+			this.doodleOptions = options.doodleOptions;
 
 			// User set up doodle options without bothering to enable/disable, so we assume enable
-			if(typeof opts.doodleOptions.enabled === "undefined") {
+			if(typeof options.doodleOptions.enabled === "undefined") {
 				this.doodleOptions.enabled = true;
 			}
 		}
@@ -2070,8 +2113,8 @@ class CMGame {
 		];
 
 		for(let key of eventKeys) {
-			if(typeof opts[key] === "function") {
-				this[key] = opts[key].bind(self);
+			if(typeof options[key] === "function") {
+				this[key] = options[key].bind(self);
 			}
 		}
 
@@ -2116,7 +2159,7 @@ class CMGame {
 		}
 
 		this.alertOverlay = document.createElement("div");
-		this.alertOverlay.classList = "cm-overlay cm-transparent-black";
+		this.alertOverlay.classList = "cm-overlay";
 
 		this.alertElement = document.createElement("aside");
 		this.alertElement.setAttribute("id", "cmAlert");
@@ -2159,27 +2202,34 @@ class CMGame {
 			this.onload();
 		}
 
-		this.debug = !!opts.debug;
-
 		/**
-		 * "debug" option immediately hides the load screen, and
-		 * any "hideOnStart" elements, starting game immediately.
+		 * `debug` option immediately hides the load screen, and
+		 * any `hideOnStart` elements, starting game immediately.
 		 */
 		if(this.debug) {
 			try {
 				document.getElementById("cmLoading").style.display = "none";
 			} catch(e) {}
 
-			if(this.tickStyle === CMGame.Color.TRANSPARENT)
+			/**
+			 * We show hidden grid elements for testing, UNLESS the dev has specifically
+			 * set these values in debugOptions.
+			 */
+			let debugOpts = options.debugOptions || {};
+			if(this.tickStyle === CMColor.NONE &&
+					typeof debugOpts.tickStyle === "undefined")
 				this.tickStyle = "rgba(60, 30, 0, 0.5)";
 
-			if(this.gridStyle === CMGame.Color.TRANSPARENT)
+			if(this.gridStyle === CMColor.NONE &&
+					typeof debugOpts.gridStyle === "undefined")
 				this.gridStyle = "rgba(65, 65, 65, 0.5)";
 
-			if(this.xAxisStyle ===  CMGame.Color.TRANSPARENT)
+			if(this.xAxisStyle ===  CMColor.NONE &&
+					typeof debugOpts.xAxisStyle === "undefined")
 				this.xAxisStyle = "rgba(65, 65, 255, 0.5)";
 
-			if(this.yAxisStyle === CMGame.Color.TRANSPARENT)
+			if(this.yAxisStyle === CMColor.NONE &&
+					typeof debugOpts.yAxisStyle === "undefined")
 				this.yAxisStyle = "rgba(255, 65, 65, 0.5)";
 
 			// start game after DOM is loaded and scripts are parsed (to avoid errors)
@@ -2671,9 +2721,7 @@ class CMGame {
 	onbeforeupdate(frameCount) {} // Occurs just before game's update()
 	onupdate(frameCount) {} // Occurs just after game's update()
 	onbeforedraw(ctx) {} // Occurs just before game's draw(), but after previous screen was cleared
-
 	ondraw(ctx) {} // Occurs just after game's draw()
-	onswipe(/* CMSwipe */ cmSwipe) {} // Triggered by significant mousemove or touchmove
 
 	/**
 	 * These can be overridden for more control,
@@ -2697,6 +2745,9 @@ class CMGame {
 	onpressend(point) {}
 	onkeydown(e) {}
 	onkeyup(e) {}
+
+	// Triggered by significant mousemove or touchmove by user
+	onswipe(/* CMSwipe */ cmSwipe) {}
 
 	/** Updates game state in current frame*/
 	update(frameCount) {
@@ -2722,7 +2773,7 @@ class CMGame {
 		this.onbeforedraw(ctx);
 
 		// Background gridlines
-		if(this.gridStyle && this.gridStyle !== CMGame.Color.TRANSPARENT) {
+		if(this.gridStyle && this.gridStyle !== CMColor.NONE) {
 			ctx.strokeStyle = this.gridStyle;
 			ctx.lineWidth = this.gridlineWidth;
 
@@ -2753,7 +2804,7 @@ class CMGame {
 
 		// Draw x and y axes
 		// x axis
-		if(this.xAxisStyle && this.xAxisStyle !== CMGame.Color.TRANSPARENT) {
+		if(this.xAxisStyle && this.xAxisStyle !== CMColor.NONE) {
 			ctx.strokeStyle = this.xAxisStyle;
 
 			this.drawLine(0, this.origin.y,
@@ -2761,7 +2812,7 @@ class CMGame {
 		}
 
 		// y axis
-		if(this.yAxisStyle && this.yAxisStyle !== CMGame.Color.TRANSPARENT) {
+		if(this.yAxisStyle && this.yAxisStyle !== CMColor.NONE) {
 			ctx.strokeStyle = this.yAxisStyle;
 			
 			this.drawLine(this.origin.x, 0,
@@ -2776,7 +2827,7 @@ class CMGame {
 
 		ctx.font = tickFontSize + "px Arial, sans-serif";
 		ctx.textBaseline = "middle";
-		if(this.tickStyle && this.tickStyle !== CMGame.Color.TRANSPARENT) {
+		if(this.tickStyle && this.tickStyle !== CMColor.NONE) {
 			ctx.strokeStyle = ctx.fillStyle = this.tickStyle;
 
 			let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
@@ -2896,14 +2947,14 @@ class CMGame {
 	 * Method for beginning a new doodle
 	 * over the current game screen.
 	 * @param {object} point - A CMPoint or similar
-	 * @param {object} [opts=this.doodleOptions] - options to pass to CMDoodle
+	 * @param {object} [options=this.doodleOptions] - options to pass to CMDoodle
 	 * @returns {object} The current CMGame instance
 	 */
-	startDoodle(point, opts=this.doodleOptions) {
+	startDoodle(point, options=this.doodleOptions) {
 		this.doodleOptions.enabled = true;
-		opts.startPoint = new CMPoint(point.x, point.y);
+		options.startPoint = new CMPoint(point.x, point.y);
 
-		this.currentDoodle = new CMDoodle(this, opts);
+		this.currentDoodle = new CMDoodle(this, options);
 		this.doodles.push(this.currentDoodle);
 		return this;
 	}
@@ -3086,18 +3137,18 @@ class CMGame {
 		let spriteStroke = func.strokeStyle;
 		let spriteLineWidth = func.lineWidth;
 		let spritePathBelow = null,
-			spriteFillBelow = CMGame.Color.TRANSPARENT,
+			spriteFillBelow = CMColor.NONE,
 			spritePathAbove = null,
-			spriteFillAbove = CMGame.Color.TRANSPARENT;
+			spriteFillAbove = CMColor.NONE;
 
 		if(func.pathBelow && func.fillStyleBelow &&
-				func.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+				func.fillStyleBelow !== CMColor.NONE) {
 			spritePathBelow = func.pathBelow;
 			spriteFillBelow = func.fillStyleBelow;
 		}
 
 		if(func.pathAbove && func.fillStyleAbove &&
-				func.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+				func.fillStyleAbove !== CMColor.NONE) {
 			spritePathAbove = func.pathAbove;
 			spriteFillAbove = func.fillStyleAbove;
 		}
@@ -3162,32 +3213,32 @@ class CMGame {
 		);
 
 		sprite.containsPoint = function(xOrPoint, y) {
-			let point = {},
+			let pointToCheck = {},
 				game = this.game;
 
 			if(typeof xOrPoint === "number") {
-				point = {
+				pointToCheck = {
 					x: xOrPoint,
 					y: y
 				};
 			}
 			else {
-				point = xOrPoint;
+				pointToCheck = xOrPoint;
 			}
 
 			let isPointHere = false;
 			game.ctx.save();
 			game.ctx.lineWidth = this.lineWidth;
-			if(game.ctx.isPointInStroke(spritePath, point.x, point.y))
+			if(game.ctx.isPointInStroke(spritePath, pointToCheck.x, pointToCheck.y))
 				isPointHere = true;
 
 			if(spritePathBelow) {
-				if(game.ctx.isPointInPath(spritePathBelow, point.x, point.y))
+				if(game.ctx.isPointInPath(spritePathBelow, pointToCheck.x, pointToCheck.y))
 					isPointHere = true;
 			}
 
 			if(spritePathAbove) {
-				if(game.ctx.isPointInPath(spritePathAbove, point.x, point.y))
+				if(game.ctx.isPointInPath(spritePathAbove, pointToCheck.x, pointToCheck.y))
 					isPointHere = true;
 			}
 
@@ -4185,11 +4236,6 @@ class CMGame {
 	 * @param {object} e - The touchend event
 	 */
 	touchEnd(e) {
-
-		// Preventing default should prevent a touch registering as a mouse click
-		if(e.cancelable)
-			e.preventDefault();
-
 		this.numPressPoints = e.touches.length;
 
 		if(this.multiTouch) {
@@ -4319,8 +4365,8 @@ class CMGame {
 	 */
 	areColliding(x1, y1, w1, h1, x2, y2, w2, h2) {
 
-		// >=3 arguments => can assume all properties are given
-		if(typeof h1 !== "undefined") {
+		// >=3 arguments => can assume all rectangular properties are given
+		if(typeof w1 !== "undefined") {
 			if(x1 <= x2 + w2 && x1 + w1 >= x2)	{
 				if(y1 <= y2 + h2 && y1 + h1 >= y2) {
 					return true;
@@ -4334,32 +4380,186 @@ class CMGame {
 		 * Otherwise, we are just checking
 		 * 2 objects. Renamed for readability.
 		 */
-		let obj1 = x1;
-		let obj2 = y1;
-		if(!obj1.shape)
-			obj1.shape = "rect";
+		let obj1 = x1,
+			obj1Shape = obj1.shape,
+			obj2 = y1,
+			obj2Shape = obj2.shape;
 
-		if(!obj2.shape)
-			obj2.shape = "rect";
+		if(!obj1Shape)
+			obj1Shape = "rect";
 
-		if(obj1.shape === "circle") {
-			if(obj2.shape === "circle") {
+		if(!obj2Shape)
+			obj2Shape = "rect";
+
+		if(obj1Shape === "circle") {
+			if(obj2Shape === "circle") {
 				return this.distance(obj1, obj2) <= obj1.radius + obj2.radius;
 			}
 			else
-			if(obj2.shape === "rect") {
+			if(obj2Shape === "rect") {
 				return this.areColliding(
 					obj1.x - obj1.radius, obj1.y - obj1.radius, obj1.radius * 2, obj1.radius * 2,
 					obj2.x, obj2.y, obj2.width, obj2.height);
 			}
+			else
+			if(obj2Shape === "line") {
+
+				// vertical line - we can treat as a thin rectangle
+				if(obj2.end.x === obj2.start.x) {
+					let lineRect = {
+						x: obj2.start.x,
+						y: Math.min(obj2.start.y, obj2.end.y),
+						width: 1,
+						height: Math.abs(obj2.end.y - obj2.start.y),
+						shape: "rect"
+					};
+
+					return this.areColliding(obj1, lineRect);
+				}
+				else
+				if(obj2.end.y === obj2.start.y) { // horizontal line
+					let lineRect = {
+						x: Math.min(obj2.start.x, obj2.end.x),
+						y: obj2.start.y,
+						width: Math.abs(obj2.end.x - obj2.start.x),
+						height: 1,
+						shape: "rect"
+					};
+
+					return this.areColliding(obj1, lineRect);
+				}
+				else {
+
+					let m = (obj2.end.y - obj2.start.y) / (obj2.end.x - obj2.start.x);
+					let point = obj2.start;
+
+					// after some algebra... we have formula y = m * x + b
+					let b = point.y - m * point.x;
+
+					let startX = Math.min(obj2.start.x, obj2.end.x);
+					let endX = Math.max(obj2.start.x, obj2.end.x);
+
+					for(let i = 0, len = endX - startX; i < len; i++) {
+						if(this.distance(obj1, {
+							x: i,
+							y: m * i + b
+						}) <= obj1.radius) {
+							return true;
+						}
+					}
+
+					return false;
+				}
+			}
 		}
 
-		if(obj2.shape === "circle" && obj1.shape === "rect") {
+		if(obj2Shape === "circle" && obj1Shape === "rect") {
 			return this.areColliding(
 				obj1.x, obj1.y, obj1.width, obj1.height,
 				obj2.x - obj2.radius, obj2.y - obj2.radius, obj2.radius * 2, obj2.radius * 2);
 		}
+		else
+		if(obj2Shape === "circle" && obj1Shape === "line") {
+			return this.areColliding(obj2, obj1);
+		}
 
+		if(obj1Shape === "line" && obj2Shape === "line") {
+
+			// get slopes
+			let m = (obj1.end.y - obj1.start.y) / (obj1.end.x - obj1.start.x);
+			let n = (obj2.end.y - obj2.start.y) / (obj2.end.x - obj2.start.x);
+
+			// if slopes are equal, lines are parallel, so just check any point on one line (say start) and see if the other contains it
+			if(m === n) {
+				return obj1.containsPoint(obj2.start);
+			}
+
+			let point1 = obj1.start;
+			let point2 = obj2.start;
+
+			// after some algebra... we have formula y = m * x + b
+			let b = point1.y - m * point1.x;
+			let c = point2.y - n * point2.x;
+
+			// after more algebra...
+			// Check if this x point (xToScreen) is between start and end x of BOTH lines. If so, return true. If not, return false.
+			let goalX = (c - b) / (m - n);
+
+			// This x lies within the x range of BOTH lines
+			if((Math.min(obj1.start.x, obj1.end.x) <= goalX &&
+				Math.max(obj1.start.x, obj1.end.x) >= goalX) &&
+					(Math.min(obj2.start.x, obj2.end.x) <= goalX &&
+					Math.max(obj2.start.x, obj2.end.x) >= goalX)) {
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+
+		if(obj1Shape === "line" && obj2Shape === "rect") {
+
+			// At least one of the endpoints is in the rectangle - so intersection
+			if(obj2.containsPoint(obj1.start) || obj2.containsPoint(obj1.end)) {
+				return true;
+			}
+
+			let lineBoundingRect = {
+				x: Math.min(this.start.x, this.end.x),
+				y: Math.min(this.start.y, this.end.y),
+				width: Math.abs(this.end.x - this.start.x),
+				height: Math.abs(this.end.y - this.start.y)
+			};
+
+			// Even the larger rectangle containing the line doesn't intersect the rect, so definitely no collision
+			if(!this.areColliding(lineBoundingRect, obj2)) {
+				return false;
+			}
+
+			// Note, since endpoints are not in rect, and neither is bounding rect, line cannot be horizontal or vertical
+			if(obj1.end.x === obj1.start.x || obj1.end.y === obj1.start.y) {
+				return false;
+			}
+
+			// Now for line to intersect the rectangle, it must intersect one of the four sides
+			let m = (obj1.end.y - obj1.start.y) / (obj1.end.x - obj1.start.x);
+			let point = obj1.start;
+			let b = point.y - m * point.x;
+
+			// Use these values with formulas y = mx + b and x = (y - b) / m
+
+			// intersects left side of rect
+			let yCheck = m * obj2.x + b;
+			if(yCheck >= obj2.y && yCheck <= obj2.y + obj2.height) {
+				return true;
+			}
+
+			// intersects right side of rect
+			yCheck = m * (obj2.x + obj2.width) + b;
+			if(yCheck >= obj2.y && yCheck <= obj2.y + obj2.height) {
+				return true;
+			}
+
+			// intersects top side of rect
+			let xCheck = (obj2.y - b) / m;
+			if(xCheck >= obj2.x && xCheck <= obj2.x + obj2.width) {
+				return true;
+			}
+
+			// intersects bottom side of rect
+			xCheck = ((obj2.y + obj2.height) - b) / m;
+			if(xCheck >= obj2.x && xCheck <= obj2.x + obj2.width) {
+				return true;
+			}
+
+			return false;
+		}
+
+		if(obj1Shape === "rect" && obj2Shape === "line") {
+			return this.areColliding(obj2, obj1);
+		}
+
+		// rect and rect
 		if(obj1.x <= obj2.x + obj2.width && obj1.x + obj1.width >= obj2.x)	{
 			if(obj1.y <= obj2.y + obj2.height && obj1.y + obj1.height >= obj2.y) {
 				return true;
@@ -4570,61 +4770,63 @@ class CMGame {
 	 * Draws an image rotated around a point
 	 * Parameters start with usual drawImage
 	 * parameters for CanvasRenderingContext2D,
-	 * and follow with one options object.
+	 * and are followed by one options object.
 	 * @param {object} image - The image (Image instance, <img> element, etc.) to be rotated
-	 * @param {array} otherArgs - All arguments after the image are saved in a rest parameter.
-	 *   These 
-	 * @param {object|number} opts - Drawing options. If just
+	 * @param {array} args - All arguments after the image are saved in a rest parameter.
+	 *   Before the last parameter, representing the "options" argument, these represent the usual
+	 *   drawImage parameters.
+	 * @param {object|number} [options] - Drawing options. If just
 	 *   a number is entered, this will be taken as the
 	 *   angle and the rotation will rotate about the image center.
-	 * @param {number} opts.angle - The angle in radians to rotate (clockwise, from viewer's perspective)
-	 * @param {boolean} [clockwise=true] - Set to false to reverse angle direction
-	 * @param {string} [opts.origin] - The transform origin, as a string, relative to the output image rectangle.
+	 *   If this argument is not provided, this is same as ctx.drawImage()
+	 * @param {number} [options.angle] - The angle in radians to rotate (clockwise, from viewer's perspective)
+	 * @param {boolean} [options.clockwise=true] - Set to false to reverse angle direction
+	 * @param {string} [options.origin] - The transform origin, as a string, relative to the output image rectangle.
 	 *   The horizontal position words are "left", "center", and "right". The vertical position words
 	 *   are "top", "center", and "bottom". Order is irrelevant. "center" can be omitted, and will be inferred
 	 *   when other options aren't present. Examples:
 	 *   "center" (this is the default), "bottom" (same as "center bottom"), "top",
 	 *   "right" (same as "right center"), "left",
 	 *   "left top", "left bottom", "right top", "right bottom"
-	 * @returns {object} A CMPoint object representing the (x, y) point this image was rotated around
+	 * @returns {object} A CMPoint object representing the screen (x, y) point this image was rotated around
 	 */
 	drawRotatedImage(image, ...args) {
 		let numArgs = args.length; // 4, 6, or 10, with options
-		let opts = args.pop();
+		let options = args.pop();
 		let angle = 0;
 		let transformOrigin = "center";
 
-		switch(typeof opts) {
+		switch(typeof options) {
 			case "number":
-				angle = opts;
+				angle = options;
 				break;
 			case "object":
-				angle = opts.angle;
+				angle = options.angle;
 				
-				if(typeof opts.clockwise === "undefined") {
-					opts.clockwise = true;
+				if(typeof options.clockwise === "undefined") {
+					options.clockwise = true;
 				}
 
-				if(opts.clockwise) {
+				if(options.clockwise) {
 					angle *= -1;
 				}
 
-				if(opts.origin && opts.origin !== "center") {
+				if(options.origin && options.origin !== "center") {
 					transformOrigin = "";
 
-					if(opts.origin.includes("left")) {
+					if(options.origin.includes("left")) {
 						transformOrigin += "left";
 					}
 					else
-					if(opts.origin.includes("right")) {
+					if(options.origin.includes("right")) {
 						transformOrigin += "right";
 					}
 
-					if(opts.origin.includes("top")) {
+					if(options.origin.includes("top")) {
 						transformOrigin += " top";
 					}
 					else
-					if(opts.origin.includes("bottom")) {
+					if(options.origin.includes("bottom")) {
 						transformOrigin += " bottom";
 					}
 
@@ -5197,14 +5399,12 @@ class CMGame {
 		this.tickDistance = this.unzoomedTickDistance / this.zoomLevel;
 		this.gridlineDistance = this.unzoomedGridlineDistance / this.zoomLevel;
 
-		if(this.zoomLevel === 1) {
-			this.origin.x = this.unzoomedOrigin.x;
-			this.origin.y = this.unzoomedOrigin.y;
-		}
-		else {
-			this.origin.x = this.center.x + (this.unzoomedOrigin.x - this.center.x) / this.zoomLevel;
-			this.origin.y = this.center.y + (this.unzoomedOrigin.y - this.center.y) / this.zoomLevel;
-		}
+		// Note: if zoomLevel is 1, this just sets origin back to unzoomedOrigin
+		// this.origin.x = this.center.x + (this.unzoomedOrigin.x - this.center.x) / this.zoomLevel;
+		// this.origin.y = this.center.y + (this.unzoomedOrigin.y - this.center.y) / this.zoomLevel;
+
+		this.origin.x = this.origin.x + (this.unzoomedOrigin.x - this.origin.x) / this.zoomLevel;
+		this.origin.y = this.origin.y + (this.unzoomedOrigin.y - this.origin.y) / this.zoomLevel;
 
 		for(let func of this.functions) {
 			func.updateBounds(this.zoomLevel);
@@ -5426,26 +5626,15 @@ class CMGame {
 	 * Note: JavaScript will return Infinity or -Infinity for a division by
 	 * zero. The dev may want to check the answer with
 	 * Number.isFinite() and set as "undefined" or undefined.
-	 * Also see getFiniteSlope().
+	 * Note: This defines slope of a generic line. Since screen points
+	 * are drawn with y values upside-down, you may need to
+	 * change sign when working with screen points.
 	 * @param {Point|object} startPoint - The first point
 	 * @param {Point|object} endPoint - The second point
 	 * @returns {number}
 	 */
 	getSlope(startPoint, endPoint) {
 		return (endPoint.y - startPoint.y) / (endPoint.x - startPoint.x);
-	}
-
-	/**
-	 * Gets the slope between to two-dimensional points,
-	 * returning undefined instead of Infinity.
-	 * @param {Point|object} startPoint - The first point
-	 * @param {Point|object} endPoint - The second point
-	 * @returns {number}
-	 */
-	getFiniteSlope(startPoint, endPoint) {
-		let slope = (endPoint.y - startPoint.y) / (endPoint.x - startPoint.x);
-
-		return Number.isFinite(slope) ? slope : undefined;
 	}
 
 	/**
@@ -5908,7 +6097,7 @@ class CMGame {
 
 	/**
 	 * Similar to removeVertex, but lets dev remove
-	 * multiple sprites at once.
+	 * multiple vertices at once.
 	 * @param {...object} vertices - A list of CMGame.Vertex instances
 	 * @returns {object} The current CMGame instance
 	 */
@@ -6009,9 +6198,17 @@ class CMGame {
 	 * Rather than blocking and waiting for user to
 	 * press OK, this returns a Promise that resolves
 	 * when user presses OK.
-	 * @param {string} [msg=""] - A message to display 
+	 * If the game is running, it pauses until just
+	 * before the returned promise resolves.
+	 * @param {string} [msg=""] - A message to display. This can be plain text or HTML.
+	 * @param {object} [options={}] - A plain JS object of options.
+	 * @param {string} [options.headerText] - String to write in the header. Defaults
+	 *   to standard alert header.
+	 * @param {string} [options.button1Text] - String to write in OK button. Default is "OK".
+	 * @param {boolean} [options.draggable] - true to let player drag modal around. Default is false.
+	 * @returns {Promise}
 	 */
-	alert(msg="") {
+	alert(msg="", options={}) {
 		let self = this;
 
 		let pauseState = this.paused;
@@ -6028,10 +6225,98 @@ class CMGame {
 		this.alertCancelButton.style.display = "none";
 		this.alertInput.style.display = "none";
 
+		this.alertElement.querySelector("h3").innerText =
+			options.headerText ||
+			((document.title || "Game") + " says:");
+
+		this.alertOKButton.innerHTML = options.button1Text || "OK";
+
+		// draggable is convenient, but adds multiple handlers
+		if(options.draggable) {
+			let oldX = this.alertElement.offsetLeft;
+			let oldY = this.alertElement.offsetTop;
+			let modalPressed = false;
+
+			this.alertElement.onmousedown = this.alertElement.ontouchstart = function(e) {
+				modalPressed = true;
+
+				console.log(e);
+
+				if(e.type === "touchstart") {
+					oldX = e.targetTouches[0].clientX;
+					oldY = e.targetTouches[0].clientY;
+				}
+				else {
+					oldX = e.clientX;
+					oldY = e.clientY;
+				}
+			};
+
+			this.alertElement.onmouseup = this.alertElement.ontouchend = function(e) {
+				modalPressed = false;
+			};
+
+			this.alertElement.onmousemove = this.alertElement.ontouchmove = function(e) {
+				if(!modalPressed) // Must "drag" to move
+					return;
+
+				let x = 0;
+				let y = 0;
+
+				if(e.type === "touchmove") {
+					x = e.targetTouches[0].clientX;
+					y = e.targetTouches[0].clientY;
+				}
+				else {
+					x = e.clientX;
+					y = e.clientY;
+				}
+
+				let offsetX = x - oldX;
+				let offsetY = y - oldY;
+
+				oldX = x;
+				oldY = y;
+
+				self.alertElement.style.left = (
+
+					parseInt(
+						window.getComputedStyle( self.alertElement )
+							.getPropertyValue("left")
+							.replace("px", "")
+					) +
+
+					offsetX
+				) + "px";
+
+				self.alertElement.style.top = (
+
+					parseInt(
+						window.getComputedStyle( self.alertElement )
+							.getPropertyValue("top")
+							.replace("px", "")
+					) +
+
+					offsetY
+				) + "px";
+			};
+		}
+		else {
+			this.alertElement.onmousedown = null;
+			this.alertElement.onmouseup = null;
+			this.alertElement.onmousemove = null;
+
+			this.alertElement.ontouchstart = null;
+			this.alertElement.ontouchend = null;
+			this.alertElement.ontouchmove = null;
+		}
+
 		return new Promise(function(resolve, reject) {
 			self.alertOKButton.onclick = function(e) {
 				e.preventDefault();
 				self.alertOverlay.style.display = "none";
+				self.alertElement.style.left = "";
+				self.alertElement.style.top = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -6045,7 +6330,7 @@ class CMGame {
 			};
 
 			self.alertOKButton.focus();
-			self.alertOverlay.style.display = "block";
+			self.alertOverlay.style.display = "block";			
 		});
 	}
 
@@ -6056,10 +6341,18 @@ class CMGame {
 	 * Rather than blocking and returning a boolean,
 	 * this returns a promise, that resolves with the
 	 * boolean (true if user pressed OK, false otherwise).
-	 * @param {string} [msg=""] - A message to display
+	 * If the game is running, it pauses until just
+	 * before the returned promise resolves.
+	 * @param {string} [msg=""] - A message to display. This can be plain text or HTML.
+	 * @param {object} [options={}] - A plain JS object of options.
+	 * @param {string} [options.headerText] - String to write in the header. Defaults
+	 *   to standard alert header.
+	 * @param {string} [options.button1Text] - String to write in OK button. Default is "OK".
+	 * @param {string} [options.button2Text] - String to write in Cancel button. Default is "Cancel".
+	 * @param {boolean} [options.draggable] - true to let player drag modal around. Default is false.
 	 * @returns {Promise}
 	 */
-	confirm(msg="") {
+	confirm(msg="", options={}) {
 		let self = this;
 
 		let pauseState = this.paused;
@@ -6076,10 +6369,97 @@ class CMGame {
 		this.alertCancelButton.style.display = "inline-block";
 		this.alertInput.style.display = "none";
 
+		this.alertElement.querySelector("h3").innerText =
+			options.headerText ||
+			((document.title || "Game") + " says:");
+
+		this.alertOKButton.innerHTML = options.button1Text || "OK";
+		this.alertCancelButton.innerHTML = options.button2Text || "Cancel";
+
+		// draggable is convenient, but adds multiple handlers
+		if(options.draggable) {
+			let oldX = this.alertElement.offsetLeft;
+			let oldY = this.alertElement.offsetTop;
+			let modalPressed = false;
+
+			this.alertElement.onmousedown = this.alertElement.ontouchstart = function(e) {
+				modalPressed = true;
+
+				if(e.type === "touchstart") {
+					oldX = e.targetTouches[0].clientX;
+					oldY = e.targetTouches[0].clientY;
+				}
+				else {
+					oldX = e.clientX;
+					oldY = e.clientY;
+				}
+			};
+
+			this.alertElement.onmouseup = this.alertElement.ontouchend = function(e) {
+				modalPressed = false;
+			};
+
+			this.alertElement.onmousemove = this.alertElement.ontouchmove = function(e) {
+				if(!modalPressed) // Must "drag" to move
+					return;
+
+				let x = 0;
+				let y = 0;
+
+				if(e.type === "touchmove") {
+					x = e.targetTouches[0].clientX;
+					y = e.targetTouches[0].clientY;
+				}
+				else {
+					x = e.clientX;
+					y = e.clientY;
+				}
+
+				let offsetX = x - oldX;
+				let offsetY = y - oldY;
+
+				oldX = x;
+				oldY = y;
+
+				self.alertElement.style.left = (
+
+					parseInt(
+						window.getComputedStyle( self.alertElement )
+							.getPropertyValue("left")
+							.replace("px", "")
+					) +
+
+					offsetX
+				) + "px";
+
+				self.alertElement.style.top = (
+
+					parseInt(
+						window.getComputedStyle( self.alertElement )
+							.getPropertyValue("top")
+							.replace("px", "")
+					) +
+
+					offsetY
+				) + "px";
+			};
+		}
+		else {
+			this.alertElement.onmousedown = null;
+			this.alertElement.onmouseup = null;
+			this.alertElement.onmousemove = null;
+
+			this.alertElement.ontouchstart = null;
+			this.alertElement.ontouchend = null;
+			this.alertElement.ontouchmove = null;
+		}
+
 		return new Promise(function(resolve, reject) {
 			self.alertOKButton.onclick = function(e) {
 				e.preventDefault();
 				self.alertOverlay.style.display = "none";
+				self.alertElement.style.left = "";
+				self.alertElement.style.top = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -6096,6 +6476,8 @@ class CMGame {
 			self.alertCancelButton.onclick = function(e) {
 				e.preventDefault();
 				self.alertOverlay.style.display = "none";
+				self.alertElement.style.left = "";
+				self.alertElement.style.top = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -6119,11 +6501,20 @@ class CMGame {
 	 * Rather than blocking and returning entered text,
 	 * this returns a promise, that resolves with the
 	 * entered text if the user press OK, and with null otherwise.
-	 * @param {string} [msg=""] - A message to display
+	 * If the game is running, it pauses until just
+	 * before the returned promise resolves.
+	 * @param {string} [msg=""] - A message to display. This can be plain text or HTML.
 	 * @param {string} [defaultString=""] - A string to load in the textbox instead of leaving blank
+	 * @param {object} [options={}] - A plain JS object of options.
+	 * @param {string} [options.headerText] - String to write in the header. Defaults
+	 *   to standard alert header.
+	 * @param {string} [options.button1Text] - String to write in OK button. Default is "OK".
+	 * @param {string} [options.button2Text] - String to write in Cancel button. Default is "Cancel".
+	 * @param {string} [options.placeholder] - "placeholder" text for the input element
+	 * @param {boolean} [options.draggable] - true to let player drag modal around. Default is false.
 	 * @returns {Promise}
 	 */
-	prompt(msg="", defaultString="") {
+	prompt(msg="", defaultString="", options={}) {
 		let self = this;
 
 		let pauseState = this.paused;
@@ -6137,14 +6528,102 @@ class CMGame {
 		}
 
 		this.alertMessage.innerHTML = msg;
+		this.alertInput.placeholder = options.placeholder || "";
 		this.alertInput.value = defaultString;
 		this.alertInput.style.display = "inline-block";
 		this.alertCancelButton.style.display = "inline-block";
+
+		this.alertElement.querySelector("h3").innerText =
+			options.headerText ||
+			((document.title || "Game") + " says:");
+
+		this.alertOKButton.innerHTML = options.button1Text || "OK";
+		this.alertCancelButton.innerHTML = options.button2Text || "Cancel";
+
+		// draggable is convenient, but adds multiple handlers
+		if(options.draggable) {
+			let oldX = this.alertElement.offsetLeft;
+			let oldY = this.alertElement.offsetTop;
+			let modalPressed = false;
+
+			this.alertElement.onmousedown = this.alertElement.ontouchstart = function(e) {
+				modalPressed = true;
+
+				if(e.type === "touchstart") {
+					oldX = e.targetTouches[0].clientX;
+					oldY = e.targetTouches[0].clientY;
+				}
+				else {
+					oldX = e.clientX;
+					oldY = e.clientY;
+				}
+			};
+
+			this.alertElement.onmouseup = this.alertElement.ontouchend = function(e) {
+				modalPressed = false;
+			};
+
+			this.alertElement.onmousemove = this.alertElement.ontouchmove = function(e) {
+				if(!modalPressed) // Must "drag" to move
+					return;
+
+				let x = 0;
+				let y = 0;
+
+				if(e.type === "touchmove") {
+					x = e.targetTouches[0].clientX;
+					y = e.targetTouches[0].clientY;
+				}
+				else {
+					x = e.clientX;
+					y = e.clientY;
+				}
+
+				let offsetX = x - oldX;
+				let offsetY = y - oldY;
+
+				oldX = x;
+				oldY = y;
+
+				self.alertElement.style.left = (
+
+					parseInt(
+						window.getComputedStyle( self.alertElement )
+							.getPropertyValue("left")
+							.replace("px", "")
+					) +
+
+					offsetX
+				) + "px";
+
+				self.alertElement.style.top = (
+
+					parseInt(
+						window.getComputedStyle( self.alertElement )
+							.getPropertyValue("top")
+							.replace("px", "")
+					) +
+
+					offsetY
+				) + "px";
+			};
+		}
+		else {
+			this.alertElement.onmousedown = null;
+			this.alertElement.onmouseup = null;
+			this.alertElement.onmousemove = null;
+
+			this.alertElement.ontouchstart = null;
+			this.alertElement.ontouchend = null;
+			this.alertElement.ontouchmove = null;
+		}
 
 		return new Promise(function(resolve, reject) {
 			self.alertOKButton.onclick = function(e) {
 				e.preventDefault();
 				self.alertOverlay.style.display = "none";
+				self.alertElement.style.left = "";
+				self.alertElement.style.top = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -6161,6 +6640,8 @@ class CMGame {
 			self.alertCancelButton.onclick = function(e) {
 				e.preventDefault();
 				self.alertOverlay.style.display = "none";
+				self.alertElement.style.left = "";
+				self.alertElement.style.top = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -6348,7 +6829,8 @@ CMGame.pluckFrom = (arr, item) => {
 };
 
 /**
- * Shuffles an array and returns shuffled version
+ * Shuffles an array and returns shuffled version.
+ * Note: the original array WILL be modified
  * @param {array} arr - Any array
  * @returns {array}
  */
@@ -6596,60 +7078,158 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 }());
 
 /**
- * Some colors are predefined here as
+ * The CMColor class is mainly used to
+ * store static color values, though
+ * individual instances can be created
+ * for manipulations like changing
+ * darkness or opacity.
+ */
+class CMColor {
+
+	/**
+	 * Creates a CMColor instance. If no arguments
+	 * are passed in, this is defined as an opaque black.
+	 * A CMColor instance is not a string, so in use, you
+	 * access an instance's (say "myColor") color string
+	 * with myColor.value
+	 * @param {number|string} [r=0] - A string defining the entire color, or the number
+	 *   representing r value if the r, g, b components are being entered separately
+	 * @param {number} [g=0] - The g component
+	 * @param {number} [b=0] - The b component
+	 * @param {number} [a=1] - The alpha/opacity component
+	 */
+	constructor(r=0, g=0, b=0, a=1) {
+		if(typeof r === "string") {
+
+			// hex
+			let colorCode = r;
+			if(colorCode.startsWith("#")) {
+				colorCode = colorCode.replace("#", "");
+
+				if(colorCode.length === 8) { // colorCode with alpha
+					colorCode = colorCode.substring(0, 6);
+					this.a = parseInt(colorCode.substring(0, 2), 16);
+				}
+
+				if(colorCode.length === 3) { // shorthand colorCode color
+					colorCode = colorCode[0] + colorCode[0] + colorCode[1] + colorCode[1] + colorCode[2] + colorCode[2];
+					this.a = 1;
+				}
+
+				this.r = parseInt(colorCode.substring(0, 2), 16);
+				this.g = parseInt(colorCode.substring(2, 4), 16);
+				this.b = parseInt(colorCode.substring(4, 6), 16);
+
+				if(typeof this.a === "undefined") {
+					this.a = 1;
+				}
+			}
+			else
+			if(colorCode.startsWith("rgb")) {
+				let pieces = colorCode.replace("rgba(", "")
+						.replace("rgb(", "")
+						.replace(")", "")
+						.split(",");
+
+				this.r = parseInt(pieces[0]);
+				this.g = parseInt(pieces[1]);
+				this.b = parseInt(pieces[2]);
+
+				if(pieces.length === 4)
+					this.a = parseInt(pieces[3]);
+				else
+					this.a = 1;
+			}
+		}
+		else { // not a string, can assume numbers
+			this.r = r;
+			this.g = g;
+			this.b = b;
+			this.opacity = a;
+		}
+	}
+
+	lighten() {
+		this.r = CMGame.clamp(this.r + 10, 0, 255);
+		this.g = CMGame.clamp(this.g + 10, 0, 255);
+		this.b = CMGame.clamp(this.b + 10, 0, 255);
+		return this;
+	}
+
+	darken() {
+		this.r = CMGame.clamp(this.r - 10, 0, 255);
+		this.g = CMGame.clamp(this.g - 10, 0, 255);
+		this.b = CMGame.clamp(this.b - 10, 0, 255);
+		return this;
+	}
+
+	increaseOpacity() {
+		this.opacity = CMGame.clamp(this.opacity + 0.1, 0, 1);
+		return this;
+	}
+
+	decreaseOpacity() {
+		this.opacity = CMGame.clamp(this.opacity - 0.1, 0, 1);
+		return this;
+	}
+}
+
+Object.defineProperty(CMColor.prototype, "value", {
+	get() {
+		return `rgba(${this.r}, ${this.g}, ${this.b}, ${this.a})`;
+	}
+});
+
+/**
+ * Our palette colors are predefined here as
  * a convenience. These match
  * corresponding classes in cmgame.css
- *
- * Color is capitalized here, as it is
- * planned to become a class in a
- * future iteration.
  */
-CMGame.Color = {
-	// colorscale / non-grayscale colors
-	FUSCHIA: "rgb(253, 13, 136)",
-	MAGENTA: "rgb(228, 0, 228)",
-	PINK: "rgb(254, 3, 133)",
-	RED: "rgb(250, 0, 92)",
-	DARK_RED: "rgb(133, 33, 33)",
 
-	ORANGE: "rgb(254, 137, 39)", // "rgb(247, 101, 3)"
-	YELLOW: "rgb(255, 245, 10)",
-	GOLD: "rgb(255, 193, 4)",
+// colorscale / non-grayscale colors
+CMColor.FUSCHIA = "rgb(253, 13, 136)";
+CMColor.MAGENTA = "rgb(228, 0, 228)";
+CMColor.PINK = "rgb(254, 3, 133)";
+CMColor.RED = "rgb(250, 0, 92)";
+CMColor.DARK_RED = "rgb(133, 33, 33)";
 
-	LIGHT_GREEN: "rgb(0, 240, 0)",
-	GREEN: "rgb(0, 185, 0)",
-	DARK_GREEN: "rgb(0, 136, 0)",
+CMColor.ORANGE = "rgb(254, 137, 39)";
+CMColor.YELLOW = "rgb(255, 245, 10)";
+CMColor.GOLD = "rgb(255, 193, 4)";
 
-	SKY_BLUE: "rgb(142, 227, 252)",
-	LIGHT_BLUE: "rgb(0, 250, 235)",
-	BLUE: "rgb(1, 97, 251)",
+CMColor.LIGHT_GREEN = "rgb(0, 240, 0)";
+CMColor.GREEN = "rgb(0, 185, 0)";
+CMColor.DARK_GREEN = "rgb(0, 136, 0)";
 
-	BLUE_GREEN: "rgb(0, 168, 153)",
+CMColor.SKY_BLUE = "rgb(142, 227, 252)";
+CMColor.LIGHT_BLUE = "rgb(0, 250, 235)";
+CMColor.BLUE = "rgb(1, 97, 251)";
 
-	VIOLET: "rgb(185, 51, 158)",
-	PURPLE: "rgb(128, 0, 128)", // 143, 41, 140
+CMColor.BLUE_GREEN = "rgb(0, 168, 153)";
 
-	BROWN: "rgb(121, 74, 25)",
-	SAND: "rgb(242, 245, 235)",
-	TAN: "rgb(242, 228, 205)",
-	PEACH: "rgb(242, 222, 212)", // "rgb(242, 215, 205)", // "rgb(255, 248, 235)",
+CMColor.VIOLET = "rgb(185, 51, 158)";
+CMColor.PURPLE = "rgb(128, 0, 128)";
 
-	// grayscale colors
-	WHITE: "rgb(255, 255, 255)",
-	ALMOST_WHITE: "rgb(250, 250, 250)", // material white
-	BLACK: "rgb(0, 0, 0)",
-	ALMOST_BLACK: "rgb(15, 23, 33)",
-	GRAY: "rgb(158, 158, 158)",
-	LIGHT_GRAY: "rgb(205, 205, 205)",
-	DARK_GRAY: "rgb(58, 58, 58)",
+CMColor.BROWN = "rgb(121, 74, 25)";
+CMColor.SAND = "rgb(242, 245, 235)";
+CMColor.TAN = "rgb(242, 228, 205)";
+CMColor.PEACH = "rgb(242, 222, 212)";
 
-	// translucent colors, e.g., for modal overlays
-	TRANSLUCENT_WHITE: "rgba(255, 255, 255, 0.85)",
-	TRANSLUCENT_BLACK: "rgba(0, 0, 0, 0.85)",
+// grayscale colors
+CMColor.WHITE = "rgb(255, 255, 255)";
+CMColor.ALMOST_WHITE = "rgb(250, 250, 250)";
+CMColor.BLACK = "rgb(0, 0, 0)";
+CMColor.ALMOST_BLACK = "rgb(15, 23, 33)";
+CMColor.GRAY = "rgb(158, 158, 158)";
+CMColor.LIGHT_GRAY = "rgb(205, 205, 205)";
+CMColor.DARK_GRAY = "rgb(58, 58, 58)";
 
-	// clear: dev should use this constant to be consistent (rather than, say, "transparent")
-	TRANSPARENT: "rgba(0, 0, 0, 0)"
-};
+// translucent colors, e.g., for modal overlays
+CMColor.TRANSLUCENT_WHITE = "rgba(255, 255, 255, 0.85)";
+CMColor.TRANSLUCENT_BLACK = "rgba(0, 0, 0, 0.85)";
+
+// clear: dev should use this constant to be consistent (rather than, say, "transparent")
+CMColor.NONE = "rgba(0, 0, 0, 0)";
 
 /**
  * A few standard fonts, as a convenience
@@ -6849,7 +7429,7 @@ class CMSprite {
 	 * @param {number} y - The starting top value, or center y if circular
 	 * @param {number} widthOrRadius - The starting width value, radius if circular, or lineWidth if a line
 	 * @param {number|string} heightOrCircle - The starting height value, or "circle" if circular, or "line"
-	 * @param {object|string|function} drawRule - An image or default color string or 
+	 * @param {object|string|function} [drawRule=null] - An image or default color string or 
 	 *   draw function (taking game's drawing context as its sole parameter). Default is null.
 	 * @param {string} [boundingRule="none"] - How to handle collision with screen edge
 	 *   "wrap": object appears on other side of screen once completely off screen
@@ -6857,7 +7437,7 @@ class CMSprite {
 	 *   "fence": object is pushed back so that it just rests on the wall
 	 *   "destroy": object is removed from game
 	 *   "none": (default) object just keeps moving offscreen,
-	 * @param {object} [options] - A plain JS object of additional options,
+	 * @param {object} [options={}] - A plain JS object of additional options,
 	 *   mainly for defining helper functions on creation.
 	 * @param {function} [options.onupdate] A function to be executed after this sprite's update()
 	 * @param {function} [options.onbeforedraw]  A function to be executed just beore this sprite's draw(),
@@ -6874,18 +7454,16 @@ class CMSprite {
 	 *   are permitted as well, e.g., for background sprites.
 	 */
 	constructor(game, x, y, widthOrRadius, heightOrCircle, drawRule=null,
-			boundingRule="none", options) {
-
-		let opts = options || {};
+			boundingRule="none", options={}) {
 
 		this.game = game;
 		this.x = x;
 		this.y = y;
-		this.z = opts.z || 0;
+		this.z = options.z || 0;
 
 		// Do not override these - they are used with Object.defineProperty. Override boundingRule instead.
 		this.boundingRulePrivate = boundingRule;
-		this.layerPrivate = opts.layer || 0;
+		this.layerPrivate = options.layer || 0;
 
 		this.layer = this.layerPrivate;
 		this.boundingRuleTop = "none";
@@ -6965,11 +7543,20 @@ class CMSprite {
 		this.opacity = 1.0;
 		this.velocity.opacity = 0.0;
 
-		this.onupdate = opts.onupdate || CMGame.noop;
-		this.onbeforedraw = opts.onbeforedraw || CMGame.noop;
-		this.ondraw = opts.ondraw || CMGame.noop;
-		this.onfadein = opts.onfadein || CMGame.noop;
-		this.onfadeout = opts.onfadeout || CMGame.noop;
+		if(typeof options.onupdate === "function")
+			this.onupdate = options.onupdate;
+
+		if(typeof options.onbeforedraw === "function")
+			this.onbeforedraw = options.onbeforedraw;
+
+		if(typeof options.ondraw === "function")
+			this.ondraw = options.ondraw;
+
+		if(typeof options.onfadein === "function")
+			this.onfadein = options.onfadein;
+
+		if(typeof options.onfadeout === "function")
+			this.onfadeout = options.onfadeout;
 
 		this.onscreen = false;
 		this.hasEnteredScreen = false; // bounding rules will not apply until sprite has entered screen
@@ -7086,8 +7673,8 @@ class CMSprite {
 	 *   second, and third index, respectively.
 	 *   If a falsy value, like null, sprite path will be destroyed and sprite movement
 	 *   will revert to latest set velocity values.
-	 * @param {object|string} [options] - A POJO of options to apply, mainly for CMFunction paths,
-	 *   or a string simply declaring the options.follow value.
+	 * @param {object|string} [options] - A plain JS object of options to apply, mainly
+	 *   for CMFunction paths, or a string simply declaring the `options.follow` value.
 	 * @param {object} [options.follow="end"] - What detail of the CMFunction to follow ("end", "start")
 	 * @param {object} [options.offset=null] - A point-like object giving details of how much the sprite's
 	 *   x and y are offset from the path point. By default, this assumes the point is in the center
@@ -7167,7 +7754,10 @@ class CMSprite {
 	 */
 	update(frameCount) {
 		if(this.pathFunction instanceof CMFunction) {
-			this.pathFunction.update(frameCount);
+
+			// Avoid calling update() twice on this function
+			if(!this.game.functions.includes(this.pathFunction))
+				this.pathFunction.update(frameCount);
 
 			switch(this.pathFunction.type) {
 				case "xofy":
@@ -7240,16 +7830,16 @@ class CMSprite {
 			}
 		}
 
+		// If you create an arbitrary `shape` you can manage bounding in onupdate
 		switch(this.shape) {
 			case "line":
-				this.boundAsLine();
+				this.boundAsLine(this.game);
 				break;
 			case "circle":
-				this.boundAsCircle();
+				this.boundAsCircle(this.game);
 				break;
 			case "rect":
-			default:
-				this.boundAsRect();
+				this.boundAsRect(this, this.game);
 				break;
 		}
 
@@ -7304,24 +7894,33 @@ class CMSprite {
 	 * @param {object} newPoint - The point to move towards (must have x and y values)
 	 * @param {number} [desiredSpeed=1] The velocity to move in the new direction.
 	 *   Note: this is not necessarily velocity of x or y coordinates, but really a polar radius.
+	 * @param {number} [startReferencePoint=this.center]
 	 */
-	moveToward(newPoint, desiredSpeed=1) {
-		let slope = game.getSlope(this.center, newPoint);
-
-		let point = game.fromPolar(
-			{
-				r: 1,
-				theta: game.slopeToRadians(slope)
-			})
-
+	moveToward(newPoint, desiredSpeed=1, startReferencePoint=this.center) {
+		if(new CMPoint(newPoint).isPoint(new CMPoint(startReferencePoint))) {
+			return this.setPath(0, 0);
+		}
+		
 		let xVelocity = desiredSpeed,
 			yVelocity = desiredSpeed;
 
-		if(newPoint.x < this.center.x)
-			xVelocity *= -1;
+		let slope = game.getSlope(startReferencePoint, newPoint);
 
-		if(newPoint.x < this.center.x)
+		// Vertical slope, moving straight up or down
+		if(!Number.isFinite(slope)) {
+			yVelocity = desiredSpeed * Math.sign(newPoint.y - startReferencePoint.y);
+			return this.setPath(0, yVelocity);
+		}
+
+		let point = game.fromPolar({
+				r: 1,
+				theta: game.slopeToRadians(slope)
+			});
+
+		if(newPoint.x < startReferencePoint.x) {
+			xVelocity *= -1;
 			yVelocity *= -1;
+		}
 
 		this.setPath(point.x * xVelocity, point.y * yVelocity);
 	}
@@ -7330,8 +7929,10 @@ class CMSprite {
 	 * Manages screen boundaries for "line" shape,
 	 * in a simple form, by considering the rectangle
 	 * enclosing the line, and bounding it as a rect.
+	 * @param {object} [boundingRect=this.game] - The enclosing rectangle that is bounding
+	 *   this figure. Generally the entire game, but some enemies, etc., may be restricted in space.
 	 */
-	boundAsLine() {
+	boundAsLine(boundingRect=this.game) {
 
 		let rectToBound = {
 			x: Math.min(this.start.x, this.end.x),
@@ -7340,21 +7941,25 @@ class CMSprite {
 			height: Math.abs(this.end.y - this.start.y)
 		};
 
-		this.boundAsRect(rectToBound);
+		return this.boundAsRect(rectToBound, boundingRect);
 	}
 
-	/** Manages screen boundaries for "circle" shape */
-	boundAsCircle() {
+	/**
+	 * Manages screen boundaries for "circle" shape
+	 * @param {object} [boundingRect=this.game] - The enclosing rectangle that is bounding
+	 *   this figure. Generally the entire game, but some enemies, etc., may be restricted in space.
+	 */
+	boundAsCircle(boundingRect=this.game) {
 		if(this.hasEnteredScreen) {
 			if(this.x < this.radius) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
 						if(this.x + this.radius < 0) {
-							this.x = this.game.width + this.radius + (this.x + this.radius);
+							this.x = boundingRect.width + this.radius + (this.x + this.radius);
 
 							// For path functions, sprites internal path value may be way off screen
 							while(this.x + this.radius < 0) {
-								this.x += this.game.width;
+								this.x += boundingRect.width;
 							}
 						}
 						break;
@@ -7379,27 +7984,27 @@ class CMSprite {
 				}
 			}
 
-			if(this.x + this.radius > this.game.width) { // right wall		
+			if(this.x + this.radius > boundingRect.width) { // right wall		
 				switch(this.boundingRuleRight) {
 					case "wrap":
-						if(this.x - this.radius > this.game.width) {
-							this.x = -this.radius + (this.x - this.radius - this.game.width);
+						if(this.x - this.radius > boundingRect.width) {
+							this.x = -this.radius + (this.x - this.radius - boundingRect.width);
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.x - this.radius > this.game.width) {
-								this.x -= this.game.width;
+							while(this.x - this.radius > boundingRect.width) {
+								this.x -= boundingRect.width;
 							}
 						}
 						break;
 					case "bounce":
-						this.x = this.game.width - this.radius;
+						this.x = boundingRect.width - this.radius;
 						this.velocity.x = -Math.abs(this.velocity.x);
 						break;
 					case "fence":
-						this.x = this.game.width - this.radius;
+						this.x = boundingRect.width - this.radius;
 						break;
 					case "destroy":
-						if(this.x - this.radius > this.game.width)
+						if(this.x - this.radius > boundingRect.width)
 							this.destroy();
 						break;
 					case "none":
@@ -7416,11 +8021,11 @@ class CMSprite {
 				switch(this.boundingRuleTop) {
 					case "wrap":
 						if(this.y + this.radius < 0) {
-							this.y = this.game.height + this.radius + (this.y + this.radius);
+							this.y = boundingRect.height + this.radius + (this.y + this.radius);
 
 							// For path functions, sprites internal path value may be way off screen
 							while(this.y + this.radius < 0) {
-								this.y += this.game.height;
+								this.y += boundingRect.height;
 							}
 						}
 						break;
@@ -7445,27 +8050,27 @@ class CMSprite {
 				}
 			}
 
-			if(this.y + this.radius > this.game.height) { // bottom wall
+			if(this.y + this.radius > boundingRect.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
-						if(this.y - this.radius > this.game.height) {
-							this.y = -this.radius + (this.y - this.radius - this.game.height);
+						if(this.y - this.radius > boundingRect.height) {
+							this.y = -this.radius + (this.y - this.radius - boundingRect.height);
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.y - this.radius > this.game.height) {
-								this.y -= this.game.height;
+							while(this.y - this.radius > boundingRect.height) {
+								this.y -= boundingRect.height;
 							}
 						}
 						break;
 					case "bounce":
-						this.y = this.game.height - this.radius;
+						this.y = boundingRect.height - this.radius;
 						this.velocity.y = -Math.abs(this.velocity.y);
 						break;
 					case "fence":
-						this.y = this.game.height - this.radius;
+						this.y = boundingRect.height - this.radius;
 						break;
 					case "destroy":
-						if(this.y - this.radius > this.game.height)
+						if(this.y - this.radius > boundingRect.height)
 							this.destroy();
 						break;
 					case "none":
@@ -7479,8 +8084,8 @@ class CMSprite {
 			}
 		}
 
-		if(this.x - this.radius > this.game.width ||
-				this.y - this.radius > this.game.height ||
+		if(this.x - this.radius > boundingRect.width ||
+				this.y - this.radius > boundingRect.height ||
 				this.x + this.radius < 0 ||
 				this.y + this.radius < 0) {
 			this.onscreen = false;
@@ -7494,19 +8099,21 @@ class CMSprite {
 	/**
 	 * Manages screen boundaries for "rect" shape sprite.
 	 * @param {object} [rectToBound=this] - A custom "rectangle" used as a "hit box"
+	 * @param {object} [boundingRect=this.game] - The enclosing rectangle that is bounding
+	 *   this figure. Generally the entire game, but some enemies, etc., may be restricted in space.
 	 */
-	boundAsRect(rectToBound=this) {
+	boundAsRect(rectToBound=this, boundingRect=this.game) {
 
 		if(this.hasEnteredScreen) {
 			if(rectToBound.x < 0) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
 						if(rectToBound.x + rectToBound.width < 0) {
-							this.x = this.game.width + (rectToBound.x + rectToBound.width);
+							this.x = boundingRect.width + (rectToBound.x + rectToBound.width);
 
 							// For path functions, sprites internal path value may be way off screen
 							while(this.x + this.width < 0) {
-								this.x += this.game.width;
+								this.x += boundingRect.width;
 							}
 						}
 						break;
@@ -7531,27 +8138,27 @@ class CMSprite {
 				}
 			}
 
-			if(rectToBound.x + rectToBound.width > this.game.width) { // right wall
+			if(rectToBound.x + rectToBound.width > boundingRect.width) { // right wall
 				switch(this.boundingRuleRight) {
 					case "wrap":
-						if(rectToBound.x > this.game.width) {
-							this.x = rectToBound.x - this.game.width;
+						if(rectToBound.x > boundingRect.width) {
+							this.x = rectToBound.x - boundingRect.width;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.x > this.game.width) {
-								this.x -= this.game.width;
+							while(this.x > boundingRect.width) {
+								this.x -= boundingRect.width;
 							}
 						}
 						break;
 					case "bounce":
-						this.x = this.game.width - rectToBound.width;
+						this.x = boundingRect.width - rectToBound.width;
 						this.velocity.x = -Math.abs(this.velocity.x);
 						break;
 					case "fence":
-						this.x = this.game.width - rectToBound.width;
+						this.x = boundingRect.width - rectToBound.width;
 						break;
 					case "destroy":
-						if(rectToBound.x > this.game.width)
+						if(rectToBound.x > boundingRect.width)
 							this.destroy();
 						break;
 					case "none":
@@ -7568,11 +8175,11 @@ class CMSprite {
 				switch(this.boundingRuleTop) {
 					case "wrap":
 						if(rectToBound.y + rectToBound.height < 0) {
-							this.y = this.game.height + (rectToBound.y + rectToBound.height); // this.game.height;
+							this.y = boundingRect.height + (rectToBound.y + rectToBound.height); // boundingRect.height;
 
 							// For path functions, sprites internal path value may be way off screen
 							while(this.y + this.height < 0) {
-								this.y += this.game.height;
+								this.y += boundingRect.height;
 							}
 						}
 						break;
@@ -7597,27 +8204,27 @@ class CMSprite {
 				}
 			}
 
-			if(rectToBound.y + rectToBound.height > this.game.height) { // bottom wall
+			if(rectToBound.y + rectToBound.height > boundingRect.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
-						if(rectToBound.y > this.game.height) {
-							this.y = rectToBound.y - this.game.height;
+						if(rectToBound.y > boundingRect.height) {
+							this.y = rectToBound.y - boundingRect.height;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.y > this.game.height) {
-								this.y -= this.game.height;
+							while(this.y > boundingRect.height) {
+								this.y -= boundingRect.height;
 							}
 						}
 						break;
 					case "bounce":
-						this.y = this.game.height - rectToBound.height;
+						this.y = boundingRect.height - rectToBound.height;
 						this.velocity.y = -Math.abs(this.velocity.y);
 						break;
 					case "fence":
-						this.y = this.game.height - rectToBound.height;
+						this.y = boundingRect.height - rectToBound.height;
 						break;
 					case "destroy":
-						if(rectToBound.y > this.game.height)
+						if(rectToBound.y > boundingRect.height)
 							this.destroy();
 						break;
 					case "none":
@@ -7650,8 +8257,9 @@ class CMSprite {
 	 */
 	draw(ctx) {
 		// We will often want to show the graph "trail"
-		if(this.pathFunction instanceof CMFunction) {
-			this.pathFunction.draw(ctx);
+		if(this.pathFunction instanceof CMFunction &&
+			!this.game.functions.includes(this.pathFunction)) {
+				this.pathFunction.draw(ctx);
 		}
 
 		if(this.image) {
@@ -7675,10 +8283,10 @@ class CMSprite {
 
 	/**
 	 * Determines if a given point is on this
-	 * object. Useful for player interaction
+	 * sprite object. Useful for player interaction
 	 * via mouse clicks or touch points.
-	 * @param {object|number} The point, or point's x value
-	 * @param {number} The point's y value
+	 * @param {object|number} pointOrX - The point, or point's x value
+	 * @param {number} [y] - The point's y value
 	 * @returns {boolean}
 	 */
 	containsPoint(pointOrX, y) {
@@ -7694,18 +8302,29 @@ class CMSprite {
 			pointToCheck = pointOrX;
 		}
 
-		if(this.shape === "circle") {
-			return this.game.distance(this, pointToCheck) <= this.radius;
-		}
-		if(this.shape === "line") { // e.g., for CMEdge
-			this.game.ctx.lineWidth = this.width;
-			return this.game.ctx.isPointInStroke(this.path, pointToCheck.x, pointToCheck.y);
-		}
-		else { // "rect"
-			return this.game.areColliding(this,
-				{x: pointToCheck.x, y: pointToCheck.y, width: 1, height: 1});
+		switch(this.shape) {
+			case "circle":
+				return this.game.distance(this, pointToCheck) <= this.radius;
+			case "line": // e.g., for CMEdge
+				this.game.ctx.lineWidth = this.width;
+				return this.game.ctx.isPointInStroke(this.path, pointToCheck.x, pointToCheck.y);
+			case "rect": // "rect"
+				return this.game.areColliding(this,
+					{x: pointToCheck.x, y: pointToCheck.y, width: 1, height: 1});
+			default: { // "path2d", etc. Anything defined with a path, that isn't just a line
+				this.game.ctx.lineWidth = this.width;
+				return (this.game.ctx.isPointInPath(this.path, pointToCheck.x, pointToCheck.y) ||
+						this.game.ctx.isPointInStroke(this.path, pointToCheck.x, pointToCheck.y));
+			}
 		}
 	}
+
+	// These can be overridden by dev
+	onupdate(frameCount) {}
+	onbeforedraw(ctx) {}
+	ondraw(ctx) {}
+	onfadein(frameCount) {}
+	onfadeout(frameCount) {}
 }
 
 Object.defineProperties(CMSprite.prototype, {
@@ -7724,25 +8343,70 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @returns {Point}
 		 */
 		get() {
-			if(this.shape === "rect") {
-				return new CMPoint(
-					this.x + .5 * this.width,
-					this.y + .5 * this.height
-				);
+			switch(this.shape) {
+				case "rect":
+					return new CMPoint(
+						this.x + .5 * this.width,
+						this.y + .5 * this.height
+					);
+				case "line":
+					return CMGame.midpoint(this.start, this.end);
+				case "circle":
+					return new CMPoint(
+						this.x,
+						this.y
+					);
+				default: {
+					return new CMPoint(
+						this.left + .5 * this.width,
+						this.top + .5 * this.height
+					);
+				}
 			}
-			else
-			if(this.shape === "line") {
-				return CMGame.midpoint(this.start, this.end);
-			}
-			else { // "circle"
-				return new CMPoint(
-					this.x,
-					this.y
-				);
+		},
+
+		set(newPoint) {
+			switch(this.shape) {
+				case "rect":
+					this.x = newPoint.x - .5 * this.width;
+					this.y = newPoint.y - .5 * this.height;
+					break;
+				case "line":
+					let slope = this.game.getSlope(this.start, this.end);
+
+					if(Number.isFinite(slope)) {
+						let halfLength = (this.end.x - this.start.x) / 2;
+
+						this.end.x = newPoint.x + halfLength;
+						this.end.y = newPoint.y + slope * halfLength;
+
+						this.start.x = newPoint.x - halfLength;
+						this.start.y = newPoint.y - slope * halfLength;
+					}
+					else { // vertical slope, start.x and end.x are equal
+
+						let halfLength = (this.end.y - this.start.y) / 2;
+
+						this.end.x = newPoint.y + slope * halfLength;
+						this.end.y = newPoint.y + halfLength;
+
+						this.start.x = newPoint.x - slope * halfLength;
+						this.start.y = newPoint.y - halfLength;						
+					}
+					break;
+				case "circle":
+					this.x = newPoint.x;
+					this.y = newPoint.y;
+					break;
+				default: {
+					this.left = newPoint.x - .5 * this.width;
+					this.top = newPoint.y - .5 * this.height;
+					break;
+				}
 			}
 		}
 	},
-	
+
 	/**
 	 * We define values like "bottom" to assist with
 	 * collision detection, especially for platformers
@@ -7856,13 +8520,28 @@ Object.defineProperty(CMSprite.prototype, "boundingRule", {
 	}
 });
 
-// If a sprite's layer is changed dynamically, we need to update sprite drawing accordingly
+/**
+ * If a sprite's layer is changed dynamically, we need
+ * to update sprite drawing accordingly. This also allows
+ * dev to simply set sprite.layer = "top" (or "bottom")
+ * without keeping track of every layer.
+ */
 Object.defineProperty(CMSprite.prototype, "layer", {
 	get() {
 		return this.layerPrivate;
 	},
 
 	set(newLayer) {
+		if(newLayer === "top") {
+			let highestLayer = game.sprites.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.layer), 0);
+			newLayer = highestLayer + 1;
+		}
+		else
+		if(newLayer === "bottom") {
+			let lowestLayer = game.sprites.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.layer), Infinity);
+			newLayer = lowestLayer - 1;
+		}
+
 		this.layerPrivate = newLayer;
 		this.game.sprites.sort((a, b) => a.layer - b.layer);
 	}
@@ -8015,13 +8694,21 @@ CMGame.mean = (...args) => {
 
 /**
  * Gets the point at the center of the line
- * connecting two points
+ * connecting two points, or center of the triangle
+ * created by connecting 3 points
  * @param {object} p1 - The first point (or object with x, y values)
  * @param {object} p2 - The second point (or object with x, y values)
+ * @param {object} [p3] - The (optional) third point
  * @returns {object}
  */
-CMGame.midpoint = (p1, p2) => {
-	return new Point(
+CMGame.midpoint = (p1, p2, p3) => {
+	if(p3) {
+		return new CMPoint(
+			CMGame.mean(p1.x, p2.x, p3.x),
+			CMGame.mean(p1.y, p2.y, p3.y));
+	}
+
+	return new CMPoint(
 		CMGame.mean(p1.x, p2.x),
 		CMGame.mean(p1.y, p2.y));
 };
@@ -8110,7 +8797,7 @@ class CMFunction {
 			}
 		}
 		else
-		if(typeof opts.discontinuousAt === "array") {
+		if(Array.isArray(opts.discontinuousAt)) {
 			this.discontinuousAt = function(x, nextX) {
 				return opts.discontinuousAt.includes(x);
 			};
@@ -8151,7 +8838,7 @@ class CMFunction {
 		this.tStep = typeof opts.tStep === "number" ? opts.tStep : 0.1;
 		this.thetaStep = typeof opts.thetaStep === "number" ? opts.thetaStep : (Math.TAU / 360);
 
-		this.strokeStyle = opts.strokeStyle || CMGame.Color.DARK_GRAY;
+		this.strokeStyle = opts.strokeStyle || CMColor.DARK_GRAY;
 		this.fillStyleBelow = opts.fillStyleBelow;
 		this.fillStyleAbove = opts.fillStyleAbove;
 		this.name = opts.name || "";
@@ -8214,9 +8901,14 @@ class CMFunction {
 				this.velocity[key] = opts.velocity[key];
 		}
 
-		this.onupdate = opts.onupdate || CMGame.noop;
-		this.onbeforedraw = opts.onbeforedraw || CMGame.noop;
-		this.ondraw = opts.ondraw || CMGame.noop;
+		if(typeof opts.onupdate === "function")
+			this.onupdate = opts.onupdate;
+
+		if(typeof opts.onbeforedraw === "function")
+			this.onbeforedraw = opts.onbeforedraw;
+
+		if(typeof opts.ondraw === "function")
+			this.ondraw = opts.ondraw;
 
 		this.path = new Path2D();
 
@@ -8357,6 +9049,11 @@ class CMFunction {
 			}
 		}
 
+		this.unzoomedOrigin = new CMPoint(
+			this.origin.x,
+			this.origin.y
+		);
+
 		// Define pathAbove and pathBelow
 		this.buildGraphPath(this.game.ctx);
 		if(this.fixed) {
@@ -8375,6 +9072,18 @@ class CMFunction {
 	 * @param {number} oldScalar - graphScalar before the change
 	 */
 	updateBounds(oldScalar) {
+
+		if(this.game.zoomLevel === 1) {
+			this.origin.x = this.unzoomedOrigin.x;
+			this.origin.y = this.unzoomedOrigin.y;
+		}
+		/*
+		else {
+			this.origin.x = this.center.x + (this.unzoomedOrigin.x - this.center.x) / this.zoomLevel;
+			this.origin.y = this.center.y + (this.unzoomedOrigin.y - this.center.y) / this.zoomLevel;
+		}
+		*/
+
 		if(this.origin.x - (oldScalar * this.start.x) === 0) {
 			this.start.x = -(this.origin.x / this.game.graphScalar);
 		}
@@ -8544,17 +9253,17 @@ class CMFunction {
 	drawGraphPath(ctx=this.game.offscreenCtx) {
 		ctx.lineWidth = this.lineWidth;
 
-		if(this.pathBelow && this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+		if(this.pathBelow && this.fillStyleBelow && this.fillStyleBelow !== CMColor.NONE) {
 			ctx.fillStyle = this.fillStyleBelow;
 			ctx.fill(this.pathBelow);
 		}
 
-		if(this.pathAbove && this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+		if(this.pathAbove && this.fillStyleAbove && this.fillStyleAbove !== CMColor.NONE) {
 			ctx.fillStyle = this.fillStyleAbove;
 			ctx.fill(this.pathAbove);
 		}
 
-		if(this.strokeStyle !== CMGame.Color.TRANSPARENT) {
+		if(this.strokeStyle !== CMColor.NONE) {
 			ctx.strokeStyle = this.strokeStyle;
 			ctx.stroke(this.path);
 		}
@@ -8611,7 +9320,7 @@ class CMFunction {
 
 		this.path = new Path2D();
 		this.path.moveTo(this.origin.x + initialPoint.x, this.origin.y - initialPoint.y);
-		for(let th = this.thetaStep; th <= Math.TAU; th += this.thetaStep) {
+		for(let th = this.thetaStep; th <= this.end.theta; th += this.thetaStep) {
 
 			let point = game.fromPolar(
 				{
@@ -8622,7 +9331,7 @@ class CMFunction {
 			this.path.lineTo( this.origin.x + point.x, this.origin.y - point.y);
 		}
 
-		if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleBelow && this.fillStyleBelow !== CMColor.NONE) {
 			this.pathBelow = new Path2D(this.path);
 			this.pathBelow.closePath(); // if necessary
 			ctx.fillStyle = this.fillStyleBelow;
@@ -8630,7 +9339,7 @@ class CMFunction {
 		}
 
 		// Attempt to fill area outside the path. Note: may not work as expected if polar path is not closed
-		if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleAbove && this.fillStyleAbove !== CMColor.NONE) {
 			this.pathAbove = new Path2D(this.path);
 
 			this.pathAbove.moveTo(game.width + ctx.lineWidth, this.origin.y - initialPoint.y); // right wall
@@ -8714,7 +9423,7 @@ class CMFunction {
 			}
 		}
 
-		if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleBelow && this.fillStyleBelow !== CMColor.NONE) {
 			this.pathBelow = new Path2D(this.path);
 			this.pathBelow.lineTo(-ctx.lineWidth, game.height - finalI);
 			this.pathBelow.lineTo(-ctx.lineWidth, game.height - initialI);
@@ -8723,7 +9432,7 @@ class CMFunction {
 			ctx.fill(this.pathBelow);
 		}
 
-		if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleAbove && this.fillStyleAbove !== CMColor.NONE) {
 			this.pathAbove = new Path2D(this.path);
 			this.pathAbove.lineTo(canvas.width + ctx.lineWidth, game.height - finalI);
 			this.pathAbove.lineTo(canvas.width + ctx.lineWidth, game.height - initialI);
@@ -8774,7 +9483,7 @@ class CMFunction {
 			}
 		}
 
-		if(this.fillStyleBelow && this.fillStyleBelow !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleBelow && this.fillStyleBelow !== CMColor.NONE) {
 			this.pathBelow = new Path2D(this.path);
 			this.pathBelow.lineTo(finalI, canvas.height + ctx.lineWidth);
 			this.pathBelow.lineTo(initialI, canvas.height + ctx.lineWidth);
@@ -8783,7 +9492,7 @@ class CMFunction {
 			ctx.fill(this.pathBelow);
 		}
 
-		if(this.fillStyleAbove && this.fillStyleAbove !== CMGame.Color.TRANSPARENT) {
+		if(this.fillStyleAbove && this.fillStyleAbove !== CMColor.NONE) {
 			this.pathAbove = new Path2D(this.path);
 			this.pathAbove.lineTo(finalI, 0 - ctx.lineWidth);
 			this.pathAbove.lineTo(initialI, 0 - ctx.lineWidth);
@@ -9037,6 +9746,11 @@ class CMFunction {
 			ofFunc,
 			opts);
 	}
+
+	// These can be overridden by dev
+	onupdate(frameCount) {}
+	onbeforedraw(ctx) {}
+	ondraw(ctx) {}
 }
 
 /**
@@ -9071,7 +9785,7 @@ class VennRegion extends CMSprite {
 			x: 0,
 			y: 0,
 			active: false,
-			fillStyle: CMGame.Color.BLACK
+			fillStyle: CMColor.BLACK
 		};
 
 		// Use expected font for reference in centering labels
@@ -9246,8 +9960,8 @@ class VennRegion extends CMSprite {
 	 * due to unusual shapes for regions.
 	 * Also returns true if point is on bounding
 	 * stroke line.
-	 * @param {object|number} The point, or point's x value
-	 * @param {number} The point's y value
+	 * @param {object|number} pointOrX - The point, or point's x value
+	 * @param {number} [y] - The point's y value
 	 * @returns {boolean}
 	 */
 	containsPoint(pointOrX, y) {
@@ -9640,7 +10354,7 @@ class VennSet extends CMSprite {
 			x: x + .75 * radius,
 			y: y + radius,
 			active: false,
-			fillStyle: CMGame.Color.BLACK
+			fillStyle: CMColor.BLACK
 		};
 
 		if(label) {
@@ -9679,7 +10393,7 @@ class VennSet extends CMSprite {
 
 	draw(ctx) {
 		ctx.save();
-		ctx.strokeStyle = ctx.fillStyle = CMGame.Color.BLACK;
+		ctx.strokeStyle = ctx.fillStyle = CMColor.BLACK;
 		ctx.lineWidth = 1.5;
 		this.game.strokeOval(this.x, this.y, this.radius);
 		if(this.label.active) {
@@ -9757,11 +10471,15 @@ class VennSet extends CMSprite {
 /** A class to manage graph theory "vertices" */
 class CMVertex extends CMSprite {
 	/**
-	 * Creates a CMVertex instance
+	 * Creates a CMVertex instance. Although x, y, and radius
+	 * arguments are expected, we allow these to be optional
+	 * for such instances where the vertex is not going to
+	 * be visible, e.g., when it is just representing a "coloring" or
+	 * an adjacency matrix.
 	 * @param {CMGame} game - The current CMGame instance
-	 * @param {number} x - The screen x for this vertex's center
-	 * @param {number} y - The screen y for this vertex's center
-	 * @param {number} radius - The radius for this vertex, drawn as a circle
+	 * @param {number} [x=0] - The screen x for this vertex's center
+	 * @param {number} [y=0] - The screen y for this vertex's center
+	 * @param {number} [radius=10] - The radius for this vertex, drawn as a circle
 	 * @param {string} fillStyle - The color to draw this vertex with
 	 * @param {object} [label] - A plain JS object of options for a label
 	 * @param {string} [label.text] - A string label for this vertex
@@ -9769,9 +10487,9 @@ class CMVertex extends CMSprite {
 	 * @param {number} [label.y] - The y position for this label
 	 * @param {boolean} [label.active=true] - Whether to draw the label. Defaults
 	 *   to true if not set but label.text has been set.
-	 * @param {string} [label.fillStyle=CMGame.Color.BLACK] - Color to draw the label with
+	 * @param {string} [label.fillStyle=CMColor.BLACK] - Color to draw the label with
 	 */
-	constructor(game, x, y, radius, fillStyle=CMGame.Color.BLACK, label) {
+	constructor(game, x=0, y=0, radius=10, fillStyle=CMColor.BLACK, label) {
 		super(game, x, y, radius, "circle", fillStyle, "none", {layer: 1});
 
 		this.degree = 0;
@@ -9864,17 +10582,17 @@ class CMEdge extends CMSprite {
 	 * @param {CMVertex} [vertex1=null] - One adjacent vertex (if directed, this should be the source vertex)
 	 * @param {CMVertex} [vertex2=null] - A different adjacent vertex (if directed, this should be the destination vertex) 
 	 * @param {number} [lineWidth=1] - The thickness in pixels to draw this vertex
-	 * @param {string} [fillStyle=CMGame.Color.BLACK] - The color to draw this vertex with
+	 * @param {string} [fillStyle=CMColor.BLACK] - The color to draw this vertex with
 	 * @param {object} [label] - A plain JS object of options for a label
 	 * @param {string} [label.text] - A string label for this vertex
 	 * @param {number} [label.x] - The x position for this label
 	 * @param {number} [label.y] - The y position for this label
 	 * @param {boolean} [label.active=true] - Whether to draw the label. Defaults
 	 *   to true if not set but label.text has been set.
-	 * @param {string} [label.fillStyle=CMGame.Color.BLACK] - Color to draw the label with
+	 * @param {string} [label.fillStyle=CMColor.BLACK] - Color to draw the label with
 	 */
 	constructor(game, vertex1=null, vertex2=null, lineWidth=1,
-			fillStyle=CMGame.Color.BLACK, label={}, directed=false, weight) {
+			fillStyle=CMColor.BLACK, label={}, directed=false, weight) {
 
 		super(game, 0, 0, lineWidth, "line", fillStyle, "none");
 
@@ -10161,8 +10879,8 @@ class CMnGon extends CMSprite {
 	 *   to game's graphScalar (i.e., so vertices lie on unit circle).
 	 * @param {number} [options.rotation] - Number in radians to rotate by (clockwise, from viewer's
 	 *   perspective). Defaults to 0 (first point on positive x axis).
-	 * @param {string} [options.fillStyle] - The color to fill this shape with. Defaults to CMGame.Color.BLACK.
-	 * @param {string} [options.strokeStyle] - The color to draw this outline with. Defaults to CMGame.Color.TRANSPARENT.
+	 * @param {string} [options.fillStyle] - The color to fill this shape with. Defaults to CMColor.BLACK.
+	 * @param {string} [options.strokeStyle] - The color to draw this outline with. Defaults to CMColor.NONE.
 	 * @param {number} [options.lineWidth] How thick the outline should be. Defaults to 1.
 	 */
 	constructor(game, n=3, options={}) {
@@ -10172,8 +10890,8 @@ class CMnGon extends CMSprite {
 			y: null,
 			radius: null,
 			rotation: 0,
-			fillStyle: CMGame.Color.BLACK,
-			strokeStyle: CMGame.Color.TRANSPARENT,
+			fillStyle: CMColor.BLACK,
+			strokeStyle: CMColor.NONE,
 			lineWidth: 1
 		};
 
@@ -10196,23 +10914,24 @@ class CMnGon extends CMSprite {
 		super(game, opts.x, opts.y, opts.radius, "circle", function(ctx) {
 			ctx.lineWidth = this.lineWidth;
 
-			if(this.fillStyle !== CMGame.Color.TRANSPARENT) {
+			if(this.fillStyle !== CMColor.NONE) {
 				ctx.fillStyle = this.fillStyle;
 				ctx.fill(this.path);
 			}
 
-			if(this.strokeStyle !== CMGame.Color.TRANSPARENT) {
+			if(this.strokeStyle !== CMColor.NONE) {
 				ctx.strokeStyle = this.strokeStyle;
 				ctx.stroke(this.path);
 			}
 		});
 
-		this.fillStyle = fillStyle;
-		this.strokeStyle = strokeStyle;
-		this.lineWidth = lineWidth;
+		this.fillStyle = opts.fillStyle;
+		this.strokeStyle = opts.strokeStyle;
+		this.lineWidth = opts.lineWidth;
 
 		this.n = n;
-		this.rotation = rotation;
+		this.rotation = opts.rotation;
+		this.points = [];
 		this.rebuildPath();
 
 		this.previousState = [this.n, this.x, this.y, this.radius, this.rotation].join(";");
@@ -10224,6 +10943,7 @@ class CMnGon extends CMSprite {
 	 */
 	rebuildPath() {
 		this.path = new Path2D();
+		this.points = [];
 
 		let arc = Math.TAU / this.n;
 
@@ -10236,6 +10956,10 @@ class CMnGon extends CMSprite {
 			this.path.lineTo(
 				this.x + this.radius * Math.cos(i),
 				this.y + this.radius * Math.sin(i));
+
+			if(i < this.rotation + Math.TAU - arc) // don't double up
+				this.points.push(new CMPoint(this.x + this.radius * Math.cos(i),
+					this.y + this.radius * Math.sin(i)));
 		}
 	}
 
@@ -10297,6 +11021,7 @@ class CMPolygon extends CMSprite {
 	 * @param {string} [options.strokeStyle] - A color to draw point-connecting lines with
 	 * @param {string} [options.fillStyle] - A color to fill the created shapes with
 	 * @param {number} [options.lineWidth] - The pixel width of the point-connecting lines
+	 * @param {boolean} [options.closed=true] - Whether the last point should connect back to the first
 	 */
 	constructor(game, points, options={}) {
 		let x = points.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.x), game.width);
@@ -10309,12 +11034,12 @@ class CMPolygon extends CMSprite {
 		super(game, x, y, width, height, function(ctx) {
 			ctx.lineWidth = this.lineWidth;
 
-			if(this.fillStyle !== CMGame.Color.TRANSPARENT) {
+			if(this.fillStyle !== CMColor.NONE) {
 				ctx.fillStyle = this.fillStyle;
 				ctx.fill(this.path);
 			}
 
-			if(this.strokeStyle !== CMGame.Color.TRANSPARENT) {
+			if(this.strokeStyle !== CMColor.NONE) {
 				ctx.strokeStyle = this.strokeStyle;
 				ctx.stroke(this.path);
 			}
@@ -10331,9 +11056,16 @@ class CMPolygon extends CMSprite {
 		this.width = width;
 		this.height = height;
 
+		if(typeof options.closed === "boolean") {
+			this.closed = options.closed;
+		}
+		else {
+			this.closed = true;
+		}
+
 		let opts = {
-			fillStyle: CMGame.Color.TRANSPARENT,
-			strokeStyle: CMGame.Color.GREEN,
+			fillStyle: CMColor.NONE,
+			strokeStyle: CMColor.GREEN,
 			lineWidth: 1
 		};
 
@@ -10387,33 +11119,8 @@ class CMPolygon extends CMSprite {
 			);
 		}
 
-		this.path.closePath();
-	}
-
-	/**
-	 * Determines if a given point is in this
-	 * object or its bounding lines. Useful for player
-	 * interaction via mouse clicks or touch points.
-	 * @param {object|number} The point, or point's x value
-	 * @param {number} The point's y value
-	 * @returns {boolean}
-	 */
-	containsPoint(pointOrX, y) {
-		let pointToCheck = null;
-
-		if(typeof pointOrX === "number") {
-			pointToCheck = {
-				x: pointOrX,
-				y: y
-			};
-		}
-		else { // single point
-			pointToCheck = pointOrX;
-		}
-
-		return (this.game.ctx.isPointInStroke(
-			this.path, pointToCheck.x, pointToCheck.y) ||
-			this.game.ctx.isPointInPath(this.path, pointToCheck.x, pointToCheck.y));
+		if(this.closed)
+			this.path.closePath();
 	}
 
 	/**
@@ -10596,6 +11303,35 @@ class CMPolygon extends CMSprite {
 		else {
 			this.hasEnteredScreen = true;
 			this.onscreen = true;
+		}
+	}
+
+	/**
+	 * Determines if a given point is in this doodle's fill path. Note:
+	 * this may not be verty reliable on complex shapes.
+	 * @param {number|object} xOrPoint - The x value, or point object
+	 * @param {number} [y] - The y value (if xOrPoint is not a point)
+	 * @returns {boolean}
+	 */
+	containsPoint(xOrPoint, y) {
+		let pointToCheck = {};
+		if(typeof xOrPoint === "number") {
+			pointToCheck = {
+				x: xOrPoint,
+				y: y
+			};
+		}
+		else {
+			pointToCheck = xOrPoint;
+		}
+
+		this.game.ctx.lineWidth = this.lineWidth;
+		if(this.closed) {
+			return (this.game.ctx.isPointInPath(this.path, pointToCheck.x, pointToCheck.y) ||
+				this.game.ctx.isPointInStroke(this.path, pointToCheck.x, pointToCheck.y));
+		}
+		else {
+			return (this.game.ctx.isPointInStroke(this.path, pointToCheck.x, pointToCheck.y));
 		}
 	}
 }
