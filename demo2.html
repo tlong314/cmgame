@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
 <title>CMGame Demo 2</title>
-<link rel="stylesheet" href="../css/cmgame.min.css" />
+<link rel="stylesheet" href="css/cmgame.css" />
 <style>
 
 #cmWrapper button {
@@ -59,14 +59,14 @@
 
 <div id="cmWrapper">
 	<canvas id="cmCanvas" class="cm-shadow-almost_black" width="640" height="480">
-		Nothing to see here...
+		This browser does not support required elements
 	</canvas>
 	<br/>
-	<button id="pngBtn">PNG</button>
-	<button id="videoBtn">3sec Video</button>
+	<button id="pngBtn" class="cm-blue cm-text-white">PNG</button>
+	<button id="videoBtn" class="cm-green cm-text-white">3sec Video</button>
 </div>
 
-<script src="../js/cmgame.js"></script>
+<script src="js/cmgame.js"></script>
 <script>
 
 // Create the game
@@ -74,7 +74,9 @@ const game = new CMGame({
 	startBtn: "#playBtn",
 	hideOnStart: ["#playBtn", "#cmTitle"],
 	graphScalar: 40,
-	tickDistance: 40
+	tickDistance: 40,
+	gridlineDistance: 20,
+	tickLabelIf: true
 });
 
 // Remember to use an onload handler (or CMGame.onpageload) before trying to bind events to HTML elements
@@ -120,7 +122,7 @@ const basicFunc2 = new CMFunction(
 			return Math.cos(x + 20 * shift);
 		},
 		{
-			strokeStyle: CMGame.Color.PURPLE,
+			strokeStyle: CMColor.PURPLE,
 			lineWidth: 2
 		}
 	);
@@ -134,7 +136,7 @@ const basicFunc3 = new CMFunction(
 		},
 		{
 			type: "xofy",
-			strokeStyle: CMGame.Color.DARK_RED,
+			strokeStyle: CMColor.DARK_RED,
 			lineWidth: 2
 		}
 	);
@@ -149,7 +151,7 @@ const basicFunc4 = new CMFunction(
 		},
 		{
 			type: "xofy",
-			strokeStyle: CMGame.Color.BLUE,
+			strokeStyle: CMColor.BLUE,
 			lineWidth: 2
 		}
 	);
@@ -160,7 +162,7 @@ let latestZoom = 1;
 let scaleChange = 1/1.001;
 
 // Add some animation by setting an onupdate function
-game.onupdate = () => {
+game.onupdate = (frameCount) => {
 	shift -= 0.01; // Change the position of the wave functions
 
 	latestZoom *= scaleChange;
@@ -184,7 +186,7 @@ game.onupdate = () => {
  */
 game.onbeforedraw = (ctx) => {
 	if(game.recordingVideo) {
-		ctx.fillStyle = CMGame.Color.WHITE;
+		ctx.fillStyle = CMColor.WHITE;
 		ctx.fillRect(0, 0, game.width, game.height);
 	}
 };
