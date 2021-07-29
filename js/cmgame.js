@@ -9959,7 +9959,7 @@ class CMFunction {
 	 * screen pixel output value associated with
 	 * this function and function type.
 	 * @param {number} screenInput - A pixel value (x or y) or angle or time
-	 * @returns {number}
+	 * @returns {number|object} object for "parametric", otherwise a number
 	 */
 	screenOf( screenInput ) { // i.e., screenToScreenOf() 
 
@@ -9977,7 +9977,7 @@ class CMFunction {
 				break;
 		}
 
-		this.realToScreenOf( realInput );
+		return this.realToScreenOf( realInput );
 	}
 
 	/**
@@ -9985,7 +9985,7 @@ class CMFunction {
 	 * and returns real (not screen pixel) output value
 	 * associated with this function and function type.
 	 * @param {number} screenInput - A pixel value (x or y) or angle or time
-	 * @returns {number}
+	 * @returns {number|object} object for "parametric", otherwise a number
 	 */
 	screenToRealOf( screenInput ) {
 
