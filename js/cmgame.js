@@ -1439,6 +1439,7 @@ class CMGame {
 					this.tickDistance);
 
 		this.graphScalar = options.graphScalar || this.gridlineDistance;
+		this.graphScalar_Private = this.graphScalar;
 		this.screenScalar = 1.0; // CSS scaling for display; separate from graph - do not override
 
 		this.mouseState = new Array(5).fill(0);
@@ -1660,20 +1661,10 @@ class CMGame {
 			 * Browser sniffing is still frowned upon, but different
 			 * hardware implementations currently leave us no choice.
 			 */
-			this.runningAndroid = !!window.navigator.userAgent.match(/android/gi);
-
-			if(!this.runningAndroid) {
+			if(!CMGame.running_Android) {
 				window.addEventListener("contextmenu", overrideContext, false);
 				this.canvas.addEventListener("contextmenu", overrideContext, false);
 			}
-
-			// iOS detection based on various answers found here:
-			// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios
-			this.running_iOS = !!(/ipad|iphone|ipod/gi.test(navigator.userAgent) ||
-					(navigator.userAgent.includes("Mac") && "ontouchend" in document) || // iPad on iOS 13 detection
-					(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
-					window.navigator.platform.match(/ipad|iphone|ipod/gi)) &&
-					!window.MSStream;
 
 			try {
 				let opts = Object.defineProperty({}, 'passive', {
@@ -1692,7 +1683,7 @@ class CMGame {
 						 * vibration directly from their iOS device settings:
 						 *   Settings -> Haptic & 3D Touch -> Off (also Vibration -> Off)
 						 */
-						if(!self.running_iOS) {
+						if(!CMGame.running_iOS) {
 							self.passiveFlag = { passive: true };
 						}
 					}
@@ -1924,6 +1915,13 @@ class CMGame {
 			this.update = function(frameCount) {
 				this.onbeforeupdate(frameCount);
 
+				if(this.frameoutFunctions.has(frameCount)) {
+					this.frameoutFunctions.get(frameCount).call(this, frameCount);
+
+					// clean up, and prevent repeats in frameCap is finite
+					this.frameoutFunctions.delete(frameCount);
+				}
+
 				for(let [id, vregion] of this.vennRegions) {
 					vregion.update(frameCount);
 				}
@@ -1933,7 +1931,9 @@ class CMGame {
 				}
 
 				for(let sprite of this.sprites) {
+					sprite.onbeforeupdate(frameCount);
 					sprite.update(frameCount);
+					sprite.onupdate(frameCount);
 				}
 
 				this.onupdate(frameCount);
@@ -1993,16 +1993,29 @@ class CMGame {
 			this.update = function(frameCount) {
 				this.onbeforeupdate(frameCount);
 
+				if(this.frameoutFunctions.has(frameCount)) {
+					this.frameoutFunctions.get(frameCount).call(this, frameCount);
+
+					// clean up, and prevent repeats in frameCap is finite
+					this.frameoutFunctions.delete(frameCount);
+				}
+
 				for(let edge of this.edges) {
+					edge.onbeforeupdate(frameCount);
 					edge.update(frameCount);
+					edge.onupdate(frameCount);
 				}
 
 				for(let vertex of this.vertices) {
+					vertex.onbeforeupdate(frameCount);
 					vertex.update(frameCount);
+					vertex.onupdate(frameCount);
 				}
 
 				for(let sprite of this.sprites) {
+					sprite.onbeforeupdate(frameCount);
 					sprite.update(frameCount);
+					sprite.onupdate(frameCount);
 				}
 
 				for(let doodle of this.doodles) {
@@ -2045,7 +2058,7 @@ class CMGame {
 				}
 
 				this.ondraw(ctx);
-				
+
 				if(this.recordingVideo) {
 					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
 						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
@@ -2101,6 +2114,8 @@ class CMGame {
 			"onkeydown",
 			"onkeyup",
 			"onresize",
+			"onbeforezoom",
+			"onzoom",
 
 			// These are helper methods you can override for the game loop
 			"onbeforestart",
@@ -2111,6 +2126,8 @@ class CMGame {
 			"ondraw",
 			"onload"
 		];
+
+		this.frameoutFunctions = new Map();
 
 		for(let key of eventKeys) {
 			if(typeof options[key] === "function") {
@@ -2465,7 +2482,11 @@ class CMGame {
 	 *   set to that number.
 	 * @param {number} [options.start=0] - Number of milliseconds to wait before starting capture
 	 * @param {number|string} [options.duration=5000] - Number of milliseconds to capture, or
-	 *   "indefinite" to continue recording until stopScreenVideo is called.
+	 *   "indefinite" to continue recording until stopScreenVideo is called. This value can
+	 *   be off by a few seconds due to the nature of browser lag and video stream capture.
+	 *   To mitigate this, the method first tries to convert this amount to the expected # of
+	 *   frames, and stops the video after the appropriate delay in frames rather than time.
+	 *   There are still some kinks, so you may want to add a few seconds to your expected time.
 	 * @param {number} [options.fps=CMGame.FPS] - Desired frame rate for capture (default's to game's rate)
 	 * @param {number} [options.mimeType="video/mp4"] - Desired mimeType for the
 	 *   output video. If not present, will be inferred from options.filename (the preferred option)
@@ -2477,7 +2498,7 @@ class CMGame {
 	takeScreenVideo(options={}) {
 		if(this.recordingVideo) {
 			console.error("Cannot record multiple videos simultaneously");
-			return Promise.resolve();
+			return Promise.resolve({video: null, src: ""});
 		}
 
 		let self = this;
@@ -2526,7 +2547,8 @@ class CMGame {
 
 				// Your type does not match your filename - now will look something like myvideo.webm.mp4
 				if(!options.filename.endsWith(inferredExtension)) {
-					console.warn(`takeScreenVideo "filename" does not match "mimeType". Inferred extension will be appended to filename.`);
+					console.warn(`takeScreenVideo "filename" does not match "mimeType".
+						Inferred extension will be appended to filename.`);
 					opts.filename = options.filename + inferredExtension;
 				}
 			}
@@ -2547,6 +2569,9 @@ class CMGame {
 			}
 		}
 
+		let durationInSeconds = opts.duration / 1000;
+		let durationInFrames = Math.ceil(opts.fps * durationInSeconds);
+
 		return new Promise(function(resolve, reject) {
 
 			let stream = self.screenVideoCanvas.captureStream(opts.fps);
@@ -2561,6 +2586,22 @@ class CMGame {
 			self.videoRecorder.ondataavailable = function(e) {
 				if(e.data.size > 0) {
 					recordedChunks.push(e.data);
+				}
+			};
+
+			self.videoRecorder.onstart = function() {
+
+				/**
+				 * Stop recording only after requested time.
+				 * May not be accurate down to the exact second.
+				 */
+				if(opts.duration !== "indefinite") { // Set duration to "indefinite" if you will stop manually
+
+					// Due to lag in browser, we'll try to stop after appropriate # of frames, rather than time
+					self.setFrameout(() => {
+						self.videoRecorder.stop();
+						self.recordingVideo = false;
+					}, durationInFrames);
 				}
 			};
 
@@ -2598,19 +2639,6 @@ class CMGame {
 
 			// Start recording only after requested delay (opts.start)
 			setTimeout(() => {
-
-				/**
-				 * Stop recording only after requested time.
-				 * May not be accurate down to the exact second.
-				 */
-				if(opts.duration !== "indefinite") { // Set duration to "indefinite" if you will stop manually
-
-					setTimeout(() => {
-						self.videoRecorder.stop();
-						self.recordingVideo = false;
-					}, opts.duration);
-				}
-
 				self.videoRecorder.start();
 				self.recordingVideo = true;
 			}, opts.start);
@@ -2722,6 +2750,8 @@ class CMGame {
 	onupdate(frameCount) {} // Occurs just after game's update()
 	onbeforedraw(ctx) {} // Occurs just before game's draw(), but after previous screen was cleared
 	ondraw(ctx) {} // Occurs just after game's draw()
+	onbeforezoom(newZoomLvl, oldZoomLvl) {} // Occurs just before zoom() processes are invoked
+	onzoom(newZoomLvl, oldZoomLvl) {} // Occurs just after zoom() is invoked
 
 	/**
 	 * These can be overridden for more control,
@@ -2749,16 +2779,44 @@ class CMGame {
 	// Triggered by significant mousemove or touchmove by user
 	onswipe(/* CMSwipe */ cmSwipe) {}
 
-	/** Updates game state in current frame*/
+	/**
+	 * Updates game state (and state of components) in current frame
+	 * @param {number} frameCount - Which frame this is from the start (modded
+	 *   out by this.frameCap if that is not infinite)
+	 */
 	update(frameCount) {
 		this.onbeforeupdate(frameCount);
+
+		if(this.frameoutFunctions.has(frameCount)) {
+			this.frameoutFunctions.get(frameCount).call(this, frameCount);
+
+			// clean up, and prevent repeats in frameCap is finite
+			this.frameoutFunctions.delete(frameCount);
+		}
 
 		for(let func of this.functions) {
 			func.update(frameCount);
 		}
 
-		for(let sprite of this.sprites) {
-			sprite.update(frameCount);
+		/**
+		 * "destroy" causes a jump in a for loop when splicing out,
+		 * essentially missing the next sprite's update() call.
+		 * We could replace with a decrementing while loop,
+		 * but this forces us to update the sprites in reverse order.
+		 * Instead we'll check if the sprite was destroyed in its
+		 * update() call, and if so, decrement the appropriate variables.
+		 */
+		for(let i = 0, cap = this.sprites.length; i < cap; i++) {
+
+			let sprite = this.sprites[i];
+			sprite.onbeforeupdate(frameCount);
+			sprite.update(frameCount); // Note: this is where "destroy" occurs, shifting i
+			sprite.onupdate(frameCount);
+
+			if(this.sprites.length < cap) { // sprites[i] was removed; jump back 1
+				i--;
+				cap--;
+			}
 		}
 
 		this.onupdate(frameCount);
@@ -3450,8 +3508,8 @@ class CMGame {
 	/**
 	 * Determines if the current game has had the given
 	 * item added (and it is not currently removed).
-	 * @param {object} item - The item to check for, an instance of CMSprite,
-	 *   CMFunction, CMVertex, CMEdge, or CMDoodle
+	 * @param {object} item - The item to check for. Must be an instance of CMSprite,
+	 *   CMFunction, CMVertex, CMEdge, or CMDoodle (or will return false)
 	 * @returns {boolean}
 	 */
 	has(item) {
@@ -3585,6 +3643,22 @@ class CMGame {
 	}
 
 	/**
+	 * Renders offscreenCanvas data onto
+	 * visible screen. This is separated from
+	 * updateAndDraw() method, so it can
+	 * still be implemented when page is paused
+	 * e.g., for using drawStrings or other
+	 * built-in drawing methods
+	 */
+	drawOffscreenToScreen() {
+		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+		this.ctx.drawImage(this.offscreenCanvas,
+			0, 0,
+			this.canvas.width,
+			this.canvas.height);
+	}
+
+	/**
 	 * This is the core of the game animation cycle.
 	 * It manages all single animation frame processes:
 	 * state updates, component drawing and moving
@@ -3602,13 +3676,7 @@ class CMGame {
 
 		this.draw(this.offscreenCtx);
 		this.offscreenCtx.restore();
-
-		// Draw offscreen canvas to visible screen
-		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-		this.ctx.drawImage(this.offscreenCanvas,
-			0, 0,
-			this.canvas.width,
-			this.canvas.height);
+		this.drawOffscreenToScreen();
 
 		this.frameCount++;
 		if(this.frameCount > this.frameCap) {
@@ -4896,7 +4964,7 @@ class CMGame {
 	 *
 	 * game.drawStrings(
 	 *	  ["15px Arial", "italic 16px Times", "14pt monospace"],
-	 *	  ["2", "&pi;", " - checked"],
+	 *	  ["2", "pi", " - checked"],
 	 *   200, 100);
 	 *
 	 * There is also a feature that lets us write multi-line
@@ -4908,8 +4976,8 @@ class CMGame {
 	 *    ["15px Arial", "italic 16px Times", "14pt Arial"]
 	 *  ],
 	 *	 [
-	 *    ["2", "&pi;", " - checked"],
-	 *    ["5", "e", " is larger"],
+	 *    ["2", "pi", " - checked"],
+	 *    ["5", "e", " is larger"]
 	 *  ],
 	 *   200, 100,
 	 *  { // in this case, fillStyle and strokeStyle options should be in 2D arrays as well
@@ -4986,8 +5054,15 @@ class CMGame {
 				else {
 
 					// Find biggest font (assume in pixels) in a given row, and use it to determine line height
-					for(let col = 0, numCols = fonts.length; col < numCols; col++) {
-						let fontSize = fonts[row][col].match(/[0-9]+[A-Za-z]+/, "");
+					for(let col = 0, numCols = fonts[0].length; col < numCols; col++) {
+						let fontSize;
+						try {
+							fontSize = fonts[row][col].match(/[0-9]+[A-Za-z]+/, "");
+						}
+						catch(e) {
+							console.error(e);
+						}
+
 						if(fontSize) {
 							maxFont = Math.max(maxFont, parseInt(fontSize[0]));
 							lineHeight = 1.5 * maxFont;
@@ -4995,7 +5070,7 @@ class CMGame {
 					}
 				}
 
-				this.drawStrings(fonts[row], strings[row].concat([row]), x, y + row * lineHeight, optsFromArrays);
+				this.drawStrings(fonts[row], strings[row], x, y + row * lineHeight, optsFromArrays);
 			}
 
 			return maxX;
@@ -5131,8 +5206,10 @@ class CMGame {
 	 * Similar to drawStrings method, but centers at (x, y)
 	 * @param {string[]|string} fontsArg - font, or array of the fonts to use in order (cycles if > strings.length)
 	 * @param {string[]|string} stringsArg - string, or array of the strings to write in order
-	 * @param {number} x - The x position for the center of the full string
-	 * @param {number} y - The y position for the center of the the full string
+	 * @param {number} [x] - The x position for the center of the full string. Defaults to
+	 *   the x value of the center point of the screen
+	 * @param {number} [y] - The y position for the center of the the full string. Defaults to
+	 *   the y value of the center point of the screen
 	 * @param {object} [options={}] - An object of options
 	 * @param {boolean} [options.fill=true] Will use fillText if true
 	 * @param {boolean} [options.stroke=false] Will use strokeText if true
@@ -5146,7 +5223,7 @@ class CMGame {
 	 * @returns {object} A CMPoint instance representing the (x, y) screen point where
 	 *   this text ends (even if rotated)
 	 */
-	drawStringsCentered(fontsArg, stringsArg, x, y, options={}) {
+	drawStringsCentered(fontsArg, stringsArg, x=this.center.x, y=this.center.y, options={}) {
 		let defaults = {
 			fill: true,
 			stroke: false,
@@ -5221,7 +5298,7 @@ class CMGame {
 		}
 
 		// Pre-draw strings, shift left by half
-		let stringLengthPx = this.measureStrings.apply(this, [fonts, strings]);
+		let stringLengthPx = this.measureStrings(fonts, strings);
 		let newLeftX = x - .5 * stringLengthPx;
 
 		if(opts.angle !== 0) {
@@ -5381,37 +5458,149 @@ class CMGame {
 	}
 
 	/**
-	 * Zooms in on "graph" type game. Note: this
-	 * becomes buggy when changing the game's origin
-	 * while zoomed in/out.
-	 * @param {number} newScale - Number representing percentage of original picture (e.g. 0.2 for 50%)
+	 * Zooms in on "graph" type game. This only affects
+	 * graphs and origin. Sprite scaling will need to be
+	 * handled separately, for instance in onzoom().
+	 * @param {number} newScale - Positive number representing percentage of
+	 *   unzoomed picture (e.g. 0.2 for 50%)
+	 * @param {object} [centralPoint=this.unzoomedOrigin] - The unzoomed canvas point around
+	 *   which the zoomed view is centered
+	 * @returns {object} The current CMGame instance
 	 */
-	zoom(newScale) {
+	zoom(newScale, centralPoint=this.unzoomedOrigin) {
 
-		if(typeof newScale !== "number" || newScale <= 0 || !Number.isFinite(newScale) || Number.isNaN(newScale)) {
+		if(typeof newScale !== "number" ||
+				newScale <= 0 ||
+				!Number.isFinite(newScale) ||
+				Number.isNaN(newScale)) {
+
 			console.error("zoom() must take a positive integer or float value as its argument. Set to 1 for 100%.");
 			return this;
 		}
 
+		let oldScale = this.zoomLevel;
+		this.onbeforezoom(newScale, oldScale);
+
 		this.zoomLevel = newScale;
 
-		this.graphScalar = this.unzoomedGraphScalar / this.zoomLevel;
+		// this.graphScalar = this.unzoomedGraphScalar / this.zoomLevel;
 		this.tickDistance = this.unzoomedTickDistance / this.zoomLevel;
 		this.gridlineDistance = this.unzoomedGridlineDistance / this.zoomLevel;
 
-		// Note: if zoomLevel is 1, this just sets origin back to unzoomedOrigin
-		// this.origin.x = this.center.x + (this.unzoomedOrigin.x - this.center.x) / this.zoomLevel;
-		// this.origin.y = this.center.y + (this.unzoomedOrigin.y - this.center.y) / this.zoomLevel;
+		// reset zoom to default of 100% before applying new scale
+		this.origin.x =
+			this.origin.x =
+			this.unzoomedOrigin.x;
 
-		this.origin.x = this.origin.x + (this.unzoomedOrigin.x - this.origin.x) / this.zoomLevel;
-		this.origin.y = this.origin.y + (this.unzoomedOrigin.y - this.origin.y) / this.zoomLevel;
+		this.origin.y =
+			this.origin.y =
+			this.unzoomedOrigin.y;
 
 		for(let func of this.functions) {
-			func.updateBounds(this.zoomLevel);
+			func.unzoomedStart = new CMPoint(func.start);
+			func.unzoomedEnd = new CMPoint(func.end);
+
+			func.origin.x = func.unzoomedOrigin.x = this.origin.x;
+			func.origin.y = func.unzoomedOrigin.y = this.origin.y;
 		}
 
+		this.graphScalar = this.unzoomedGraphScalar;
+
+		for(let func of this.functions) {
+			func.start.x = func.unzoomedStart.x;
+			func.start.y = func.unzoomedStart.y;
+			func.end.x = func.unzoomedEnd.x;
+			func.end.y = func.unzoomedEnd.y;	
+
+			func.updateBounds(oldScale);
+		}
+
+		// Just returning to 100%. We're done.
+		if(newScale === 1) {
+			this.onzoom(newScale, oldScale);
+			return this;
+		}
+
+		let alpha = (centralPoint.x - this.origin.x) / newScale;
+		let beta = (centralPoint.y - this.origin.y) / newScale;
+
+		// Recenter the new "origin"
+		this.origin.x = this.origin.x - alpha;
+		this.origin.y = this.origin.y - beta;
+
+		for(let func of this.functions) {
+			func.origin.x = func.unzoomedOrigin.x = this.origin.x;
+			func.origin.y = func.unzoomedOrigin.y = this.origin.y;
+		}
+
+		this.graphScalar /= newScale;
+
+		for(let func of this.functions) {
+			func.start.x = func.unzoomedStart.x;
+			func.start.y = func.unzoomedStart.y;
+			func.end.x = func.unzoomedEnd.x;
+			func.end.y = func.unzoomedEnd.y;
+
+			func.updateBounds(oldScale);
+		}
+
+		this.onzoom(newScale, oldScale);
+		
 		if(this.paused)
 			this.draw();
+
+		return this;
+	};
+
+	/**
+	 * This is a timeout method particular to the current game.
+	 * It is similar to setTimeout, but set by number of frames,
+	 * regardless of FPS change. If you want a timer using exact
+	 * time amounts, use setTimeout instead.
+	 * @param {function} callback - The function to invoke after the number of
+	 *   frames defined. The callback has current game instance as its `this`
+	 *   object and takes the current frameCount value as its only parameter.
+	 * @param {number} framesToWait - How many frames to wait before
+	 *   the callback is invoked. If this is 0 the function will be invoked
+	 *   immediately. Non-integer values will be rounded up.
+	 *   Negative values do nothing unless the game's frameCap is a finite
+	 *   number. If frameCap is finite, then the value is essentially
+	 *   subtracted from current frameCount.
+	 * @returns {object} The current CMGame instance
+	 */
+	setFrameout(callback, framesToWait) {
+		framesToWait = Math.ceil(framesToWait);
+
+		if(framesToWait === 0) {
+			callback.call(this, this.frameCount);
+			return this;
+		}
+
+		if(framesToWait < 0) {
+			if(!Number.isFinite(this.frameCap)) {
+				console.error(`setFrameout() must take non-negative integer as second argument
+					if game's frameCap property is not finite`);
+				return this;
+			}
+
+			return this.setFrameout(CMGame.mod(framesToWait, 0, this.frameCap));
+		}
+
+		let targetFrame = (this.frameCount + framesToWait) % this.frameCap;
+
+		// A callback is already registered at this frame, so put these together
+		if(this.frameoutFunctions.has(targetFrame)) {
+			let oldCallback = this.frameoutFunctions.get(targetFrame);
+			let combinedCallbacks = function(frameCount) {
+				oldCallback(frameCount);
+				callback(frameCount);
+			};
+
+			this.frameoutFunctions.set(targetFrame, combinedCallbacks);
+		}
+		else {
+			this.frameoutFunctions.set(targetFrame, callback);
+		}
 
 		return this;
 	}
@@ -6204,7 +6393,9 @@ class CMGame {
 	 * @param {object} [options={}] - A plain JS object of options.
 	 * @param {string} [options.headerText] - String to write in the header. Defaults
 	 *   to standard alert header.
-	 * @param {string} [options.button1Text] - String to write in OK button. Default is "OK".
+	 * @param {string} [options.buttonText] - String to write in OK button. Default is "OK".
+	 * @param {string} [options.button1Text] - Same as button1Text. Only provided for
+	 *   naming option consistent with confirm() and prompt().
 	 * @param {boolean} [options.draggable] - true to let player drag modal around. Default is false.
 	 * @returns {Promise}
 	 */
@@ -6229,7 +6420,7 @@ class CMGame {
 			options.headerText ||
 			((document.title || "Game") + " says:");
 
-		this.alertOKButton.innerHTML = options.button1Text || "OK";
+		this.alertOKButton.innerHTML = options.buttonText || options.button1Text || "OK";
 
 		// draggable is convenient, but adds multiple handlers
 		if(options.draggable) {
@@ -6239,8 +6430,6 @@ class CMGame {
 
 			this.alertElement.onmousedown = this.alertElement.ontouchstart = function(e) {
 				modalPressed = true;
-
-				console.log(e);
 
 				if(e.type === "touchstart") {
 					oldX = e.targetTouches[0].clientX;
@@ -6905,7 +7094,47 @@ CMGame.trimFilename = (filename) => {
 	return trimmedString;
 }
 
-// Static so user can set it before creating CMGame instance
+/**
+ * We only use browser detection for features where it
+ * is absolutely necessary, like working with haptic feedback
+ * vs. contextmenu, or detecting screen size with/without
+ * actual fullscreen support
+ */
+CMGame.running_Android = !!window.navigator.userAgent.match(/android/gi);
+
+// iOS detection based on various answers found here:
+// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios
+CMGame.running_iOS = !!(/ipad|iphone|ipod/gi.test(navigator.userAgent) ||
+	(navigator.userAgent.includes("Mac") && "ontouchend" in document) || // iPad on iOS 13 detection
+	(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+	window.navigator.platform.match(/ipad|iphone|ipod/gi)) &&
+	!window.MSStream;
+
+// Do our best to get largest possible dimensions (fullscreen)
+if(CMGame.running_iOS) { // No fullscreen for iPhone, so just get available dimensions
+	CMGame.screenWidth = window.screen.availWidth;
+	CMGame.screenHeight = window.screen.availHeight;
+
+	// iOS acts up when trying to access document.body.clientWidth or .clientHeight
+	if(!documentBody.clientWidth) {
+		documentBody.clientWidth = CMGame.screenWidth;
+		documentBody.clientHeight = CMGame.screenHeight;
+	}
+}
+else {
+	if(window.screen && window.screen.width) {
+		CMGame.screenWidth = window.screen.width;
+		CMGame.screenHeight = window.screen.height;
+	} else if(window.outerWidth) {
+		CMGame.screenWidth = window.outerWidth;
+		CMGame.screenHeight = window.outerHeight;
+	} else {
+		CMGame.screenWidth = document.documentElement.clientWidth;
+		CMGame.screenHeight = document.documentElement.clientHeight;
+	}
+}
+
+// This method is static so user can set it before creating a CMGame instance
 CMGame.onpageload = CMGame.noop;
 CMGame.pageLoaded = false; // Mainly for internal use
 
@@ -7092,6 +7321,8 @@ class CMColor {
 	 * A CMColor instance is not a string, so in use, you
 	 * access an instance's (say "myColor") color string
 	 * with myColor.value
+	 * The individual components of the color can be accessed
+	 * via myColor.r, myColor.g, myColor.b, and myColor.a for alpha/opacity
 	 * @param {number|string} [r=0] - A string defining the entire color, or the number
 	 *   representing r value if the r, g, b components are being entered separately
 	 * @param {number} [g=0] - The g component
@@ -7136,7 +7367,7 @@ class CMColor {
 				this.b = parseInt(pieces[2]);
 
 				if(pieces.length === 4)
-					this.a = parseInt(pieces[3]);
+					this.a = parseFloat(pieces[3]);
 				else
 					this.a = 1;
 			}
@@ -7145,31 +7376,55 @@ class CMColor {
 			this.r = r;
 			this.g = g;
 			this.b = b;
-			this.opacity = a;
+			this.a = a;
 		}
 	}
 
-	lighten() {
-		this.r = CMGame.clamp(this.r + 10, 0, 255);
-		this.g = CMGame.clamp(this.g + 10, 0, 255);
-		this.b = CMGame.clamp(this.b + 10, 0, 255);
+	/**
+	 * Makes this color slightly closer to white, by increasing
+	 * each of the r, g, and b components
+	 * @param {number} [amount=10] How many units in 255 to increase
+	 * @returns {object} The current CMColor instance
+	 */
+	brighten(amount=10) {
+		this.r = CMGame.clamp(this.r + amount, 0, 255);
+		this.g = CMGame.clamp(this.g + amount, 0, 255);
+		this.b = CMGame.clamp(this.b + amount, 0, 255);
 		return this;
 	}
 
-	darken() {
-		this.r = CMGame.clamp(this.r - 10, 0, 255);
-		this.g = CMGame.clamp(this.g - 10, 0, 255);
-		this.b = CMGame.clamp(this.b - 10, 0, 255);
+	/**
+	 * Makes this color slightly closer to black, by decreasing
+	 * each of the r, g, and b components
+	 * @param {number} [amount=10] How many units in 255 to increase
+	 * @returns {object} The current CMColor instance
+	 */
+	darken(amount=10) {
+		this.r = CMGame.clamp(this.r - amount, 0, 255);
+		this.g = CMGame.clamp(this.g - amount, 0, 255);
+		this.b = CMGame.clamp(this.b - amount, 0, 255);
 		return this;
 	}
 
-	increaseOpacity() {
-		this.opacity = CMGame.clamp(this.opacity + 0.1, 0, 1);
+	/**
+	 * Makes this color slightly closer to opaque, by increasing
+	 * the alpha component
+	 * @param {number} [amount=0.1] How many units in 1.0 to increase
+	 * @returns {object} The current CMColor instance
+	 */
+	increaseOpacity(amount=0.1) {
+		this.a = CMGame.clamp(this.a + 0.1, 0, 1);
 		return this;
 	}
 
-	decreaseOpacity() {
-		this.opacity = CMGame.clamp(this.opacity - 0.1, 0, 1);
+	/**
+	 * Makes this color slightly closer to transparent, by decreasing
+	 * the alpha component
+	 * @param {number} [amount=0.1] How many units in 1.0 to decrease
+	 * @returns {object} The current CMColor instance
+	 */
+	decreaseOpacity(amount=0.1) {
+		this.a = CMGame.clamp(this.a - 0.1, 0, 1);
 		return this;
 	}
 }
@@ -7268,24 +7523,20 @@ Object.defineProperty(CMGame.prototype, "font", {
 	}
 });
 
-(function() {
-	let gsVal = 20;
+Object.defineProperty(CMGame.prototype, "graphScalar", {
 
-	Object.defineProperty(CMGame.prototype, "graphScalar", {
+	get() {
+		return this.graphScalar_Private;
+	},
 
-		get() {
-			return gsVal;
-		},
-
-		set(newVal) {
-			let oldVal = gsVal;
-			gsVal = newVal;
-			for(let func of this.functions) {
-				func.updateBounds(oldVal);
-			}
+	set(newVal) {
+		let oldVal = this.graphScalar_Private;
+		this.graphScalar_Private = newVal;
+		for(let func of this.functions) {
+			func.updateBounds(oldVal);
 		}
-	});
-}());
+	}
+});
 
 /**
  * One reusable HTML element is used for
@@ -7431,6 +7682,8 @@ class CMSprite {
 	 * @param {number|string} heightOrCircle - The starting height value, or "circle" if circular, or "line"
 	 * @param {object|string|function} [drawRule=null] - An image or default color string or 
 	 *   draw function (taking game's drawing context as its sole parameter). Default is null.
+	 *   When extending the Sprite class, you can set this to null in the constructor's super() call
+	 *   to use the extended classes draw() method.
 	 * @param {string} [boundingRule="none"] - How to handle collision with screen edge
 	 *   "wrap": object appears on other side of screen once completely off screen
 	 *   "bounce": object bounces away from wall with same momentum
@@ -7439,12 +7692,14 @@ class CMSprite {
 	 *   "none": (default) object just keeps moving offscreen,
 	 * @param {object} [options={}] - A plain JS object of additional options,
 	 *   mainly for defining helper functions on creation.
+	 * @param {function} [options.onbeforeupdate] A function to be executed just before this sprite's update()
 	 * @param {function} [options.onupdate] A function to be executed after this sprite's update()
 	 * @param {function} [options.onbeforedraw]  A function to be executed just beore this sprite's draw(),
 	 *   (e.g., to draw a shadow before drawing the sprite)
 	 * @param {function} [options.ondraw] A function to be executed after this sprite's draw()
 	 * @param {function} [options.onfadein] A function to be executed at the end of a "fade in" animation
 	 * @param {function} [options.onfadeout] A function to be executed at the end of a "fade out" animation
+	 * @param {function} [options.ondestroy] A callback to invoke when this sprite is removed from the game
 	 * @param {number} [options.z] A third coordinate "z" value if dev wants to manage
 	 *   some form of "depth". Defaults to 0.
 	 * @param {number} [options.layer=0] - A number than can be used to define the
@@ -7452,6 +7707,9 @@ class CMSprite {
 	 *   will be drawn in the order they were created. By default, all sprites have
 	 *   layer 0, so are drawn in the order they were created. Negative numbers
 	 *   are permitted as well, e.g., for background sprites.
+	 * @param {object} [options.boundingRect] - A rectangular object (i.e., an object with  numerical x, y,
+	 *   width and height properties) that will be used instead of the entire canvas, when invoking
+	 *   the bounding rules for this sprite. Defaults to this.game (i.e., the game's canvas dimensions)
 	 */
 	constructor(game, x, y, widthOrRadius, heightOrCircle, drawRule=null,
 			boundingRule="none", options={}) {
@@ -7462,15 +7720,36 @@ class CMSprite {
 		this.z = options.z || 0;
 
 		// Do not override these - they are used with Object.defineProperty. Override boundingRule instead.
-		this.boundingRulePrivate = boundingRule;
-		this.layerPrivate = options.layer || 0;
+		this.boundingRule_Private = boundingRule;
+		this.layer_Private = options.layer || 0;
 
-		this.layer = this.layerPrivate;
+		this.layer = this.layer_Private;
 		this.boundingRuleTop = "none";
 		this.boundingRuleRight = "none";
 		this.boundingRuleBottom = "none";
 		this.boundingRuleLeft = "none";
 		this.boundingRule = boundingRule;
+		this.boundingRect = null;
+
+		if(options.boundingRect) {
+			if(typeof options.boundingRect.x === "number" &&
+					typeof options.boundingRect.y === "number" &&
+					typeof options.boundingRect.width === "number" && 
+					typeof options.boundingRect.height === "number") {
+				this.boundingRect = options.boundingRect;
+			}
+			else {
+				console.warn("CMSprite option 'boundingRect' requires numerical x, y, width, and height properties");
+			}
+		}
+		else { // boundingRect defaults to entire game
+			this.boundingRect = {
+				x: 0,
+				y: 0,
+				width: game.width,
+				height: game.height
+			};
+		}
 
 		this.shape;
 		this.width;
@@ -7506,7 +7785,6 @@ class CMSprite {
 			this.radius = Math.hypot(this.width, this.height); // i.e., the "diagonal"
 		}
 
-		this.ondestroy = null;
 		this.pathFunction = null;
 		this.pathFunctionOffset = null;
 		this.pathFunctionFollow = "end";
@@ -7543,20 +7821,35 @@ class CMSprite {
 		this.opacity = 1.0;
 		this.velocity.opacity = 0.0;
 
+		if(typeof options.onbeforeupdate === "function")
+			this.onbeforeupdate = options.onbeforeupdate;
+		else
+			this.onbeforeupdate = CMGame.noop;
+
 		if(typeof options.onupdate === "function")
 			this.onupdate = options.onupdate;
+		else
+			this.onupdate = CMGame.noop;
 
 		if(typeof options.onbeforedraw === "function")
 			this.onbeforedraw = options.onbeforedraw;
+		else
+			this.onbeforedraw = CMGame.noop;
 
 		if(typeof options.ondraw === "function")
 			this.ondraw = options.ondraw;
+		else
+			this.ondraw = CMGame.noop;
 
 		if(typeof options.onfadein === "function")
 			this.onfadein = options.onfadein;
 
 		if(typeof options.onfadeout === "function")
 			this.onfadeout = options.onfadeout;
+
+		this.ondestroy = null;
+		if(typeof options.ondestroy === "function")
+			this.ondestroy = options.ondestroy;
 
 		this.onscreen = false;
 		this.hasEnteredScreen = false; // bounding rules will not apply until sprite has entered screen
@@ -7833,17 +8126,15 @@ class CMSprite {
 		// If you create an arbitrary `shape` you can manage bounding in onupdate
 		switch(this.shape) {
 			case "line":
-				this.boundAsLine(this.game);
+				this.boundAsLine();
 				break;
 			case "circle":
-				this.boundAsCircle(this.game);
+				this.boundAsCircle();
 				break;
 			case "rect":
-				this.boundAsRect(this, this.game);
+				this.boundAsRect(this);
 				break;
 		}
-
-		this.onupdate(frameCount);
 	}
 
 	/**
@@ -7929,10 +8220,10 @@ class CMSprite {
 	 * Manages screen boundaries for "line" shape,
 	 * in a simple form, by considering the rectangle
 	 * enclosing the line, and bounding it as a rect.
-	 * @param {object} [boundingRect=this.game] - The enclosing rectangle that is bounding
+	 * @param {object} [boundingRect=this.boundingRect] - The enclosing rectangle that is bounding
 	 *   this figure. Generally the entire game, but some enemies, etc., may be restricted in space.
 	 */
-	boundAsLine(boundingRect=this.game) {
+	boundAsLine(boundingRect=this.boundingRect) {
 
 		let rectToBound = {
 			x: Math.min(this.start.x, this.end.x),
@@ -7946,32 +8237,32 @@ class CMSprite {
 
 	/**
 	 * Manages screen boundaries for "circle" shape
-	 * @param {object} [boundingRect=this.game] - The enclosing rectangle that is bounding
+	 * @param {object} [boundingRect=this.boundingRect] - The enclosing rectangle that is bounding
 	 *   this figure. Generally the entire game, but some enemies, etc., may be restricted in space.
 	 */
-	boundAsCircle(boundingRect=this.game) {
+	boundAsCircle(boundingRect=this.boundingRect) {
 		if(this.hasEnteredScreen) {
 			if(this.x < this.radius) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
-						if(this.x + this.radius < 0) {
-							this.x = boundingRect.width + this.radius + (this.x + this.radius);
+						if(this.x + this.radius < boundingRect.x) {
+							this.x = boundingRect.width + this.radius;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.x + this.radius < 0) {
+							while(this.x + this.radius < boundingRect.x) {
 								this.x += boundingRect.width;
 							}
 						}
 						break;
 					case "bounce":
-						this.x = this.radius;
+						this.x = boundingRect.x + this.radius;
 						this.velocity.x = Math.abs(this.velocity.x);
 						break;
 					case "fence":
-						this.x = this.radius;
+						this.x = boundingRect.x + this.radius;
 						break;
 					case "destroy":
-						if(this.x < this.radius)
+						if(this.x + this.radius < boundingRect.x)
 							this.destroy();
 						break;
 					case "none":
@@ -8017,27 +8308,27 @@ class CMSprite {
 				}
 			}
 
-			if(this.y - this.radius < 0) { // top wall
+			if(this.y - this.radius < boundingRect.y) { // top wall
 				switch(this.boundingRuleTop) {
 					case "wrap":
-						if(this.y + this.radius < 0) {
-							this.y = boundingRect.height + this.radius + (this.y + this.radius);
+						if(this.y + this.radius < boundingRect.y) {
+							this.y = boundingRect.y + boundingRect.height + this.radius;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.y + this.radius < 0) {
+							while(this.y + this.radius < boundingRect.y) {
 								this.y += boundingRect.height;
 							}
 						}
 						break;
 					case "bounce":
-						this.y = this.radius;
+						this.y = boundingRect.y + this.radius;
 						this.velocity.y = Math.abs(this.velocity.y);
 						break;
 					case "fence":
-						this.y = this.radius;
+						this.y = boundingRect.y + this.radius;
 						break;
 					case "destroy":
-						if(this.y + this.radius < 0)
+						if(this.y + this.radius < boundingRect.y)
 							this.destroy();
 						break;
 					case "none":
@@ -8099,33 +8390,33 @@ class CMSprite {
 	/**
 	 * Manages screen boundaries for "rect" shape sprite.
 	 * @param {object} [rectToBound=this] - A custom "rectangle" used as a "hit box"
-	 * @param {object} [boundingRect=this.game] - The enclosing rectangle that is bounding
+	 * @param {object} [boundingRect=this.boundingRect] - The enclosing rectangle that is bounding
 	 *   this figure. Generally the entire game, but some enemies, etc., may be restricted in space.
 	 */
-	boundAsRect(rectToBound=this, boundingRect=this.game) {
-
+	boundAsRect(rectToBound=this, boundingRect=this.boundingRect) {
 		if(this.hasEnteredScreen) {
-			if(rectToBound.x < 0) { // left wall
+
+			if(rectToBound.x < boundingRect.x) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
-						if(rectToBound.x + rectToBound.width < 0) {
+						if(rectToBound.x + rectToBound.width < boundingRect.x) {
 							this.x = boundingRect.width + (rectToBound.x + rectToBound.width);
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.x + this.width < 0) {
+							while(this.x + this.width < boundingRect.x) {
 								this.x += boundingRect.width;
 							}
 						}
 						break;
 					case "bounce":
-						this.x = 0;
+						this.x = boundingRect.x;
 						this.velocity.x = Math.abs(this.velocity.x);
 						break;
 					case "fence":
-						this.x = 0;
+						this.x = boundingRect.x;
 						break;
 					case "destroy":
-						if(rectToBound.x + rectToBound.width < 0)
+						if(rectToBound.x + rectToBound.width < boundingRect.x)
 							this.destroy();
 						break;
 					case "none":
@@ -8138,27 +8429,27 @@ class CMSprite {
 				}
 			}
 
-			if(rectToBound.x + rectToBound.width > boundingRect.width) { // right wall
+			if(rectToBound.x + rectToBound.width > boundingRect.x + boundingRect.width) { // right wall
 				switch(this.boundingRuleRight) {
 					case "wrap":
-						if(rectToBound.x > boundingRect.width) {
+						if(rectToBound.x > boundingRect.x + boundingRect.width) {
 							this.x = rectToBound.x - boundingRect.width;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.x > boundingRect.width) {
+							while(this.x > boundingRect.x + boundingRect.width) {
 								this.x -= boundingRect.width;
 							}
 						}
 						break;
 					case "bounce":
-						this.x = boundingRect.width - rectToBound.width;
+						this.x = boundingRect.x + boundingRect.width - rectToBound.width;
 						this.velocity.x = -Math.abs(this.velocity.x);
 						break;
 					case "fence":
-						this.x = boundingRect.width - rectToBound.width;
+						this.x = boundingRect.x + boundingRect.width - rectToBound.width;
 						break;
 					case "destroy":
-						if(rectToBound.x > boundingRect.width)
+						if(rectToBound.x > boundingRect.x + boundingRect.width)
 							this.destroy();
 						break;
 					case "none":
@@ -8171,27 +8462,27 @@ class CMSprite {
 				}
 			}
 
-			if(rectToBound.y < 0) { // top wall
+			if(rectToBound.y < boundingRect.y) { // top wall
 				switch(this.boundingRuleTop) {
 					case "wrap":
-						if(rectToBound.y + rectToBound.height < 0) {
+						if(rectToBound.y + rectToBound.height < boundingRect.y) {
 							this.y = boundingRect.height + (rectToBound.y + rectToBound.height); // boundingRect.height;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.y + this.height < 0) {
+							while(this.y + this.height < boundingRect.y) {
 								this.y += boundingRect.height;
 							}
 						}
 						break;
 					case "bounce":
-						this.y = 0;
+						this.y = boundingRect.y;
 						this.velocity.y = Math.abs(this.velocity.y);
 						break;
 					case "fence":
-						this.y = 0;
+						this.y = boundingRect.y;
 						break;
 					case "destroy":
-						if(rectToBound.y + rectToBound.height < 0)
+						if(rectToBound.y + rectToBound.height < boundingRect.y)
 							this.destroy();
 						break;
 					case "none":
@@ -8204,27 +8495,27 @@ class CMSprite {
 				}
 			}
 
-			if(rectToBound.y + rectToBound.height > boundingRect.height) { // bottom wall
+			if(rectToBound.y + rectToBound.height > boundingRect.y + boundingRect.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
-						if(rectToBound.y > boundingRect.height) {
+						if(rectToBound.y > boundingRect.y + boundingRect.height) {
 							this.y = rectToBound.y - boundingRect.height;
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.y > boundingRect.height) {
+							while(this.y > boundingRect.y + boundingRect.height) {
 								this.y -= boundingRect.height;
 							}
 						}
 						break;
 					case "bounce":
-						this.y = boundingRect.height - rectToBound.height;
+						this.y = boundingRect.y + boundingRect.height - rectToBound.height;
 						this.velocity.y = -Math.abs(this.velocity.y);
 						break;
 					case "fence":
-						this.y = boundingRect.height - rectToBound.height;
+						this.y = boundingRect.y + boundingRect.height - rectToBound.height;
 						break;
 					case "destroy":
-						if(rectToBound.y > boundingRect.height)
+						if(rectToBound.y > boundingRect.y + boundingRect.height)
 							this.destroy();
 						break;
 					case "none":
@@ -8503,11 +8794,11 @@ Object.defineProperties(CMSprite.prototype, {
 Object.defineProperty(CMSprite.prototype, "boundingRule", {
 
 	get() {
-		return this.boundingRulePrivate;
+		return this.boundingRule_Private;
 	},
 
 	set(newRule) {
-		this.boundingRulePrivate = newRule;
+		this.boundingRule_Private = newRule;
 
 		if(Array.isArray(newRule)) {
 			[this.boundingRuleTop, this.boundingRuleRight,
@@ -8528,7 +8819,7 @@ Object.defineProperty(CMSprite.prototype, "boundingRule", {
  */
 Object.defineProperty(CMSprite.prototype, "layer", {
 	get() {
-		return this.layerPrivate;
+		return this.layer_Private;
 	},
 
 	set(newLayer) {
@@ -8542,7 +8833,7 @@ Object.defineProperty(CMSprite.prototype, "layer", {
 			newLayer = lowestLayer - 1;
 		}
 
-		this.layerPrivate = newLayer;
+		this.layer_Private = newLayer;
 		this.game.sprites.sort((a, b) => a.layer - b.layer);
 	}
 });
@@ -8732,6 +9023,57 @@ CMGame.clamp = (entry, bound, upperBound) => {
 		return Math.min(Math.max( 0, entry ), bound);
 };
 
+/**
+ * Shifts a value to an appropriate value
+ * between two others. Unlike clamp, this
+ * process does not force an entry outside bounds to
+ * take the value of the bounds, but rather
+ * adds/subtracts the length of the interval
+ * until the value is within the bounds.
+ * For integer values and a lower bound of 0,
+ * this is just usual % operation in JavaScript.
+ * If `entry` is negative, this returns the
+ * value expected in number theory (but not in JS).
+ * CMGame.mod(-2, 0, 10); // returns 8, whereas (-2) % 10 returns -2 
+ *
+ * This can take non-integer values, making it especially
+ * useful in keeping radian values between 0 and Math.TAU.
+ *
+ * Similar to modular arithmetic, the "lower bound" is
+ * inclusive, and the "upper bound" is exclusive. So for
+ * instance, and angel can map to 0, but not to Math.TAU.
+ *
+ * @param {number} entry - The number being mapped into this interval
+ * @param {number} bound - The lower bound. If upperBound is not provided,
+ *   this becomes the upper bound, and the lower bound is set to 0.
+ * @param {number} [upperBound] - The upper bound if provided
+ * @returns {number}
+ */
+CMGame.mod = (entry, bound, upperBound) => {
+	let lowerBound = 0;
+	if(typeof upperBound === "number")
+		lowerBound = bound;
+
+	let intervalLength = (upperBound - lowerBound);
+
+	// Since JS supports non-integer modding, this reduces to normal process
+	if(lowerBound >= 0 && upperBound >= 0) {
+		return lowerBound + entry % intervalLength;
+	}
+
+	// Take care of negatives
+	while(entry < lowerBound) {
+		entry += intervalLength;
+	}
+
+	// Redundant?
+	while(entry >= upperBound) {
+		entry -= intervalLength;
+	}
+
+	return entry;
+};
+
 /** Class to manage drawable functions */
 class CMFunction {
 
@@ -8792,7 +9134,7 @@ class CMFunction {
 				this.continuous = false;
 
 				this.discontinuousAt = function(x, nextX) {
-					return !self.game.almostEqual(self.screenOf(x), self.screenOf(nextX));
+					return !self.game.almostEqual(self.realToScreenOf(x), self.realToScreenOf(nextX));
 				};
 			}
 		}
@@ -8833,7 +9175,9 @@ class CMFunction {
 		}
 
 		this.of = func; // e.g., if you name this function f, then f.of(2) is similar to f(2)
-		this.screenOf = null; // A function shifting and scaling given function (with real input) to the screen
+
+		// A function shifting and scaling given function (with real input) to the screen
+		this.realToScreenOf = null;
 
 		this.tStep = typeof opts.tStep === "number" ? opts.tStep : 0.1;
 		this.thetaStep = typeof opts.thetaStep === "number" ? opts.thetaStep : (Math.TAU / 360);
@@ -8934,14 +9278,14 @@ class CMFunction {
 						return self.valsArray[Math.floor(self.game.yToScreen(y))];
 					};
 
-					self.screenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
+					self.realToScreenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
 
 					self.screenValsArray = new Array((self.game.height - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(y => self.screenOf( self.game.xToReal( y, self.origin ) ) );
+						.map(y => self.realToScreenOf( self.game.xToReal( y, self.origin ) ) );
 
-					self.screenOf = function(y) {
+					self.realToScreenOf = function(y) {
 						return self.screenValsArray[Math.floor(self.game.yToScreen(y))];
 					};
 					break;
@@ -8963,16 +9307,16 @@ class CMFunction {
 						return self.valsArray[Math.floor(theta / self.thetaStep)];
 					};
 
-					self.screenOf = function(theta) {
+					self.realToScreenOf = function(theta) {
 						return (self.of(theta) * self.game.graphScalar);
 					};
 
 					self.screenValsArray = new Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(i => self.screenOf( i * self.thetaStep ) );
+						.map(i => self.realToScreenOf( i * self.thetaStep ) );
 
-					self.screenOf = function(theta) {
+					self.realToScreenOf = function(theta) {
 						return self.screenValsArray[Math.floor(theta / self.thetaStep)];
 					};
 					break;
@@ -8986,7 +9330,7 @@ class CMFunction {
 						return self.valsArray[Math.floor(t)];
 					};
 
-					self.screenOf = function(t) {
+					self.realToScreenOf = function(t) {
 						let xyFromParam = self.of( t );
 						return self.game.toScreen(xyFromParam, self.origin);
 					};
@@ -8994,9 +9338,9 @@ class CMFunction {
 					self.screenValsArray = new Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(t => self.screenOf( t * self.tStep ) );
+						.map(t => self.realToScreenOf( t * self.tStep ) );
 
-					self.screenOf = function(t) {
+					self.realToScreenOf = function(t) {
 						return self.screenValsArray[Math.floor(t)];
 					};
 					break;
@@ -9011,40 +9355,40 @@ class CMFunction {
 						return self.valsArray[Math.floor(self.game.xToScreen(x))];
 					};
 
-					self.screenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
+					self.realToScreenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
 
 					self.screenValsArray = new Array((self.game.width - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
-						.map(i => self.screenOf( self.game.xToReal( i, self.origin ) ) );
+						.map(i => self.realToScreenOf( self.game.xToReal( i, self.origin ) ) );
 
-					self.screenOf = function(x) {
+					self.realToScreenOf = function(x) {
 						return self.screenValsArray[Math.floor(self.game.xToScreen(x))];
 					};
 					break;
 			}
 		}
 		else
-		// Define the onscreen "screenOf" function for functions that are not "fixed" on the screen
+		// Define the onscreen "realToScreenOf" function for functions that are not "fixed" on the screen
 		{
 			switch(this.type) {
 				case "xofy":
-					self.screenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
+					self.realToScreenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
 					break;
 				case "polar":
-					self.screenOf = function(theta) {
+					self.realToScreenOf = function(theta) {
 						return (self.of(theta) * self.game.graphScalar);
 					};
 					break;
 				case "parametric":
-					self.screenOf = function(t) {
+					self.realToScreenOf = function(t) {
 						let xyFromParam = self.of( t );
 						return self.game.toScreen(xyFromParam, self.origin);
 					};
 					break;
 				case "cartesian":
 				default:
-					self.screenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
+					self.realToScreenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
 					break;
 			}
 		}
@@ -9053,6 +9397,10 @@ class CMFunction {
 			this.origin.x,
 			this.origin.y
 		);
+
+		// Note: for zoom in/out we only need to track x and y values
+		this.unzoomedStart = new CMPoint(this.start);
+		this.unzoomedEnd = new CMPoint(this.end);
 
 		// Define pathAbove and pathBelow
 		this.buildGraphPath(this.game.ctx);
@@ -9069,20 +9417,12 @@ class CMFunction {
 	 * boundaries. For simplicity, this is only
 	 * invoked on "zoom out".
 	 * Mostly used internally.
-	 * @param {number} oldScalar - graphScalar before the change
+	 * @param {number} [oldScalar=1] - graphScalar before the change
 	 */
-	updateBounds(oldScalar) {
+	updateBounds(oldScalar=1) {
 
-		if(this.game.zoomLevel === 1) {
-			this.origin.x = this.unzoomedOrigin.x;
-			this.origin.y = this.unzoomedOrigin.y;
-		}
-		/*
-		else {
-			this.origin.x = this.center.x + (this.unzoomedOrigin.x - this.center.x) / this.zoomLevel;
-			this.origin.y = this.center.y + (this.unzoomedOrigin.y - this.center.y) / this.zoomLevel;
-		}
-		*/
+		this.origin.x = this.origin.x + (this.unzoomedOrigin.x - this.origin.x) / this.game.zoomLevel;
+		this.origin.y = this.origin.y + (this.unzoomedOrigin.y - this.origin.y) / this.game.zoomLevel;
 
 		if(this.origin.x - (oldScalar * this.start.x) === 0) {
 			this.start.x = -(this.origin.x / this.game.graphScalar);
@@ -9124,7 +9464,7 @@ class CMFunction {
 				initialScreenRealX = (initialI - this.origin.x) / game.graphScalar;
 				finalI = Math.min(canvas.width, this.game.xToScreen(this.end.x, this.origin) );
 
-				this.path.moveTo(initialI, this.screenOf( initialScreenRealX ) );
+				this.path.moveTo(initialI, this.realToScreenOf( initialScreenRealX ) );
 
 				for(let i = initialI + 1; i <= finalI; i++) {
 
@@ -9133,15 +9473,15 @@ class CMFunction {
 
 					// Don't connect over vertical asymptotes
 					if(
-						(this.screenOf(screenGraphX) < 0 && this.screenOf(screenGraphXMinus1) > canvas.height) ||
-						(this.screenOf(screenGraphXMinus1) < 0 && this.screenOf(screenGraphX) > canvas.height) ||
+						(this.realToScreenOf(screenGraphX) < 0 && this.realToScreenOf(screenGraphXMinus1) > canvas.height) ||
+						(this.realToScreenOf(screenGraphXMinus1) < 0 && this.realToScreenOf(screenGraphX) > canvas.height) ||
 						 this.discontinuousAt(screenGraphXMinus1, screenGraphX)) {
 
 						this.continuous = false;
-						this.path.moveTo(i, this.screenOf(screenGraphX) );
+						this.path.moveTo(i, this.realToScreenOf(screenGraphX) );
 					}
 					else {
-						this.path.lineTo(i, this.screenOf(screenGraphX) );
+						this.path.lineTo(i, this.realToScreenOf(screenGraphX) );
 					}
 				}
 
@@ -9166,7 +9506,7 @@ class CMFunction {
 				initialScreenRealY = (initialI - this.origin.y) / game.graphScalar;
 				finalI = Math.min(game.height, game.height - this.game.yToScreen( this.end.y, this.origin) );
 
-				this.path.moveTo(this.screenOf( initialScreenRealY ), game.height - initialI);
+				this.path.moveTo(this.realToScreenOf( initialScreenRealY ), game.height - initialI);
 
 				for(let i = initialI + 1; i <= finalI; i++) {
 
@@ -9175,14 +9515,14 @@ class CMFunction {
 
 					// Don't connect over horizontal asymptotes
 					if(
-						(this.screenOf(screenGraphY) < 0 && this.screenOf(screenGraphYMinus1) > canvas.width) ||
-						(this.screenOf(screenGraphYMinus1) < 0 && this.screenOf(screenGraphY) > canvas.width)) {
+						(this.realToScreenOf(screenGraphY) < 0 && this.realToScreenOf(screenGraphYMinus1) > canvas.width) ||
+						(this.realToScreenOf(screenGraphYMinus1) < 0 && this.realToScreenOf(screenGraphY) > canvas.width)) {
 
 						this.continuous = false;
-						this.path.moveTo(this.screenOf(screenGraphY), game.height - i );
+						this.path.moveTo(this.realToScreenOf(screenGraphY), game.height - i );
 					}
 					else {
-						this.path.lineTo(this.screenOf(screenGraphY), game.height - i);
+						this.path.lineTo(this.realToScreenOf(screenGraphY), game.height - i);
 					}
 				}
 
@@ -9198,7 +9538,7 @@ class CMFunction {
 				break;
 			case "polar":
 				initialPoint = game.fromPolar({
-						r: this.screenOf(0),
+						r: this.realToScreenOf(0),
 						theta: 0
 					});
 
@@ -9207,7 +9547,7 @@ class CMFunction {
 
 					let point = game.fromPolar(
 						{
-							r: this.screenOf(th),
+							r: this.realToScreenOf(th),
 							theta: th
 						});
 
@@ -9228,12 +9568,12 @@ class CMFunction {
 				this.pathAbove.lineTo(game.width + ctx.lineWidth, this.origin.y - initialPoint.y);
 				break;
 			case "parametric":
-				initialPoint = this.screenOf(0);
+				initialPoint = this.realToScreenOf(0);
 				this.path.moveTo(initialPoint.x, initialPoint.y);
 
 				// If no end has been provided, there is nothing to draw (no time elapses)
 				for(let tIndex = this.tStep; tIndex < this.end.t; tIndex += this.tStep) {
-					let point = this.screenOf(tIndex);
+					let point = this.realToScreenOf(tIndex);
 					this.path.lineTo( point.x, point.y);
 				}
 
@@ -9314,7 +9654,7 @@ class CMFunction {
 		let canvas = game.canvas;
 
 		let initialPoint = game.fromPolar({
-				r: this.screenOf(0),
+				r: this.realToScreenOf(0),
 				theta: 0
 			});
 
@@ -9324,7 +9664,7 @@ class CMFunction {
 
 			let point = game.fromPolar(
 				{
-					r: this.screenOf(th),
+					r: this.realToScreenOf(th),
 					theta: th
 				});
 
@@ -9367,13 +9707,13 @@ class CMFunction {
 		let game = this.game;
 		let canvas = game.canvas;
 
-		let initialPoint = this.screenOf(0);
+		let initialPoint = this.realToScreenOf(0);
 		this.path = new Path2D();
 		this.path.moveTo(initialPoint.x, initialPoint.y);
 
 		// If no end has been provided, there is nothing to draw (no time elapses)
 		for(let tIndex = this.tStep; tIndex < this.end.t; tIndex += this.tStep) {
-			let point = this.screenOf(tIndex);
+			let point = this.realToScreenOf(tIndex);
 			this.path.lineTo( point.x, point.y);
 		}
 
@@ -9402,7 +9742,7 @@ class CMFunction {
 
 		// Draw the current graph
 		this.path = new Path2D();
-		this.path.moveTo(this.screenOf( initialScreenRealY ), game.height - initialI);
+		this.path.moveTo(this.realToScreenOf( initialScreenRealY ), game.height - initialI);
 
 		for(let i = initialI + 1; i <= finalI; i++) {
 
@@ -9411,15 +9751,15 @@ class CMFunction {
 
 			// Don't connect over horizontal asymptotes
 			if(
-				(this.screenOf(screenGraphY) < 0 && this.screenOf(screenGraphYMinus1) > canvas.width) ||
-				(this.screenOf(screenGraphYMinus1) < 0 && this.screenOf(screenGraphY) > canvas.width)) {
+				(this.realToScreenOf(screenGraphY) < 0 && this.realToScreenOf(screenGraphYMinus1) > canvas.width) ||
+				(this.realToScreenOf(screenGraphYMinus1) < 0 && this.realToScreenOf(screenGraphY) > canvas.width)) {
 
 				ctx.stroke(this.path);
 				this.continuous = false;
-				this.path.moveTo(this.screenOf(screenGraphY), game.height - i );
+				this.path.moveTo(this.realToScreenOf(screenGraphY), game.height - i );
 			}
 			else {
-				this.path.lineTo(this.screenOf(screenGraphY), game.height - i);
+				this.path.lineTo(this.realToScreenOf(screenGraphY), game.height - i);
 			}
 		}
 
@@ -9461,7 +9801,7 @@ class CMFunction {
 
 		// Draw the current graph
 		this.path = new Path2D();
-		this.path.moveTo(initialI, this.screenOf( initialScreenRealX ) );
+		this.path.moveTo(initialI, this.realToScreenOf( initialScreenRealX ) );
 
 		for(let i = initialI + 1; i <= finalI; i++) {
 
@@ -9470,16 +9810,16 @@ class CMFunction {
 
 			// Don't connect over vertical asymptotes
 			if(
-				(this.screenOf(screenGraphX) < 0 && this.screenOf(screenGraphXMinus1) > canvas.height) ||
-				(this.screenOf(screenGraphXMinus1) < 0 && this.screenOf(screenGraphX) > canvas.height) ||
+				(this.realToScreenOf(screenGraphX) < 0 && this.realToScreenOf(screenGraphXMinus1) > canvas.height) ||
+				(this.realToScreenOf(screenGraphXMinus1) < 0 && this.realToScreenOf(screenGraphX) > canvas.height) ||
 				this.discontinuousAt(screenGraphXMinus1, screenGraphX)) {
 
 				ctx.stroke(this.path);
 				this.continuous = false;
-				this.path.moveTo(i, this.screenOf(screenGraphX) );
+				this.path.moveTo(i, this.realToScreenOf(screenGraphX) );
 			}
 			else {
-				this.path.lineTo(i, this.screenOf(screenGraphX) );
+				this.path.lineTo(i, this.realToScreenOf(screenGraphX) );
 			}
 		}
 
@@ -9555,11 +9895,10 @@ class CMFunction {
 					pointYStyle = "color: rgb(255, 95, 95)";
 				}
 
-				console.log(`Point (%c${point.x}%c, %c${point.y}%c) is outside canvas`,
-					pointXStyle,
-					"color: default",
-					pointYStyle,
-					"color: default");
+				if(this.debug) {
+					console.log(`Point (%c${point.x}%c, %c${point.y}%c) is outside canvas`,
+						pointXStyle, "color: default", pointYStyle, "color: default");
+				}
 
 				return "unknown";
 			}
@@ -9599,6 +9938,72 @@ class CMFunction {
 	 */
 	discontinuousAt(input, nextInput) {
 		return false;
+	}
+
+	/**
+	 * Each CMFunction instance, f, has 4
+	 * types of mathematical functions:
+	 *
+	 * - f.of() maps a real number to a real number (or point)
+	 * - f.screenOf() maps the onscreen pixel point to where the function's
+	 *   output would be (as an onscreen pixel point)
+	 * - f.realToScreenOf() takes the real input, returns the value (in
+	 *    pixels) where that input's real output would show on the screen
+	 * - f.screenToRealOf() take an onscreen pixel point as an input,
+	 *   determines what the real-valued equivalent input is, and
+	 *   returns the function's real output for that real input
+	 */
+
+	/**
+	 * Takes screen pixel input value, and returns
+	 * screen pixel output value associated with
+	 * this function and function type.
+	 * @param {number} screenInput - A pixel value (x or y) or angle or time
+	 * @returns {number}
+	 */
+	screenOf( screenInput ) { // i.e., screenToScreenOf() 
+
+		let realInput;
+		switch(this.type) {
+			case "cartesian":
+				realInput = this.game.xToReal( screenInput, this.origin );
+				break;
+			case "xofy":
+				realInput = this.game.yToReal( screenInput, this.origin );
+				break;
+			case "polar": // angle and "time" do not change
+			case "parametric":
+				realInput = screenInput;
+				break;
+		}
+
+		this.realToScreenOf( realInput );
+	}
+
+	/**
+	 * Takes screen pixel input value, uses its real equivalent,
+	 * and returns real (not screen pixel) output value
+	 * associated with this function and function type.
+	 * @param {number} screenInput - A pixel value (x or y) or angle or time
+	 * @returns {number}
+	 */
+	screenToRealOf( screenInput ) {
+
+		let realInput;
+		switch(this.type) {
+			case "cartesian":
+				realInput = this.game.xToReal( screenInput, this.origin );
+				break;
+			case "xofy":
+				realInput = this.game.yToReal( screenInput, this.origin );
+				break;
+			case "polar": // angle and "time" do not change
+			case "parametric":
+				realInput = screenInput;
+				break;
+		}
+
+		return this.of( realInput );
 	}
 
 	/**
@@ -10533,8 +10938,6 @@ class CMVertex extends CMSprite {
 				edge.end.y = this.y;
 			}
 		}
-
-		this.onupdate(frameCount);
 	}
 
 	/**
@@ -10975,8 +11378,6 @@ class CMnGon extends CMSprite {
 			this.rebuildPath();
 			this.previousState = [this.n, this.x, this.y, this.radius, this.rotation].join(";");
 		}
-
-		this.onupdate(frameCount);
 	}
 
 	/**
@@ -11102,8 +11503,6 @@ class CMPolygon extends CMSprite {
 			this.bottom = this.points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.y), 0);
 			this.rebuildPath();
 		}
-
-		this.onupdate(frameCount);
 	}
 
 	/**
