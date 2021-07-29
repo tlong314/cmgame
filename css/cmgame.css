@@ -428,6 +428,12 @@ button {
 	border-color: rgb(235, 235, 235);
 }
 
+button:disabled {
+	box-shadow: none;
+	background-color: rgb(158, 158, 158); /* gray */
+	color: rgb(205, 205, 205); /* light_gray */
+}
+
 /**
  * Tutorial for styling your own play button can be found here:
  * https://css-tricks.com/making-pure-css-playpause-button/
