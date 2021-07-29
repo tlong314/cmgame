@@ -535,7 +535,11 @@ Generally you will not be accessing CMFunction properties and methods directly. 
 func.of(x);
 
 // Returns the onscreen pixel value output of the real input x. For instance, if func is type "cartesian" this will get the real y value and return the onscreen y-value that represents this number (based on the function's origin, and the game's graphScalar)
-func.screenOf(x);
+func.realToScreenOf(x);
+
+// Similarly...
+func.screenToRealOf(x); // Input is a screen pixel value, output is the real ouput (from associated real input)
+func.screenOf(x); // Input and output are both onscreen pixel values
 
 // These are 3 ways to perform the same operation: Look at the point (200, 400) on the canvas, and determine its position relative to the graph.
 func.positionOf(200, 400);
