@@ -614,7 +614,7 @@ class CMAudio extends Audio {
 		super();
 
 		// Has already been defined
-		if(imageSrc instanceof CMAudio) {
+		if(audioSrc instanceof CMAudio) {
 			return this;
 		}
 
@@ -1021,22 +1021,22 @@ class CMSwipe {
 	 * Note: the endpoint's coordinates are listed
 	 * first, as they are likely to be the most useful
 	 * @param {CMGame} game - The current game instance
-	 * @param {number} newX - x value of the swipe's endpoint
-	 * @param {number} newY - y value of the swipe's endpoint
+	 * @param {number} x - x value of the swipe's endpoint
+	 * @param {number} y - y value of the swipe's endpoint
 	 * @param {number} oldX - x value of the swipe's starting point
 	 * @param {number} oldY - y value of the swipe's starting point
 	 */
-	constructor(game, newX, newY, oldX, oldY) {
+	constructor(game, x, y, oldX, oldY) {
 		this.game = game;
-		this.newX = newX;
-		this.newY = newY;
+		this.x = x;
+		this.y = y;
 		this.oldX = oldX;
 		this.oldY = oldY;
-		this.offsetX = this.newX - this.oldX;
-		this.offsetY = this.newY - this.oldY;
+		this.offsetX = this.x - this.oldX;
+		this.offsetY = this.y - this.oldY;
 
-		this.direction = this.getDirection(oldX, oldY, newX, newY); // "left", "up", "down", "right"
-		this.direction8 = this.getDirection8(oldX, oldY, newX, newY); // "left", "up", "upleft", "downright" , etc.
+		this.direction = this.getDirection(oldX, oldY, x, y); // "left", "up", "down", "right"
+		this.direction8 = this.getDirection8(oldX, oldY, x, y); // "left", "up", "upleft", "downright" , etc.
 
 		// These are for tracking ALL recorded swipes, even consecutive ones in the same direction
 		game.latestSwipes.push(this);
@@ -1065,12 +1065,12 @@ class CMSwipe {
 	 * so angles are "upside-down"
 	 * @param {number} oldX - The swipe's starting point's x value
 	 * @param {number} oldY - The swipe's starting point's y value
-	 * @param {number} newX - The swipe's ending point's x value
-	 * @param {number} newY - The swipe's ending point's y value
+	 * @param {number} x - The swipe's ending point's x value
+	 * @param {number} y - The swipe's ending point's y value
 	 * @returns {string}
 	 */
-	getDirection(oldX, oldY, newX, newY) {
-		let angle = this.game.toPolar(new CMPoint(newX - oldX, newY - oldY)).theta;
+	getDirection(oldX, oldY, x, y) {
+		let angle = this.game.toPolar(new CMPoint(x - oldX, y - oldY)).theta;
 
 		if(angle >= 1.75 * Math.PI || angle < .25 * Math.PI) {
 			this.direction = "right";
@@ -1098,12 +1098,12 @@ class CMSwipe {
 	 * so angles are "upside-down"
 	 * @param {number} oldX - The swipe's starting point's x value
 	 * @param {number} oldY - The swipe's starting point's y value
-	 * @param {number} newX - The swipe's ending point's x value
-	 * @param {number} newY - The swipe's ending point's y value
+	 * @param {number} x - The swipe's ending point's x value
+	 * @param {number} y - The swipe's ending point's y value
 	 * @returns {string}
 	 */
-	getDirection8(oldX, oldY, newX, newY) {
-		let angle = this.game.toPolar(new CMPoint(newX - oldX, newY - oldY)).theta;
+	getDirection8(oldX, oldY, x, y) {
+		let angle = this.game.toPolar(new CMPoint(x - oldX, y - oldY)).theta;
 		let octant = Math.PI / 8;
 
 		if(angle >= 15 * octant || angle < 1 * octant) {
@@ -1440,7 +1440,9 @@ class CMGame {
 
 		this.graphScalar = options.graphScalar || this.gridlineDistance;
 		this.graphScalar_Private = this.graphScalar;
-		this.screenScalar = 1.0; // CSS scaling for display; separate from graph - do not override
+
+		// CSS scaling for display; separate from graph - do not override
+		this.screenScalar = 1.0;
 
 		this.mouseState = new Array(5).fill(0);
 		this.mouseStateString = "00000";
@@ -2716,7 +2718,18 @@ class CMGame {
 		this.animFrameId = requestNextFrame(self.runCycle);
 
 		if(typeof this.onstart === "function") {
-			this.onstart(this);
+			try {
+				self.onstart(self);
+			}
+			catch(e) {
+				console.error(e);
+				console.log(`CMGame engine says: Chaining on creation may lead to an initialization error ` +
+					`if your onstart() method references the current game instance. ` +
+					`Try separating the .start() call from initialization. For instance,
+
+	const game = new CMGame();
+	game.start();`);
+			}
 		}
 
 		return this;
@@ -7684,12 +7697,15 @@ class CMSprite {
 	 *   draw function (taking game's drawing context as its sole parameter). Default is null.
 	 *   When extending the Sprite class, you can set this to null in the constructor's super() call
 	 *   to use the extended classes draw() method.
-	 * @param {string} [boundingRule="none"] - How to handle collision with screen edge
+	 * @param {string|function} [boundingRule="none"] - How to handle collision with screen edge.
+	 *   This can be a function, which takes a single argument, the "rectangle" object used to bound
+	 *   the sprite, which is the `this` object (the rectangle has x, y, width, and height number values),
+	 *   or it can be one of the following strings, which define common types of bounding behavior:
 	 *   "wrap": object appears on other side of screen once completely off screen
 	 *   "bounce": object bounces away from wall with same momentum
 	 *   "fence": object is pushed back so that it just rests on the wall
-	 *   "destroy": object is removed from game
-	 *   "none": (default) object just keeps moving offscreen,
+	 *   "destroy": object is removed from game (pulled from the game sprites, but you can add it again later)
+	 *   "none": object just keeps moving offscreen in current direction. This is the default value.
 	 * @param {object} [options={}] - A plain JS object of additional options,
 	 *   mainly for defining helper functions on creation.
 	 * @param {function} [options.onbeforeupdate] A function to be executed just before this sprite's update()
@@ -8797,14 +8813,32 @@ Object.defineProperty(CMSprite.prototype, "boundingRule", {
 		return this.boundingRule_Private;
 	},
 
-	set(newRule) {
+	set(newRule="none") {
 		this.boundingRule_Private = newRule;
 
 		if(Array.isArray(newRule)) {
-			[this.boundingRuleTop, this.boundingRuleRight,
-				this.boundingRuleBottom, this.boundingRuleLeft] = newRule;
+			switch(newRule.length) {
+				case 1:
+					[this.boundingRuleTop, this.boundingRuleRight,
+						this.boundingRuleBottom, this.boundingRuleLeft] = new Array(4).fill(newRule[0]);
+					break;
+				case 2: // Similar to CSS shorthand, 2 values imply vertical then horizontal
+					this.boundingRuleTop = newRule[0];
+					this.boundingRuleBottom = newRule[0];
+					this.boundingRuleLeft = newRule[1];
+					this.boundingRuleRight = newRule[1];
+					break;
+				case 4:
+					[this.boundingRuleTop, this.boundingRuleRight,
+						this.boundingRuleBottom, this.boundingRuleLeft] = newRule;
+					break;
+				default: {
+					console.error("Invalid array length of " + newRule.length +
+						" for CMSprite bounding rule");
+				}
+			}
 		}
-		else {
+		else { // Single rule is defined, so apply to all sides
 			[this.boundingRuleTop, this.boundingRuleRight,
 				this.boundingRuleBottom, this.boundingRuleLeft] = new Array(4).fill(newRule);
 		}
@@ -9057,7 +9091,7 @@ CMGame.mod = (entry, bound, upperBound) => {
 	let intervalLength = (upperBound - lowerBound);
 
 	// Since JS supports non-integer modding, this reduces to normal process
-	if(lowerBound >= 0 && upperBound >= 0) {
+	if(entry >= 0 && lowerBound >= 0 && upperBound >= 0) {
 		return lowerBound + entry % intervalLength;
 	}
 
@@ -9176,7 +9210,7 @@ class CMFunction {
 
 		this.of = func; // e.g., if you name this function f, then f.of(2) is similar to f(2)
 
-		// A function shifting and scaling given function (with real input) to the screen
+		// A function shifting and scaling given function's output (with real input) to the screen
 		this.realToScreenOf = null;
 
 		this.tStep = typeof opts.tStep === "number" ? opts.tStep : 0.1;
@@ -9388,7 +9422,9 @@ class CMFunction {
 					break;
 				case "cartesian":
 				default:
-					self.realToScreenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
+					self.realToScreenOf = function(x) {
+							return self.game.yToScreen(self.of(x), self.origin);
+						};
 					break;
 			}
 		}
