@@ -372,7 +372,7 @@ canvas {
 }
 
 /* Low CSS specificity to keep it easier to override, but provide opaque background for #cmTitle, etc.*/
-article, section, div {
+article, section {
 	background: rgb(255, 255, 255);
 }
 
@@ -598,6 +598,10 @@ label .cm-play-button {
 	background-color: rgb(121, 74, 25);
 }
 
+.cm-sand {
+	background-color: rgb(242, 245, 235);
+}
+
 .cm-tan {
 	background-color: rgb(242, 245, 235);
 }
@@ -709,6 +713,10 @@ label .cm-play-button {
 
 .cm-text-brown {
 	color: rgb(121, 74, 25);
+}
+
+.cm-text-sand {
+	color: rgb(242, 245, 235);
 }
 
 .cm-text-tan {
