@@ -90,10 +90,15 @@ const CMSound = (function() {
 
 	let sourceNodes = {};
 
-    const _af_buffers = new Map(),
-        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const _af_buffers = new Map();
+
+	let _audioCtxConstructor = (window.AudioContext || window.webkitAudioContext);
+    let _audioCtx = null;
 
     let _isUnlocked = false;
+
+	// To elminate warnings, we will hold off on _audioCtx initialization and file loading until user interaction
+	let loadQueue = [];
 
     /**
      * A shim to handle browsers which still expect the old callback-based decodeAudioData,
@@ -121,13 +126,15 @@ const CMSound = (function() {
     function _unlockAudio() {
         if (_isUnlocked) return;
 
-        // Scratch buffer to prevent memory leaks on iOS.
-        // See: https://stackoverflow.com/questions/24119684/web-audio-api-memory-leaks-on-mobile-platforms
-        const _scratchBuffer = _audioCtx.createBuffer(1, 1, 22050);
-
         // We call this when user interaction will allow us to unlock
         // the audio API.
         const unlock = function (e) {
+
+			_audioCtx = new _audioCtxConstructor();
+
+			// Scratch buffer to prevent memory leaks on iOS.
+			// See: https://stackoverflow.com/questions/24119684/web-audio-api-memory-leaks-on-mobile-platforms
+			const _scratchBuffer = _audioCtx.createBuffer(1, 1, 22050);
 
 			silentAudio.onended = function() {
 				var source = _audioCtx.createBufferSource();
@@ -158,6 +165,13 @@ const CMSound = (function() {
 
 					if(!unlockCalled) {
 						unlockCalled = true;
+
+						Promise.all(
+							loadQueue.map(obj =>
+								load(obj.filepath, obj.preferredName, "from prom"))
+						).then(() => {
+							// console.log("all audios loaded in CMSound");
+						});
 					}
 				};
 			}; // silentAudio.onended
@@ -183,6 +197,20 @@ const CMSound = (function() {
      * @returns {Promise<AudioBuffer>}
      */
     async function load (sfxFile, preferredName=null) {
+
+		/**
+		 * To prevent decodeShim throwing an error as we wait for user interaction,
+		 * we will store these requests in a queue
+		 */
+		if(!audUnlocked) {
+			loadQueue.push({
+				filepath: sfxFile,
+				preferredName: preferredName
+			});
+
+			return Promise.resolve(null);
+		}
+
         if (_af_buffers.has(sfxFile)) {
             return _af_buffers.get(sfxFile);
         }
@@ -211,17 +239,25 @@ const CMSound = (function() {
      */
     function play (sfxFile, loopIfTrue) {
 
-		// Added to improve performance, rather than call load on each play
+		// Added to improve performance. I mean, like, barely.
 		if(_af_buffers.has(sfxFile)) {
 			sourceNodes[sfxFile] = _audioCtx.createBufferSource();
             sourceNodes[sfxFile].loop = !!loopIfTrue;
 			sourceNodes[sfxFile].buffer = _af_buffers.get(sfxFile);
             sourceNodes[sfxFile].connect(_audioCtx.destination);
             sourceNodes[sfxFile].start();
-			return sourceNodes[sfxFile];
+			return Promise.resolve(sourceNodes[sfxFile]);
 		}
 
         return load(sfxFile).then((audioBuffer) => {
+			if(audioBuffer === null) {
+				/**
+				 * If sound is not loaded yet (e.g., on first user interaction)
+				 * reject so game will play from normal <audio>
+				 */
+				return Promise.reject("CMSound audios not loaded");
+			}
+
             sourceNodes[sfxFile] = _audioCtx.createBufferSource();
 			sourceNodes[sfxFile].loop = !!loopIfTrue;
             sourceNodes[sfxFile].buffer = audioBuffer;
@@ -1245,6 +1281,7 @@ class CMGame {
 
 		this.images = {};
 		this.audios = {}; // Used internally as a fallback when `fetch` won't happen
+		this.audioSources = {}; // Used to map key/id/name to source string
 		this.audioMap = new Map(); // Main audio object; used for best performance
 
 		if(Array.isArray(options.images)) {
@@ -1262,17 +1299,20 @@ class CMGame {
 			}
 		}
 
-		// Note: this.audios is mainly used internally. Use playAudio(), etc.
+		// Note: this.audios is mainly used internally. Use playSound(), etc.
 		if(Array.isArray(options.audios)) {
 			for(let i = 0; i < options.audios.length; i++) {
 				let keyString = CMGame.trimFilename( options.audios[i] );
 				this.audios[i] = this.audios[keyString] =
 						new CMAudio(options.audios[i], null, this);
+
+				this.audioSources[ keyString ] = options.audios[i];
 			}
 		}
 		else {
 			for(let key in options.audios) {
 				this.audios[key] = new CMAudio(options.audios[key], key, this);
+				this.audioSources[ key ] = options.audios[key];
 			}
 		}
 
@@ -1444,7 +1484,7 @@ class CMGame {
 		// CSS scaling for display; separate from graph - do not override
 		this.screenScalar = 1.0;
 
-		this.mouseState = new Array(5).fill(0);
+		this.mouseState = Array(5).fill(0);
 		this.mouseStateString = "00000";
 		this.started = false;
 		this.paused = true;
@@ -1472,7 +1512,7 @@ class CMGame {
 		this.latestSwipePath = []; // Similar to latestSwipeStrings, but discarding consecutive repeats
 		this.latestSwipePath8 = []; // Similar to latestSwipePath, with 8 directions
 
-		this.hideOnStart = options.hideOnStart || [];
+		this.hideOnStart = options.hideOnStart;
 
 		this.wrapper = null;
 		switch(typeof options.wrapper) {
@@ -2705,12 +2745,32 @@ class CMGame {
 			this.onbeforestart();
 		}
 
-		for(let item of this.hideOnStart) {
-			if(typeof item === "object")
-				elm.style.display = "none";
-			else
-			if(typeof item === "string")
-				document.querySelector(item).style.display = "none";
+		// hideOnStart can be set to null or [] to not hide anything - undefined hides non-game parts
+		if(typeof this.hideOnStart === "undefined") {
+			let allowedElements = [document.querySelector("#cmWrapper"),
+				document.querySelector("#cmAlert"),
+				document.querySelector("#cmToast"),
+				document.querySelector("#cmOffscreenToast")]
+					.concat(Array.from( document.querySelectorAll("#cmWrapper *")))
+					.concat(Array.from( document.querySelectorAll("#cmAlert *")))
+					.concat(Array.from( document.querySelectorAll("br")))
+					.concat(Array.from( document.querySelectorAll("script")));
+
+			document.querySelectorAll("body *").forEach(elm => {
+				if(!allowedElements.includes(elm) &&
+						elm.querySelectorAll("#cmWrapper").length === 0) { // elm does not contain the game and wrapper
+					elm.style.display = "none";
+				}
+			});
+		}
+		else {
+			for(let item of this.hideOnStart) {
+				if(typeof item === "object")
+					elm.style.display = "none";
+				else
+				if(typeof item === "string")
+					document.querySelector(item).style.display = "none";
+			}
 		}
 
 		this.started = true;
@@ -4854,8 +4914,8 @@ class CMGame {
 	 * and are followed by one options object.
 	 * @param {object} image - The image (Image instance, <img> element, etc.) to be rotated
 	 * @param {array} args - All arguments after the image are saved in a rest parameter.
-	 *   Before the last parameter, representing the "options" argument, these represent the usual
-	 *   drawImage parameters.
+	 *   Before the last argument (which represents the "options" argument) these represent
+	 *   the usual drawImage parameters of a CanvasRenderingContext2D instance.
 	 * @param {object|number} [options] - Drawing options. If just
 	 *   a number is entered, this will be taken as the
 	 *   angle and the rotation will rotate about the image center.
@@ -5360,7 +5420,7 @@ class CMGame {
 		}
 
 		let self = this;
-		CMSound.play(soundId).then(CMGame.noop, function() {
+		CMSound.play( this.audioSources[soundId] ).then(CMGame.noop, function() {
 
 			// CMSound not working (e.g., when testing locally), default to normal Audio()
 			try {
@@ -5381,7 +5441,7 @@ class CMGame {
 	 */
 	stopSound(soundId) {
 		let self = this;
-		CMSound.stop(soundId).then(CMGame.noop, () => {
+		CMSound.stop( this.audioSources[soundId] ).then(CMGame.noop, () => {
 			try {
 				self.audioMap.get(soundId).pause();
 				self.audioMap.get(soundId).currentTime = 0;
@@ -5399,10 +5459,9 @@ class CMGame {
 	 */
 	pauseSound(soundId) {
 		let self = this;
-		CMSound.stop(soundId).then(CMGame.noop, () => {
+		CMSound.stop( this.audioSources[soundId] ).then(CMGame.noop, () => {
 			try {
 				self.audioMap.get(soundId).pause();
-				self.audioMap.get(soundId).currentTime = 0;
 			}
 			catch(e) {
 				console.error("Error pausing sound " + soundId);
@@ -5422,7 +5481,7 @@ class CMGame {
 		}
 
 		let self = this;
-		CMSound.loop(soundId).then(CMGame.noop, () => {
+		CMSound.loop( this.audioSources[soundId] ).then(CMGame.noop, () => {
 
 			// CMSound not working (e.g., when testing locally), default to normal Audio()
 			try {
@@ -5442,7 +5501,7 @@ class CMGame {
 	 */
 	pauseMusic(soundId) {
 		let self = this;
-		CMSound.pause(soundId).then(CMGame.noop, () => {
+		CMSound.pause( this.audioSources[soundId] ).then(CMGame.noop, () => {
 			try {
 				self.audioMap.get(soundId).pause();
 			}
@@ -5459,7 +5518,7 @@ class CMGame {
 	 */
 	stopMusic(soundId) {
 		let self = this;
-		CMSound.stop(soundId).then(CMGame.noop, () => {
+		CMSound.stop( this.audioSources[soundId] ).then(CMGame.noop, () => {
 			try {
 				self.audioMap.get(soundId).pause();
 				self.audioMap.get(soundId).currentTime = 0;
@@ -5723,43 +5782,106 @@ class CMGame {
 	 * Converts a given slope, to the corresponding
 	 * degrees it would represent on the unit circle,
 	 * emanating from the origin.
+	 *
+	 * See notes in slopeToRadians about multiple
+	 * outputs.
+	 *
 	 * @param {number} slope - The slope (allowing infinite values)
-	 * @returns {number}
+	 * @param {number|string} [direction=1] - Direction from origin that answers can be pulled
+	 *    from. Choices are "right" (the default), "left"
+	 * @returns {number|array}
 	 */
-	slopeToDegrees(slope) {
-		if(slope === Infinity) {
-			return 90;
+	slopeToDegrees(slope, direction) {
+
+		// Handle vertical slopes first
+		if(!Number.isFinite(slope)) {
+			switch(direction) {
+				case "right":
+				case 1:
+					if(slope === Infinity)
+						return 90;
+					else
+						return 270;
+				case "left":
+				case 2:
+					if(slope === Infinity)
+						return 270;
+					else
+						return 90;
+				default:
+					return [90, 270];
+			}
 		}
 
-		if(slope === -Infinity) {
-			return 270;
-		}
+		let rads = this.slopeToRadians(slope, direction);
 
-		return this.toDegrees(
-			this.slopeToRadians(slope)
-		);
+		if(Array.isArray(rads)) {
+			return [this.toDegrees(rads[0]), this.toDegrees(rads[1])];
+		}
+		else
+			return this.toDegrees(rads);
 	}
 
 	/**
 	 * Converts a given slope, to the corresponding
 	 * radians it would represent on the unit circle,
-	 * emanating from the origin.
+	 * emanating from the origin (0, 0).
+	 *
+	 * Note: As every slope will have exactly two points on
+	 * the unit circle corresponding to it (on either side of
+	 * the origin), we must define which quadrants we are
+	 * allowed to pull our answer from.
+	 * "right" or 1 (Math.sign of any positive x value) gives
+	 *   the value to the right of the y-axis; "left" or -1 gives
+	 *   the value to the left (any value ON the y-axis has
+	 *   infinite slope, so will be returned immediately).
+	 * Any other second argument (0, 3, or whatever is preferred)
+	 *   will return a 2-element array with both values, in
+	 *   increasing order.
+	 *
 	 * @param {number} slope - The slope (allowing infinite values)
-	 * @returns {number}
+	 * @param {number|string} [direction=1] - Direction from origin that answers can be pulled
+	 *    from. Choices are 1 or "right" or right of the y-axis, "left" for left.
+	 * @returns {number|array}
 	 */
-	slopeToRadians(slope) {
-		if(slope === Infinity) {
-			return .5 * Math.PI;
+	slopeToRadians(slope, direction=1) {
+
+		// Handle vertical slopes first
+		if(!Number.isFinite(slope)) {
+			switch(direction) {
+				case "right":
+				case 1:
+					if(slope === Infinity)
+						return .5 * Math.PI;
+					else
+						return 1.5 * Math.PI;
+				case "left":
+				case 2:
+					if(slope === Infinity)
+						return 1.5 * Math.PI;
+					else
+						return .5 * Math.PI;
+				default:
+					return [.5 * Math.PI, 1.5 * Math.PI];
+			}
 		}
 
-		if(slope === -Infinity) {
-			return 1.5 * Math.PI;
-		}
+		// Convert a point with slope as "slope / 1" from the origin
+		let theta = this.toPolar({
+				x: 1,
+				y: slope
+			}).theta;
 
-		return this.toPolar({
-			x: 1,
-			y: slope
-		}).theta;
+		switch(direction) {
+			case "right":
+			case 1:
+				return theta;
+			case "left":
+			case 2:
+				return CMGame.mod( theta + Math.PI, 0, Math.TAU );
+			default:
+				return [theta, CMGame.mod( theta + Math.PI, 0, Math.TAU )].sort();
+		}
 	}
 
 	/**
@@ -5771,16 +5893,8 @@ class CMGame {
 	 */
 	degreesToSlope(deg) {
 
-		// Bring large entries within bound.
-		// We don't use % in case deg is not an integer.
-		while(deg >= 360) {
-			deg -= 360;
-		}
-
-		// Account for negative entries
-		while(deg < 0) {
-			deg += 360;
-		}
+		// move deg to appropriate bounds
+		deg = CMGame.mod(deg, 0, 360);
 
 		if(deg === 90) {
 			return Infinity;
@@ -5795,22 +5909,16 @@ class CMGame {
 
 	/**
 	 * Converts the radians on the unit circle, to
-	 * the corresponding slope. Returns Infinity
+	 * the corresponding slope (of points ordered
+	 * from left to right along the x-axis). Returns Infinity
 	 * for pi/2, and -Infinity for 3pi/2
 	 * @param {number} rad - The radians (from 0 inclusive to 2pi exclusive)
 	 * @returns {number}
 	 */
 	radiansToSlope(rad) {
-		// Bring large entries within bound.
-		// We don't use % in case deg is not an integer.
-		while(rad >= Math.TAU) {
-			rad -= Math.TAU;
-		}
 
-		// Account for negative entries
-		while(rad < 0) {
-			rad += Math.TAU;
-		}
+		// move rad to appropriate bounds
+		rad = CMGame.mod(rad, 0, Math.TAU);
 
 		if(rad === Math.PI / 2) {
 			return Infinity;
@@ -5824,15 +5932,17 @@ class CMGame {
 	}
 
 	/**
-	 * Gets the slope between to two-dimensional points.
+	 * Gets the slope between two two-dimensional points.
 	 * Note: JavaScript will return Infinity or -Infinity for a division by
 	 * zero. The dev may want to check the answer with
 	 * Number.isFinite() and set as "undefined" or undefined.
-	 * Note: This defines slope of a generic line. Since screen points
+	 *
+	 * Note: This defines slope of a generic real line. Since screen points
 	 * are drawn with y values upside-down, you may need to
 	 * change sign when working with screen points.
-	 * @param {Point|object} startPoint - The first point
-	 * @param {Point|object} endPoint - The second point
+	 *
+	 * @param {object} startPoint - The first point
+	 * @param {object} endPoint - The second point
 	 * @returns {number}
 	 */
 	getSlope(startPoint, endPoint) {
@@ -6391,6 +6501,78 @@ class CMGame {
 		}
 
 		return Math.abs(val - otherVal) < 1 / this.graphScalar;
+	}
+
+	/**
+	 * Gets an array of the sprites currently in the
+	 * game. To keep code future-proof (considering
+	 * that game.sprites may be stored in a Map
+	 * rather than an array) this method should be used
+	 * instead of accessing game.sprites directly
+	 * @returns {array}
+	 */
+	getSprites() {
+		return this.sprites;
+	}
+
+	/**
+	 * Gets an array of the functions
+	 * currently in the game.
+	 * See notes in getSprites()
+	 * @returns {array}
+	 */
+	getFunctions() {
+		return this.functions;
+	}
+
+	/**
+	 * Gets an array of the graph theory
+	 * edges currently in the game.
+	 * See notes in getSprites()
+	 * @returns {array}
+	 */
+	getEdges() {
+		return this.edges;
+	}
+
+	/**
+	 * Gets an array of the graph theory
+	 * vertices currently in the game.
+	 * See notes in getSprites()
+	 * @returns {array}
+	 */
+	getVertices() {
+		return this.vertices;
+	}
+
+	/**
+	 * Gets an array of the venn diagram
+	 * regions currently in the game.
+	 * See notes in getSprites()
+	 * @returns {array}
+	 */
+	getVennRegions() {
+		return Array.from( this.vennRegions.values() );
+	}
+
+	/**
+	 * Gets an array of the venn diagram
+	 *  sets currently in the game.
+	 * See notes in getSprites()
+	 * @returns {array}
+	 */
+	getVennSets() {
+		return Array.from( this.vennSets.values() );
+	}
+
+	/**
+	 * Gets an array of the CMDoodle
+	 * objects currently in the game.
+	 * See notes in getSprites()
+	 * @returns {array}
+	 */
+	getDoodles() {
+		return this.doodles;
 	}
 
 	/**
@@ -7525,7 +7707,12 @@ Object.defineProperty(CMGame.prototype, "font", {
 			currentFontSize = "10px";
 		}
 
-		// Font relative to scaling example: ctx.font = game.font.rel(12) + "px Arial";
+		/**
+		 * game.font.rel can be used to create a font at an
+		 * apparent pixel size regardless of scaling and zooming.
+		 *
+		 * Example: ctx.font = game.font.rel(12) + "px Arial";
+		 */
 		return {
 			rel: (pxForScale1) => pxForScale1 / self.screenScalar,
 			MONO: `${currentFontSize} monospace`,
@@ -8034,7 +8221,7 @@ class CMSprite {
 				let cart = game.fromPolar(
 				{
 					r: newPath.r || 1,
-					theta: newPath.theta || this.game.slopeToRadians(this.velocity.y / this.velocity.x)
+					theta: newPath.theta || this.game.slopeToRadians(this.velocity.y / this.velocity.x, Math.sign(this.velocity.x))
 				});
 
 				this.velocity.x = cart.x;
@@ -8148,7 +8335,7 @@ class CMSprite {
 				this.boundAsCircle();
 				break;
 			case "rect":
-				this.boundAsRect(this);
+				this.boundAsRect(this, this.boundingRect);
 				break;
 		}
 	}
@@ -8196,38 +8383,63 @@ class CMSprite {
 	}
 
 	/**
-	 * Sets the sprite's current course towards
-	 * a specific onscreen point.
-	 * @param {object} newPoint - The point to move towards (must have x and y values)
+	 * Sets the sprite's current course toward
+	 * a specific onscreen point (note: these points
+	 * are based on pixels, not real graph values).
+	 * @param {object|string} newPoint - The point to move towards as an object (must have x
+	 *   and y number values), or the angle to move, written as a string ending with "rad" or "deg",
+	 *   for radians or degrees, respectively
 	 * @param {number} [desiredSpeed=1] The velocity to move in the new direction.
 	 *   Note: this is not necessarily velocity of x or y coordinates, but really a polar radius.
 	 * @param {number} [startReferencePoint=this.center]
 	 */
 	moveToward(newPoint, desiredSpeed=1, startReferencePoint=this.center) {
-		if(new CMPoint(newPoint).isPoint(new CMPoint(startReferencePoint))) {
-			return this.setPath(0, 0);
-		}
-		
 		let xVelocity = desiredSpeed,
 			yVelocity = desiredSpeed;
 
-		let slope = game.getSlope(startReferencePoint, newPoint);
-
-		// Vertical slope, moving straight up or down
-		if(!Number.isFinite(slope)) {
-			yVelocity = desiredSpeed * Math.sign(newPoint.y - startReferencePoint.y);
-			return this.setPath(0, yVelocity);
+		// on same vertical line
+		if(typeof newPoint === "object" && newPoint.x === startReferencePoint.x) {
+			if(newPoint.y === startReferencePoint.y) { // same point! (ignoring any z value)
+				return this.setPath(0, 0);
+			}
+			else { // vertical slope, moving straight up or down
+				yVelocity = desiredSpeed * Math.sign(newPoint.y - startReferencePoint.y);
+				return this.setPath(0, yVelocity);
+			}
 		}
 
+		let game = this.game;
+		let theta = null;
+		if(typeof newPoint === "string") {
+			if(newPoint.endsWith("rad")) {
+				theta = parseFloat(newPoint.replace(/(Math\.)?pi/ig, "" + Math.PI)
+					.replace(/(Math\.)?tau/ig, "" + Math.TAU));
+			}
+			else
+			if(newPoint.endsWith("deg")) {
+				theta = game.toRadians( parseFloat(newPoint) );
+			}
+			else {
+				theta = 0;
+				console.error(`CMSprite moveToward() requires 'rad' or 'deg' at the end of first string argument`);
+			}
+		}
+		else { // "object"
+			// will be finite since vertical lines were handled previously
+			let slope;
+			if(startReferencePoint.x < newPoint.x)
+				slope = game.getSlope(startReferencePoint, newPoint);
+			else
+				slope = game.getSlope(startReferencePoint, newPoint);
+
+			theta = game.slopeToRadians(slope, Math.sign(newPoint.x - startReferencePoint.x));
+		}
+
+		// Get the (normalized) horizontal and vertical Cartesian distances
 		let point = game.fromPolar({
 				r: 1,
-				theta: game.slopeToRadians(slope)
+				theta: theta
 			});
-
-		if(newPoint.x < startReferencePoint.x) {
-			xVelocity *= -1;
-			yVelocity *= -1;
-		}
 
 		this.setPath(point.x * xVelocity, point.y * yVelocity);
 	}
@@ -8820,7 +9032,7 @@ Object.defineProperty(CMSprite.prototype, "boundingRule", {
 			switch(newRule.length) {
 				case 1:
 					[this.boundingRuleTop, this.boundingRuleRight,
-						this.boundingRuleBottom, this.boundingRuleLeft] = new Array(4).fill(newRule[0]);
+						this.boundingRuleBottom, this.boundingRuleLeft] = Array(4).fill(newRule[0]);
 					break;
 				case 2: // Similar to CSS shorthand, 2 values imply vertical then horizontal
 					this.boundingRuleTop = newRule[0];
@@ -8840,7 +9052,7 @@ Object.defineProperty(CMSprite.prototype, "boundingRule", {
 		}
 		else { // Single rule is defined, so apply to all sides
 			[this.boundingRuleTop, this.boundingRuleRight,
-				this.boundingRuleBottom, this.boundingRuleLeft] = new Array(4).fill(newRule);
+				this.boundingRuleBottom, this.boundingRuleLeft] = Array(4).fill(newRule);
 		}
 	}
 });
@@ -8874,17 +9086,58 @@ Object.defineProperty(CMSprite.prototype, "layer", {
 
 /**
  * Trims away very minor rounding errors,
- * by converting insignificantly small
+ * mainly by converting insignificantly small
  * values to zero. Returns the number input,
  * or 0 if the input was sufficiently small.
  * @param {number} val - A number to check
  * @returns {number}
  */
 CMGame.roundSmall = (val) => {
-	if( Math.abs(val) < 0.00000001 )
+
+	let tempVal = val;
+
+	// If preferred, dev can adjust these for different sensitivity
+	let tooCloseToZero = 0.00000001;
+	let tooManyZeroes = "00000000000000";
+	let tooManyNines = "99999999999999";
+
+	// Work with long repeated decimals (not large integers)
+	if((val + "").includes(".")) {
+		tempVal = val + "";
+		let vSplit = tempVal.split("."); 
+		let ints = vSplit[0];
+		let dec = vSplit[1];
+
+		// round tiny errors
+		if(dec.includes(tooManyZeroes)) {
+
+			// we cut off all decimal tempValues starting here
+			dec = "" + parseFloat( dec.substring(0, dec.indexOf(tooManyZeroes)) );
+		}
+
+		// sign will matter here
+		if(dec.includes(tooManyNines)) {
+			let ninesLocation = dec.indexOf(tooManyNines);
+
+			if(ninesLocation === 0) { // started after decimal, round up to next integer
+				ints = parseInt(ints) + Math.sign(val);
+				dec = 0;
+			}
+			else {
+				// strip away all the nines (and anything after) and round up
+				dec = parseFloat( "." + dec.substring(0, ninesLocation) );
+				dec += 1 / (10**ninesLocation);
+				dec = parseFloat( (dec + "").replace(".", "") );
+			}
+		}
+
+		tempVal = parseFloat(ints + "." + dec);
+	}
+
+	if( Math.abs(tempVal) < tooCloseToZero )
 		return 0;
 	else
-		return val;
+		return tempVal;
 };
 
 /**
@@ -9303,7 +9556,7 @@ class CMFunction {
 			// For a function without values changing, we can store the values once
 			switch(self.type) {
 				case "xofy":
-					self.valsArray = new Array((self.game.height - 0) / 1)
+					self.valsArray = Array((self.game.height - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(y => self.of( self.game.xToReal( y, self.origin ) ) );
@@ -9314,7 +9567,7 @@ class CMFunction {
 
 					self.realToScreenOf = function(y) { return self.game.xToScreen(self.of(y), self.origin); };
 
-					self.screenValsArray = new Array((self.game.height - 0) / 1)
+					self.screenValsArray = Array((self.game.height - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(y => self.realToScreenOf( self.game.xToReal( y, self.origin ) ) );
@@ -9324,7 +9577,7 @@ class CMFunction {
 					};
 					break;
 				case "polar":
-					self.valsArray = new Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
+					self.valsArray = Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(i => self.of( i * self.thetaStep ) );
@@ -9345,7 +9598,7 @@ class CMFunction {
 						return (self.of(theta) * self.game.graphScalar);
 					};
 
-					self.screenValsArray = new Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
+					self.screenValsArray = Array(Math.floor((Math.TAU - 0) / self.thetaStep)) // Create array with 3600 slots
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(i => self.realToScreenOf( i * self.thetaStep ) );
@@ -9355,7 +9608,7 @@ class CMFunction {
 					};
 					break;
 				case "parametric":
-					self.valsArray = new Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
+					self.valsArray = Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(i => self.of( i * self.tStep ) );
@@ -9369,7 +9622,7 @@ class CMFunction {
 						return self.game.toScreen(xyFromParam, self.origin);
 					};
 
-					self.screenValsArray = new Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
+					self.screenValsArray = Array(Math.floor((self.end.t - self.start.t ) / self.tStep))
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(t => self.realToScreenOf( t * self.tStep ) );
@@ -9380,7 +9633,7 @@ class CMFunction {
 					break;
 				case "cartesian":
 				default:
-					self.valsArray = new Array((self.game.width - 0) / 1)
+					self.valsArray = Array((self.game.width - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(i => self.of( self.game.xToReal( i, self.origin ) ) );
@@ -9391,7 +9644,7 @@ class CMFunction {
 
 					self.realToScreenOf = function(x) { return self.game.yToScreen(self.of(x), self.origin); };
 
-					self.screenValsArray = new Array((self.game.width - 0) / 1)
+					self.screenValsArray = Array((self.game.width - 0) / 1)
 						.fill(0)
 						.map((element, idx, fullArr) => idx)
 						.map(i => self.realToScreenOf( self.game.xToReal( i, self.origin ) ) );
@@ -11191,11 +11444,14 @@ class CMEdge extends CMSprite {
 				y: this.end.y
 			};
 
-			angle = this.game.slopeToRadians( this.game.getSlope(this.start, this.end) );
+			angle = this.game.slopeToRadians( this.game.getSlope(this.start, this.end), Math.sign(this.end.x - this.start.x) );
 
+			/**
+			// This has been added into slopeToRadians
 			if(this.end.x < this.start.x) {
 				angle += Math.PI;
 			}
+			*/
 
 			while(angle >= Math.TAU) {
 				angle -= Math.TAU;
@@ -11561,8 +11817,9 @@ class CMPolygon extends CMSprite {
 	/**
 	 * Manages screen boundaries for "rect" shape sprite.
 	 * @param {object} [rectToBound=this] - A custom "rectangle" used as a "hit box"
+	 * @param {object} [boundingRect=this.boundingRect]
 	 */
-	boundAsRect(rectToBound=this) {
+	boundAsRect(rectToBound=this, boundingRect=this.boundingRect) {
 
 		if(this.hasEnteredScreen) {
 			if(rectToBound.x <= 0) { // left wall
@@ -11770,3 +12027,77 @@ class CMPolygon extends CMSprite {
 		}
 	}
 }
+
+Object.defineProperty(window, "cmboilerplate", {
+	set() {
+		console.log(
+`You cannot define cmboilerplate yourself. It is used internally to provide starting HTML code. If you are trying to get the cmboilerplate code, just type
+
+	cmboilerplate
+		
+and press Enter`);
+	},
+	get() {
+		let boilerplate =
+`<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0,
+    maximum-scale=1.0, user-scalable=0, minimal-ui' />
+  <title>
+    <!-- Replace this line with your title -->
+  </title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link type="text/css" rel="stylesheet" href="css/cmgame.css" />
+</head>
+<body class="cm-dark_gray">
+<div id="cmLoading" class="cm-almost_black">
+  <h1 class="cm-text-white">Loading...</h1>
+  <progress id="cmLoadingProgress" title="Loaded resources"
+     value="0" max="0" class="cm-small-shadow-almost_white">
+  </progress>
+    <p>
+      <span class="cm-text-white">Powered by CMGame Engine</span>
+      <br/>
+      <a href="https://github.com/tlong314/cmgame" class="cm-text-white">
+	    github.com/tlong314/cmgame
+	  </a>
+    </p>
+  </div>
+
+  <article id="cmTitle" class="cm-white">
+    <h1>
+      <!-- Replace this line with your game's title -->
+    </h1>
+    <p>
+      <!-- Replace this line with a description of your game. -->
+    </p>
+    <p class="cm-center-text">
+      <label for="playBtn">
+        <button id="playBtn" title="Click to play" class="cm-play-button">
+          <div class="cm-play"></div>
+        </button>
+        <br/>
+        Play now
+      </label>
+    </p>
+  </article>
+  <div id="cmWrapper" class="cm-none">
+    <canvas id="cmCanvas" width="360" height="480" class="cm-sky_blue">
+      Nothing to see here...
+    </canvas>
+  </div>
+<script src="js/cmgame.js"></script>
+<script>
+
+// Your own JavaScript code will go here
+
+</script>
+</body>
+</html>`;
+
+		document.write(`<textarea style='width: 100%; height: 100%'>${boilerplate}</textarea>`);
+		return boilerplate;
+	}
+});
