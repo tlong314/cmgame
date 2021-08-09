@@ -51,7 +51,10 @@ vennDiagram.setNumberOfSets(2, 0);
 // Handle all clicks/taps
 vennDiagram.onpressstart = function(e) {
 
-	for(let [id, region] of vennDiagram.vennRegions) {
+	// Use this get function to access as an array (even if regions are stored as a map, array, etc.)
+	let regions = vennDiagram.getVennRegions();
+
+	for(let region of regions) {
 		if(region.containsPoint(e)) {
 			region.filled = !region.filled;
 		}
