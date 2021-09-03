@@ -465,13 +465,40 @@ label .cm-play-button {
 }
 
 /* Style triangle "play" icon in play button */
-.cm-play-button .cm-play {
+button .cm-play {
 	background: transparent;
 	box-sizing: border-box;
 	width: 32px;
 	height: 32px;
 	border-style: solid;
 	border-width: 16px 0 16px 32px;
+	border-color: transparent transparent transparent rgb(250, 250, 250);
+}
+
+.cm-play-button-small {
+	box-sizing: border-box;
+	width: 64px;
+	height: 33px;
+	border-radius: 2px;
+	padding: 8px 24px 8px 25.5px;
+}
+
+.cm-play-button-small.no-border {
+	border: none;
+	padding: 8px 21px 8px 27px;
+}
+
+label .cm-play-button-small {
+	margin-bottom: 3px;
+}
+
+button .cm-play-small {
+	background: transparent;
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
+	border-style: solid;
+	border-width: 8px 0 8px 16px;
 	border-color: transparent transparent transparent rgb(250, 250, 250);
 }
 
