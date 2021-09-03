@@ -3354,13 +3354,19 @@ class CMGame {
 	}
 
 	/**
-	 * Removes all current doodles from game instance.
-	 * Note: sprites created from spriteFromDoodle(s)
+	 * Removes all current doodles from game instance, or
+	 * a specific subcollection of them.
+	 * Note: CMSprite instances created from spriteFromDoodle(s)
 	 * will not be removed.
+	 * @param [doodles] Specific doodles to remove
 	 * @returns {object} The current CMGame instance
 	 */
-	clearDoodles() {
-		CMGame.clearAll( this.doodles );
+	clearDoodles(doodles) {
+		if(typeof doodles === "undefined")
+			CMGame.clearAll( this.doodles );
+		else
+			this.doodles = this.doodles.filter(doodle => !doodles.includes(doodle));
+
 		this.currentDoodle = null;
 
 		// No animation cycle running, so redraw without doodles
@@ -3458,7 +3464,7 @@ class CMGame {
 		);
 
 		if(!keepDoodles) {
-			this.clearDoodles();
+			this.clearDoodles(doodles);
 		}
 
 		return sprite;
@@ -3469,10 +3475,10 @@ class CMGame {
 	 * Performs same operations as spriteFromDoodles
 	 * but for a single CMDoodle object (like a
 	 * continous drawing).
-	 * @param {object} doodle - A CMDoodle instance. If no
-	 *   instance is provided, this uses the latest in-game
-	 *   doodle curve. If game has no doodles, this does
-	 *   nothing and returns null.
+	 * @param {object} [doodle] - A CMDoodle instance. If no
+	 *   instance is provided (or, e.g., null is passed in), this uses
+	 *   the latest in-game doodle curve. If game has no doodles,
+	 *   this does nothing and returns null.
 	 * @param {boolean} [keepDoodle=false] - If true, the CMDoodle object will not be removed
 	 * @returns {object} A CMSprite instance, or null.
 	 */
@@ -7693,7 +7699,6 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 
 }());
 
-
 (function() {
 	/**
 	 * game.fps is animation speed (roughly) in frames per second
@@ -7706,7 +7711,7 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 	 * to create a slower game or animation.
 	 */
 
-	Object.defineProperty(CMGame, "fps", {
+	Object.defineProperty(CMGame.prototype, "fps", {
 		get() {
 			return this.fps_Private;
 		},
@@ -7720,7 +7725,7 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 		}
 	});
 
-	Object.defineProperty(CMGame, "frameDelay", {
+	Object.defineProperty(CMGame.prototype, "frameDelay", {
 		get() {
 			return this.frameDelay_Private;
 		},
@@ -8656,7 +8661,7 @@ class CMSprite {
 	 *   for radians or degrees, respectively
 	 * @param {number} [desiredSpeed=1] The velocity to move in the new direction.
 	 *   Note: this is not necessarily velocity of x or y coordinates, but really a polar radius.
-	 * @param {number} [startReferencePoint=this.center]
+	 * @param {number} [startReferencePoint=this.center] - The starting point used to calculate this directional slope
 	 */
 	moveToward(newPoint, desiredSpeed=1, startReferencePoint=this.center) {
 		let xVelocity = desiredSpeed,
@@ -9733,21 +9738,17 @@ CMGame.mean = (...args) => {
  * Gets the point at the center of the line
  * connecting two points, or center of the triangle
  * created by connecting 3 points
- * @param {object} p1 - The first point (or object with x, y values)
- * @param {object} p2 - The second point (or object with x, y values)
- * @param {object} [p3] - The (optional) third point
+ * @param {object[]} args - A collection of points (any objects with numeric x, y values)
  * @returns {object}
  */
-CMGame.midpoint = (p1, p2, p3) => {
-	if(p3) {
-		return new CMPoint(
-			CMGame.mean(p1.x, p2.x, p3.x),
-			CMGame.mean(p1.y, p2.y, p3.y));
-	}
+CMGame.midpoint = (...args) => {
+	let x = args.reduce((xSum, currentPoint) =>
+		xSum + currentPoint.x, 0) / args.length;
 
-	return new CMPoint(
-		CMGame.mean(p1.x, p2.x),
-		CMGame.mean(p1.y, p2.y));
+	let y = args.reduce((ySum, currentPoint) =>
+		ySum + currentPoint.y, 0) / args.length;
+
+	return new CMPoint(x, y);
 };
 
 /**
@@ -12375,13 +12376,7 @@ Object.defineProperty(CMPolygon.prototype, "center", {
 			return;
 		}
 
-		let x = this.points.reduce((xSum, currentPoint) =>
-			xSum + currentPoint.x, 0) / this.points.length;
-
-		let y = this.points.reduce((ySum, currentPoint) =>
-			ySum + currentPoint.y, 0) / this.points.length;
-
-		return new CMPoint(x, y);
+		return CMGame.midpoint(...this.points);
 	}
 });
 
