@@ -98,7 +98,7 @@ Instead of building your own project, you can of course open one of the demo HTM
 
 As discussed above, we can pass in various options when creating our game. These are described below.
 
-`startBtn` - An HTML element (or CSS selector for that element) that will be used to start the game. Defaults to null, and game starts on first user interaction.
+`startBtn` - An HTML element (or CSS selector for that element) that will be used to start the game. You can also pass in an array of HTML elements (or CSS selectors, or any combination) to allow multiple different buttons to start the game (e.g., one from title screen, one from a settings screen), in which case the first element will be stored internally as the "startBtn" reference. Defaults to null, and game starts on first user interaction.
 
 `fullscreen` - {boolean} If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
 
