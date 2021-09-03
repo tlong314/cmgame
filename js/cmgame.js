@@ -1183,7 +1183,7 @@ class CMGame {
 	/**
 	 * Creates a CMGame instance. This essentially creates the current game.
 	 * @param {object} [options] - A plain JS object of options. All are optional, including this object.
-	 * @param {object|string} [options.startBtn] - An HTML element (or CSS selector for that element) that will be used to start the game. Defaults to null, and game starts on first user interaction.
+	 * @param {object|string} [options.startBtn] - An HTML element (or CSS selector for that element) that will be used to start the game (or an array of any combination). Defaults to null, and game starts on first user interaction.
 	 * @param {boolean} [options.options.fullscreen] - If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
 	 * @param {string} [options.orientation] - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
 	 * @param {object|string} [options.enterFullscreenBtn] - An HTML element (or CSS selector for that element) to be used to enter fullscreen when user clicks. Default is null.
@@ -1814,23 +1814,47 @@ class CMGame {
 		this.runCycle = this.updateAndDraw.bind(this);
 
 		this.startBtn = null;
-		switch(typeof options.startBtn) {
-			case "object":
-				this.startBtn = options.startBtn;
-				break;
-			case "string":
-				this.startBtn = document.querySelector(options.startBtn);
-				break;
-			default: {
-				this.startBtn = this.canvas;
-				break;
-			}
-		}
+		if(Array.isArray(options.startBtn)) {
+			options.startBtn.forEach((desc, idx) => {
+				let btn;
+				if(typeof desc === "string")
+					btn = document.querySelector(desc);
+				else
+					btn = desc;
 
-		this.startBtn.addEventListener("click", e => {
-			e.preventDefault();
-			self.start();
-		}, false);
+				// save first reference in case we need it for our fullscreen button
+				if(idx === 0)
+					this.startBtn = btn;
+
+				if(btn === null)
+					console.error("Cannot use null reference as start button.");
+				else {
+					btn.addEventListener("click", e => {
+						e.preventDefault();
+						self.start();
+					}, false);
+				}
+			});
+		}
+		else {
+			switch(typeof options.startBtn) {
+				case "object":
+					this.startBtn = options.startBtn;
+					break;
+				case "string":
+					this.startBtn = document.querySelector(options.startBtn);
+					break;
+				default: {
+					this.startBtn = this.canvas;
+					break;
+				}
+			}
+
+			this.startBtn.addEventListener("click", e => {
+				e.preventDefault();
+				self.start();
+			}, false);
+		}
 
 		this.enterFullscreenBtn = null;
 		this.exitFullscreenBtn = null;
@@ -2325,7 +2349,6 @@ class CMGame {
 						func.ondraw(ctx);
 					}
 
-					// @todo Optimize - if type is "all" store these on creation to sort immediately
 					let allToDraw = this.getVennRegions()
 						.concat( this.getVennSets() )
 						.concat( this.getEdges() )
@@ -2987,9 +3010,7 @@ class CMGame {
 		}
 	}
 
-	/**
-	 * Start current game processes, animations, etc.
-	 */
+	/** Start current game processes, animations, etc. */
 	start() {
 		let self = this;
 		if(this.started) { // Prevent double calls
@@ -3534,9 +3555,7 @@ class CMGame {
 			spriteFillAbove = func.fillStyleAbove;
 		}
 
-		// @todo base these on function "type"
-		let minX, minY, maxX, maxY;
-		
+		let minX, minY, maxX, maxY;		
 		switch(func.type) {
 			case "cartesian":
 				minX = Math.max(0, this.xToScreen(func.start.x));
@@ -11905,7 +11924,7 @@ class CMEdge extends CMSprite {
 			angle = this.game.slopeToRadians( this.game.getSlope(this.start, this.end), Math.sign(this.end.x - this.start.x) );
 
 			if(Array.isArray(angle)) {
-				angle = angle[0]; // @todo Verify when [0] is best here
+				angle = angle[0];
 			}
 
 			while(angle >= Math.TAU) {
