@@ -18,9 +18,11 @@ Math.SQRT3 = Math.SQRT3 || Math.sqrt(3); // Convenience for unit circle, etc.
 Math.SQRT5 = Math.SQRT5 || Math.sqrt(5); // Ditto
 Math.PHI = Math.PHI || .5 * (1 + Math.SQRT5); // Golden ratio
 
-// These will be used to control FPS speed
+// These will be used to control fps speed
 window.requestNextFrame = window.requestAnimationFrame;
 window.cancelNextFrame = window.cancelAnimationFrame;
+
+window.documentBody = null;
 
 /**
  * Some style guides suggest not using "optional" HTML tags,
@@ -43,9 +45,6 @@ if(!document.body) {
 else {
 	window.documentBody = document.body;
 }
-
-// For minimal code, we let user omit <body> tag
-//window.documentBody = document.body || document.documentElement;
 
 /**
  * Manage web audio logic, overcoming iOS bug
@@ -594,9 +593,9 @@ class CMPoint {
 		let otherZ = typeof otherPoint.z === "undefined" ? 0 : otherPoint.z
 
 		return (
-			CMGame.roundSmall( this.x - otherPoint.x ) &&
-			CMGame.roundSmall( this.y - otherPoint.y ) &&
-			CMGame.roundSmall( this.z - otherZ )
+			!CMGame.roundSmall( this.x - otherPoint.x ) &&
+			!CMGame.roundSmall( this.y - otherPoint.y ) &&
+			!CMGame.roundSmall( this.z - otherZ )
 		);
 	}
 }
@@ -704,7 +703,8 @@ const initializeIfReady = () => {
 		let splashPage = document.getElementById("cmLoading");
 		if(splashPage !== null) {
 			splashPage.addEventListener("animationend", e => {
-				splashPage.parentNode.removeChild(splashPage);
+				splashPage.classList.remove("cm-intro-fade");
+				splashPage.style.display = "none";
 			}, false);
 
 			splashPage.classList.add("cm-intro-fade");
@@ -1489,6 +1489,10 @@ class CMGame {
 		this.started = false;
 		this.paused = true;
 		this.animFrameId = null;
+
+		this.frameDelay_Private = CMGame.MIN_FRAME_DELAY;
+		this.fps_Private = options.fps || CMGame.MAX_FPS;
+
 		this.gameOver = false;
 		this.frameCount = 0;
 
@@ -1945,170 +1949,421 @@ class CMGame {
 		this.vertices = [];
 		this.edges = [];
 
+		/**
+		 * The game is optimized by type. If you want to use multiple types
+		 * you can set type to "all" and it will combine all sprites, edges, etc.,
+		 * but of course may run a little slower as it uses everything at
+		 * once. That is useful for static drawing, like charts.
+		 */
+
 		// Create a Venn Diagram-based game
-		if(this.type === "venn") {
+		switch(this.type) {
+			case "venn": {
 
-			this.vennSets = new Map(); // VennSet
-			this.vennRegions = new Map(); // VennRegion
+				this.vennSets = new Map(); // VennSet
+				this.vennRegions = new Map(); // VennRegion
 
-			this.setNumberOfSets(options.numSets || 0, options.variation || 0);
+				this.setNumberOfSets(options.numSets || 0, options.variation || 0);
 
-			/** Updates game state in current frame*/
-			this.update = function(frameCount) {
-				this.onbeforeupdate(frameCount);
+				/** Updates game state in current frame*/
+				this.update = function(frameCount) {
+					this.onbeforeupdate(frameCount);
 
-				if(this.frameoutFunctions.has(frameCount)) {
-					this.frameoutFunctions.get(frameCount).call(this, frameCount);
+					if(this.frameoutFunctions.has(frameCount)) {
+						this.frameoutFunctions.get(frameCount).call(this, frameCount);
 
-					// clean up, and prevent repeats in frameCap is finite
-					this.frameoutFunctions.delete(frameCount);
+						// clean up, and prevent repeats in frameCap is finite
+						this.frameoutFunctions.delete(frameCount);
+					}
+
+					for(let [id, vregion] of this.vennRegions) {
+						vregion.update(frameCount);
+					}
+
+					for(let [name, vset] of this.vennSets) {
+						vset.update(frameCount);
+					}
+
+					for(let sprite of this.sprites) {
+						sprite.onbeforeupdate(frameCount);
+						sprite.update(frameCount);
+						sprite.onupdate(frameCount);
+					}
+
+					this.onupdate(frameCount);
 				}
 
-				for(let [id, vregion] of this.vennRegions) {
-					vregion.update(frameCount);
-				}
+				this.draw = function(ctx=this.offscreenCtx) {
+					ctx.clearRect(0, 0,
+						this.offscreenCanvas.width,
+						this.offscreenCanvas.height);
 
-				for(let [name, vset] of this.vennSets) {
-					vset.update(frameCount);
-				}
+					this.onbeforedraw(ctx);
 
-				for(let sprite of this.sprites) {
-					sprite.onbeforeupdate(frameCount);
-					sprite.update(frameCount);
-					sprite.onupdate(frameCount);
-				}
+					// Removed all built-in graph drawing logic from here
+					for(let [id, vregion] of this.vennRegions) {
+						vregion.draw(ctx);
+					}
 
-				this.onupdate(frameCount);
+					for(let [name, vset] of this.vennSets) {
+						vset.draw(ctx);
+					}
+
+					ctx.fillStyle = CMColor.BLACK;
+					let fontSize = Math.floor(this.width / 16);
+					ctx.font = `italic ${fontSize}px Times New Roman, serif`;
+					ctx.fillText("U", this.canvas.width - fontSize * 1.5, fontSize * 1.25);
+
+					for(let sprite of this.sprites) {
+						sprite.onbeforedraw(ctx);
+						ctx.save();
+						ctx.globalAlpha = sprite.opacity;
+						sprite.draw(ctx);
+						ctx.restore();
+						sprite.ondraw(ctx);
+					}
+
+					for(let doodle of this.doodles) {
+						doodle.draw(ctx);
+					}
+
+					this.ondraw(ctx);
+
+					if(this.recordingVideo) {
+						this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+							this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+
+						this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+							this.screenVideoDetails.width, this.screenVideoDetails.height);
+					}
+				};
 			}
+				break;
+			case "graphtheory": {
+				this.vertices = [];
+				this.edges = [];
 
-			this.draw = function(ctx=this.offscreenCtx) {
-				ctx.clearRect(0, 0,
-					this.offscreenCanvas.width,
-					this.offscreenCanvas.height);
+				/** Updates game state in current frame*/
+				this.update = function(frameCount) {
+					this.onbeforeupdate(frameCount);
 
-				this.onbeforedraw(ctx);
+					if(this.frameoutFunctions.has(frameCount)) {
+						this.frameoutFunctions.get(frameCount).call(this, frameCount);
 
-				// Removed all built-in graph drawing logic from here
-				for(let [id, vregion] of this.vennRegions) {
-					vregion.draw(ctx);
+						// clean up, and prevent repeats in frameCap is finite
+						this.frameoutFunctions.delete(frameCount);
+					}
+
+					for(let edge of this.edges) {
+						edge.onbeforeupdate(frameCount);
+						edge.update(frameCount);
+						edge.onupdate(frameCount);
+					}
+
+					for(let vertex of this.vertices) {
+						vertex.onbeforeupdate(frameCount);
+						vertex.update(frameCount);
+						vertex.onupdate(frameCount);
+					}
+
+					for(let sprite of this.sprites) {
+						sprite.onbeforeupdate(frameCount);
+						sprite.update(frameCount);
+						sprite.onupdate(frameCount);
+					}
+
+					this.onupdate(frameCount);
 				}
 
-				for(let [name, vset] of this.vennSets) {
-					vset.draw(ctx);
-				}
+				this.draw = function(ctx=this.offscreenCtx) {
+					ctx.clearRect(0, 0,
+						this.offscreenCanvas.width,
+						this.offscreenCanvas.height);
 
-				ctx.fillStyle = CMColor.BLACK;
-				let fontSize = Math.floor(this.width / 16);
-				ctx.font = `italic ${fontSize}px Times New Roman, serif`;
-				ctx.fillText("U", this.canvas.width - fontSize * 1.5, fontSize * 1.25);
+					this.onbeforedraw(ctx);
 
-				for(let sprite of this.sprites) {
-					sprite.onbeforedraw(ctx);
-					ctx.save();
-					ctx.globalAlpha = sprite.opacity;
-					sprite.draw(ctx);
-					ctx.restore();
-					sprite.ondraw(ctx);
-				}
+					for(let edge of this.edges) {
+						edge.onbeforedraw(ctx);
+						edge.draw(ctx);
+						edge.ondraw(ctx);
+					}
 
-				for(let doodle of this.doodles) {
-					doodle.draw(ctx);
-				}
+					for(let vertex of this.vertices) {
+						vertex.onbeforedraw(ctx);
+						vertex.draw(ctx);
+						vertex.ondraw(ctx);
+					}
 
-				this.ondraw(ctx);
+					for(let sprite of this.sprites) {
+						sprite.onbeforedraw(ctx);
+						ctx.save();
+						ctx.globalAlpha = sprite.opacity;
+						sprite.draw(ctx);
+						ctx.restore();
+						sprite.ondraw(ctx);
+					}
 
-				if(this.recordingVideo) {
-					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
-						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+					for(let doodle of this.doodles) {
+						doodle.draw(ctx);
+					}
 
-					this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
-						this.screenVideoDetails.width, this.screenVideoDetails.height);
-				}
-			};
-		}
-		else
-		if(this.type === "graphtheory") {
-			this.vertices = [];
-			this.edges = [];
+					this.ondraw(ctx);
 
-			/** Updates game state in current frame*/
-			this.update = function(frameCount) {
-				this.onbeforeupdate(frameCount);
+					if(this.recordingVideo) {
+						this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+							this.screenVideoCanvas.width, this.screenVideoCanvas.height);
 
-				if(this.frameoutFunctions.has(frameCount)) {
-					this.frameoutFunctions.get(frameCount).call(this, frameCount);
-
-					// clean up, and prevent repeats in frameCap is finite
-					this.frameoutFunctions.delete(frameCount);
-				}
-
-				for(let edge of this.edges) {
-					edge.onbeforeupdate(frameCount);
-					edge.update(frameCount);
-					edge.onupdate(frameCount);
-				}
-
-				for(let vertex of this.vertices) {
-					vertex.onbeforeupdate(frameCount);
-					vertex.update(frameCount);
-					vertex.onupdate(frameCount);
-				}
-
-				for(let sprite of this.sprites) {
-					sprite.onbeforeupdate(frameCount);
-					sprite.update(frameCount);
-					sprite.onupdate(frameCount);
-				}
-
-				for(let doodle of this.doodles) {
-					doodle.update(frameCount);
-				}
-
-				this.onupdate(frameCount);
+						this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+							this.screenVideoDetails.width, this.screenVideoDetails.height);
+					}
+				};
 			}
+				break;
+			case "all": {
 
-			this.draw = function(ctx=this.offscreenCtx) {
-				ctx.clearRect(0, 0,
-					this.offscreenCanvas.width,
-					this.offscreenCanvas.height);
+				// Need to manage CMFunctions, CMVennSets, CMVennRegions, CMVertices, CMEdges
+				// 		CMSprites, CMDoodles
 
-				this.onbeforedraw(ctx);
+				this.vertices = [];
+				this.edges = [];
+				this.vennSets = new Map(); // VennSet
+				this.vennRegions = new Map(); // VennRegion
 
-				for(let edge of this.edges) {
-					edge.onbeforedraw(ctx);
-					edge.draw(ctx);
-					edge.ondraw(ctx);
+				this.setNumberOfSets(options.numSets || 0, options.variation || 0);
+
+				/** Updates game state in current frame*/
+				this.update = function(frameCount) {
+					this.onbeforeupdate(frameCount);
+
+					if(this.frameoutFunctions.has(frameCount)) {
+						this.frameoutFunctions.get(frameCount).call(this, frameCount);
+
+						// clean up, and prevent repeats in frameCap is finite
+						this.frameoutFunctions.delete(frameCount);
+					}
+
+					for(let [id, vregion] of this.vennRegions) {
+						vregion.update(frameCount);
+					}
+
+					for(let [name, vset] of this.vennSets) {
+						vset.update(frameCount);
+					}
+
+					for(let edge of this.edges) {
+						edge.onbeforeupdate(frameCount);
+						edge.update(frameCount);
+						edge.onupdate(frameCount);
+					}
+
+					for(let vertex of this.vertices) {
+						vertex.onbeforeupdate(frameCount);
+						vertex.update(frameCount);
+						vertex.onupdate(frameCount);
+					}
+
+					for(let sprite of this.sprites) {
+						sprite.onbeforeupdate(frameCount);
+						sprite.update(frameCount);
+						sprite.onupdate(frameCount);
+					}
+
+					this.onupdate(frameCount);
 				}
 
-				for(let vertex of this.vertices) {
-					vertex.onbeforedraw(ctx);
-					vertex.draw(ctx);
-					vertex.ondraw(ctx);
-				}
+				this.draw = function(ctx=this.offscreenCtx) {
+					ctx.clearRect(0, 0,
+						this.offscreenCanvas.width,
+						this.offscreenCanvas.height);
 
-				for(let sprite of this.sprites) {
-					sprite.onbeforedraw(ctx);
-					ctx.save();
-					ctx.globalAlpha = sprite.opacity;
-					sprite.draw(ctx);
-					ctx.restore();
-					sprite.ondraw(ctx);
-				}
+					this.onbeforedraw(ctx);
 
-				for(let doodle of this.doodles) {
-					doodle.draw(ctx);
-				}
+					// Background gridlines
+					if(this.gridStyle && this.gridStyle !== CMColor.NONE) {
+						ctx.strokeStyle = this.gridStyle;
+						ctx.lineWidth = this.gridlineWidth;
 
-				this.ondraw(ctx);
+						// vertical lines, center to left
+						for(let i = this.origin.x; i > 0; i -= this.gridlineDistance) {
+							this.drawLine(i, 0,
+								i, this.canvas.height);
+						}
 
-				if(this.recordingVideo) {
-					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
-						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+						// vertical lines, center to right
+						for(let i = this.origin.x; i < this.width; i += this.gridlineDistance) {
+							this.drawLine(i, 0,
+								i, this.canvas.height);
+						}
 
-					this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
-						this.screenVideoDetails.width, this.screenVideoDetails.height);
-				}
-			};
+						// horizontal lines, center to top
+						for(let i = this.origin.y; i > 0; i -= this.gridlineDistance) {
+							this.drawLine(0, i,
+								this.canvas.width, i);
+						}
+
+						// horizontal lines, center to bottom
+						for(let i = this.origin.y; i < this.height; i += this.gridlineDistance) {
+							this.drawLine(0, i,
+								this.canvas.width, i);
+						}
+					}
+
+					// Draw x and y axes
+					// x axis
+					if(this.xAxisStyle && this.xAxisStyle !== CMColor.NONE) {
+						ctx.strokeStyle = this.xAxisStyle;
+
+						this.drawLine(0, this.origin.y,
+							this.width, this.origin.y);
+					}
+
+					// y axis
+					if(this.yAxisStyle && this.yAxisStyle !== CMColor.NONE) {
+						ctx.strokeStyle = this.yAxisStyle;
+						
+						this.drawLine(this.origin.x, 0,
+							this.origin.x, this.height);	
+					}
+
+					// Draw tick marks
+					let incrementer = this.tickDistance / this.graphScalar; // this.graphScalar / this.tickDistance;
+					let tickFontSize = this.tickFontSize || Math.max(10, Math.min(
+							Math.ceil(.55 * this.gridlineDistance),
+							Math.ceil(.55 * this.tickDistance) ));
+
+					ctx.font = tickFontSize + "px Arial, sans-serif";
+					ctx.textBaseline = "middle";
+					if(this.tickStyle && this.tickStyle !== CMColor.NONE) {
+						ctx.strokeStyle = ctx.fillStyle = this.tickStyle;
+
+						let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
+
+						// vertical lines on x-axis, center to left
+						for(let i = this.origin.x - this.tickDistance, n = -incrementer;
+								i > 0;
+								i -= this.tickDistance, n -= incrementer) {
+
+							this.drawLine(i, this.origin.y - halfTickLength,
+								i, this.origin.y + halfTickLength);
+
+							let nLabel = this.tickLabelIfX(n);
+							if(typeof nLabel === "string")
+								ctx.fillText(nLabel,
+									i - .5 * ctx.measureText(nLabel).width,
+									this.origin.y + halfTickLength + .75 * tickFontSize);
+							else
+							if(nLabel)
+								ctx.fillText("" + n,
+									i - ctx.measureText("" + n).width + ctx.measureText("-").width,
+									this.origin.y + halfTickLength + .75 * tickFontSize);
+						}
+
+						// vertical lines on x-axis, center to right
+						for(let i = this.origin.x + this.tickDistance, n = incrementer;
+								i < this.width;
+								i += this.tickDistance, n += incrementer) {
+
+							this.drawLine(i, this.origin.y - halfTickLength,
+								i, this.origin.y + halfTickLength);
+
+							let nLabel = this.tickLabelIfX(n);
+							if(typeof nLabel === "string")
+								ctx.fillText(nLabel,
+									i - .5 * ctx.measureText(nLabel).width,
+									this.origin.y + halfTickLength + .75 * tickFontSize);
+							else
+							if(nLabel)
+								ctx.fillText("" + n,
+									i - .5 * ctx.measureText("" + n).width,
+									this.origin.y + halfTickLength + .75 * tickFontSize);
+						}
+
+						// horizontal lines on y-axis, center to top
+						for(let i = this.origin.y - this.tickDistance, n = incrementer;
+								i > 0;
+								i -= this.tickDistance, n += incrementer) {
+
+							this.drawLine(this.origin.x - halfTickLength, i,
+								this.origin.x + halfTickLength, i);
+
+							let nLabel = this.tickLabelIfY(n);
+							if(typeof nLabel === "string")
+								ctx.fillText(nLabel,
+									this.origin.x - halfTickLength - 1.25 * ctx.measureText(nLabel).width,
+									i);
+							else
+							if(nLabel)
+								ctx.fillText("" + n,
+									this.origin.x - halfTickLength - 1.25 * ctx.measureText("" + n).width,
+									i);
+						}
+
+						// horizontal lines on y-axis, center to bottom
+						for(let i = this.origin.y + this.tickDistance, n = -incrementer;
+								i < this.height;
+								i += this.tickDistance, n -= incrementer) {
+
+							this.drawLine(this.origin.x - halfTickLength, i,
+								this.origin.x + halfTickLength, i);
+
+							let nLabel = this.tickLabelIfY(n);
+							if(typeof nLabel === "string")
+								ctx.fillText(nLabel,
+									this.origin.x - halfTickLength - 1.25 * ctx.measureText(nLabel).width,
+									i);
+							else
+							if(nLabel)
+								ctx.fillText("" + n,
+									this.origin.x - halfTickLength - 1.25 * ctx.measureText("" + n).width,
+									i);
+						}
+					}
+
+					for(let func of this.functions) {
+						func.onbeforedraw(ctx);
+						func.draw(ctx);
+						func.ondraw(ctx);
+					}
+
+					// @todo Optimize - if type is "all" store these on creation to sort immediately
+					let allToDraw = this.getVennRegions()
+						.concat( this.getVennSets() )
+						.concat( this.getEdges() )
+						.concat( this.getVertices() )
+						.concat( this.getFunctions() )
+						.concat( this.getSprites() ).slice(0).sort((a, b) => {
+								return a.layer - b.layer;
+						});
+
+					for(let i = 0, len = allToDraw.length; i < len; i++) {
+						allToDraw[i].draw(ctx);
+					}
+
+					for(let sprite of this.sprites) {
+						sprite.onbeforedraw(ctx);
+						ctx.save();
+						ctx.globalAlpha = sprite.opacity;
+						sprite.draw(ctx);
+						ctx.restore();
+						sprite.ondraw(ctx);
+					}
+
+					for(let doodle of this.doodles) {
+						doodle.draw(ctx);
+					}
+
+					this.ondraw(ctx);
+
+					if(this.recordingVideo) {
+						this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+							this.screenVideoCanvas.width, this.screenVideoCanvas.height);
+
+						this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
+							this.screenVideoDetails.width, this.screenVideoDetails.height);
+					}
+				};
+			}
+				break;
 		}
 
 		this.doodleOptions = {};
@@ -2529,7 +2784,7 @@ class CMGame {
 	 *   To mitigate this, the method first tries to convert this amount to the expected # of
 	 *   frames, and stops the video after the appropriate delay in frames rather than time.
 	 *   There are still some kinks, so you may want to add a few seconds to your expected time.
-	 * @param {number} [options.fps=CMGame.FPS] - Desired frame rate for capture (default's to game's rate)
+	 * @param {number} [options.fps=this.fps] - Desired frame rate for capture (default's to game's rate)
 	 * @param {number} [options.mimeType="video/mp4"] - Desired mimeType for the
 	 *   output video. If not present, will be inferred from options.filename (the preferred option)
 	 * @param {string|Video} [options.output] Option for handling. "download"  to download immediately, "none"
@@ -2548,7 +2803,7 @@ class CMGame {
 		let opts = {
 			start: 0,
 			duration: 5000,
-			fps: Math.round(CMGame.FPS),
+			fps: this.fps,
 			mimeType: "video/mp4", // video/mp4 or video/webm, etc.
 			filename: "cmgscreenvideo.mp4", // Better choice, as mimeType will be inferred
 			output: "download" // set to "download", "none", or a <video> element, or use returned Promise data
@@ -2745,31 +3000,15 @@ class CMGame {
 			this.onbeforestart();
 		}
 
-		// hideOnStart can be set to null or [] to not hide anything - undefined hides non-game parts
-		if(typeof this.hideOnStart === "undefined") {
-			let allowedElements = [document.querySelector("#cmWrapper"),
-				document.querySelector("#cmAlert"),
-				document.querySelector("#cmToast"),
-				document.querySelector("#cmOffscreenToast")]
-					.concat(Array.from( document.querySelectorAll("#cmWrapper *")))
-					.concat(Array.from( document.querySelectorAll("#cmAlert *")))
-					.concat(Array.from( document.querySelectorAll("br")))
-					.concat(Array.from( document.querySelectorAll("script")));
-
-			document.querySelectorAll("body *").forEach(elm => {
-				if(!allowedElements.includes(elm) &&
-						elm.querySelectorAll("#cmWrapper").length === 0) { // elm does not contain the game and wrapper
-					elm.style.display = "none";
-				}
-			});
-		}
-		else {
+		if(Array.isArray( this.hideOnStart ) ) {
 			for(let item of this.hideOnStart) {
 				if(typeof item === "object")
 					elm.style.display = "none";
 				else
-				if(typeof item === "string")
-					document.querySelector(item).style.display = "none";
+				if(typeof item === "string") {
+					if(document.querySelector(item) !== null)
+						document.querySelector(item).style.display = "none";
+				}
 			}
 		}
 
@@ -2798,7 +3037,7 @@ class CMGame {
 	/** Pause current game cycle */
 	pause() {
 		this.paused = true;
-		cancelNextFrame(this.animFrameId);
+		window.cancelNextFrame(this.animFrameId);
 		this.animFrameId = null;
 
 		return this;
@@ -3156,6 +3395,8 @@ class CMGame {
 		let minY = this.canvas.height;
 		let maxX = 0;
 		let maxY = 0;
+		let width = 0;
+		let height = 0;
 
 		for(let i = 0; i < doodles.length; i++) {
 			minX = Math.min(minX, Math.min.apply(Math, doodles[i].points.map(point=>point.x)));
@@ -3163,6 +3404,9 @@ class CMGame {
 			maxX = Math.max(maxX, Math.max.apply(Math, doodles[i].points.map(point=>point.x)));
 			maxY = Math.max(maxY, Math.max.apply(Math, doodles[i].points.map(point=>point.y)));
 		}
+
+		width = maxX - minX;
+		height = maxY - minY;
 
 		// Without any length in the path, nothing will be drawn
 		if(doodles[0].points.length === 1) {
@@ -3196,8 +3440,8 @@ class CMGame {
 			this,
 			minX,
 			minY,
-			maxX - minX,
-			maxY - minY,
+			width,
+			height,
 			function(ctx) {
 				ctx.save();
 				ctx.translate(this.x - minX, this.y - minY);
@@ -4000,7 +4244,10 @@ class CMGame {
 	 * @param {object} e - The keydown event
 	 */
 	keyDown(e) {
-		if(!game.paused) // If game is paused, user may be typing into prompt input
+		if(!this.paused &&
+				e.target.nodeName !== "INPUT" &&
+				e.target.nodeName !== "TEXTAREA" &&
+				e.target.nodeName !== "BUTTON") // If game is paused, user may be typing into prompt input
 			e.preventDefault();
 
 		switch(e.keyCode) {
@@ -4037,7 +4284,10 @@ class CMGame {
 	 * @param {object} e - The keyup event
 	 */
 	keyUp(e) {
-		e.preventDefault();
+		 if(e.target.nodeName !== "INPUT" &&
+				e.target.nodeName !== "TEXTAREA" &&
+				e.target.nodeName !== "BUTTON")
+			e.preventDefault();
 
 		switch(e.keyCode) {
 			case 38: // Up arrow
@@ -4822,12 +5072,12 @@ class CMGame {
 	 * Draws and fills a rounded rectangle on the canvas
 	 * Adapted from solutions here:
 	 * https://stackoverflow.com/questions/1255512/how-to-draw-a-rounded-rectangle-using-html-canvas
-	  * @param {number} x - The top left x coordinate 
-	  * @param {number} y - The top left y coordinate  
-	  * @param {number} width - The width of the rectangle  
-	  * @param {number} height - The height of the rectangle
-	  * @param {number} radius - The rounded corner radius (used for all 4 corners)
-	  */
+	 * @param {number} x - The top left x coordinate 
+	 * @param {number} y - The top left y coordinate  
+	 * @param {number} width - The width of the rectangle  
+	 * @param {number} height - The height of the rectangle
+	 * @param {number} radius - The rounded corner radius (used for all 4 corners)
+	 */
 	fillRoundedRect(x, y, w, h, r) {
 
 		// Radius is too big, reduce to half the width or height
@@ -4853,12 +5103,12 @@ class CMGame {
 	 * Draws and strokes a rounded rectangle on the canvas
 	 * Adapted from solutions here:
 	 * https://stackoverflow.com/questions/1255512/how-to-draw-a-rounded-rectangle-using-html-canvas
-	  * @param {number} x - The top left x coordinate 
-	  * @param {number} y - The top left y coordinate  
-	  * @param {number} width - The width of the rectangle  
-	  * @param {number} height - The height of the rectangle
-	  * @param {number} radius - The rounded corner radius (used for all 4 corners)
-	  */
+	 * @param {number} x - The top left x coordinate 
+	 * @param {number} y - The top left y coordinate  
+	 * @param {number} width - The width of the rectangle  
+	 * @param {number} height - The height of the rectangle
+	 * @param {number} radius - The rounded corner radius (used for all 4 corners)
+	 */
 	strokeRoundedRect(x, y, w, h, r) {
 
 		// Radius is too big, reduce to half the width or height
@@ -5077,7 +5327,8 @@ class CMGame {
 	 * @param {number} [options.offsets[]] - An array of point-like objects defining offset for
 	 *   each string. Note: this does not affect the returned x value, just as CSS translate does not
 	 *   affect page flow
-	 * @returns {number} The ending x of the complete string
+	 * @returns {object} - A CMPoint with x representing the ending x of the complete string, and y
+	 *   representing the expected ending y point, based on # of lines and line height
 	 */
 	drawStrings(fonts, strings, x, y, options={}) {
 		let defaults = {
@@ -5089,12 +5340,13 @@ class CMGame {
 
 		let opts = {};
 		for(let key in defaults) {
-			opts[key] = (typeof options[key] !== "undefined") ? options[key] : defaults[key]
+			opts[key] = (typeof options[key] !== "undefined") ? options[key] : defaults[key];
 		}
 
 		// Allow dev to pass in multi-line strings
 		if(Array.isArray(fonts) && Array.isArray(fonts[0])) {
 			let maxX = x;
+			let maxY = y;
 
 			// Assumes all arrays are of the same length
 			for(let row = 0, numRows = Math.max(fonts.length, strings.length); row < numRows; row++) {
@@ -5143,10 +5395,12 @@ class CMGame {
 					}
 				}
 
-				this.drawStrings(fonts[row], strings[row], x, y + row * lineHeight, optsFromArrays);
+				maxX = Math.max(maxX,
+					this.drawStrings(fonts[row], strings[row], x, y + row * lineHeight, optsFromArrays).x);
+				maxY += lineHeight;
 			}
 
-			return maxX;
+			return new CMPoint(maxX, maxY);
 		}
 
 		if(typeof opts.fillStyles === "string") {
@@ -5204,11 +5458,21 @@ class CMGame {
 		numFonts = fonts.length;
 		let numStrings = strings.length;
 		let offsetX = 0;
+		let offsetY = 0;
 
 		for(let i = 0; i < numStrings; i++) {
 			this.offscreenCtx.save();
 			this.offscreenCtx.font = fonts[i % numFonts];
 			this.offscreenCtx.textAlign = "left"; // "center" will affect our positioning
+
+			// Try to find the current font size (in pixels) to increase our offsetY
+			let currentFontSize = fonts[i % numFonts].match(/[0-9]+px/, "");
+			if(currentFontSize) {
+				currentFontSize = parseFloat( currentFontSize[0] );
+			}
+			else {
+				currentFontSize = 10;
+			}
 
 			if(opts.offsets) {
 				let offset = opts.offsets[i % opts.offsets.length];
@@ -5227,10 +5491,11 @@ class CMGame {
 
 			// Add width of text in current font
 			offsetX += this.offscreenCtx.measureText(strings[i]).width;
+			offsetY = Math.max(offsetY, 1.5 * currentFontSize);
 			this.offscreenCtx.restore();
 		}
 
-		return x + offsetX;
+		return new CMPoint(x + offsetX, y + offsetY);
 	}
 
 	/**
@@ -5279,9 +5544,9 @@ class CMGame {
 	 * Similar to drawStrings method, but centers at (x, y)
 	 * @param {string[]|string} fontsArg - font, or array of the fonts to use in order (cycles if > strings.length)
 	 * @param {string[]|string} stringsArg - string, or array of the strings to write in order
-	 * @param {number} [x] - The x position for the center of the full string. Defaults to
+	 * @param {number} [x=this.center.x] - The x position for the center of the full string. Defaults to
 	 *   the x value of the center point of the screen
-	 * @param {number} [y] - The y position for the center of the the full string. Defaults to
+	 * @param {number} [y=this.center.y] - The y position for the center of the the full string. Defaults to
 	 *   the y value of the center point of the screen
 	 * @param {object} [options={}] - An object of options
 	 * @param {boolean} [options.fill=true] Will use fillText if true
@@ -5289,7 +5554,9 @@ class CMGame {
 	 * @param {boolean} [options.fillStyles[]] An array of colors, gradients, etc. to fill with
 	 * @param {boolean} [options.strokeStyles[]] An array of colors, gradients, etc. to stroke with
 	 * @param {number} [options.angle=0] An angle (radians) to rotate by (clockwise, from viewer's perspective)
-	 * @param {number} [options.centerVertically=true] If true uses textBaseline="middle"
+	 * @param {number} [options.centerVertically=true] If true uses textBaseline="middle". Note: since this
+	 *   is based on all alphabetic characters, it may not be exactly centered (e.g., when the string has no hanging
+	 *   characters like lowercase "g")
 	 * @param {number} [options.offsets[]] - An array of point-like objects defining offset for
 	 *   each string. Note: this does not affect the returned x value, just as CSS translate does not
 	 *   affect page flow
@@ -5627,7 +5894,7 @@ class CMGame {
 	/**
 	 * This is a timeout method particular to the current game.
 	 * It is similar to setTimeout, but set by number of frames,
-	 * regardless of FPS change. If you want a timer using exact
+	 * regardless of fps change. If you want a timer using exact
 	 * time amounts, use setTimeout instead.
 	 * @param {function} callback - The function to invoke after the number of
 	 *   frames defined. The callback has current game instance as its `this`
@@ -5724,7 +5991,7 @@ class CMGame {
 			else
 			if(y < 0) {
 				return {
-					r: y,
+					r: -y,
 					theta: 3 * Math.PI/2
 				};
 			}
@@ -5788,7 +6055,7 @@ class CMGame {
 	 *
 	 * @param {number} slope - The slope (allowing infinite values)
 	 * @param {number|string} [direction=1] - Direction from origin that answers can be pulled
-	 *    from. Choices are "right" (the default), "left"
+	 *    from. Choices are "right" (the default) or 1, and "left" or -1
 	 * @returns {number|array}
 	 */
 	slopeToDegrees(slope, direction) {
@@ -5815,11 +6082,10 @@ class CMGame {
 
 		let rads = this.slopeToRadians(slope, direction);
 
-		if(Array.isArray(rads)) {
+		if(Array.isArray(rads))
 			return [this.toDegrees(rads[0]), this.toDegrees(rads[1])];
-		}
-		else
-			return this.toDegrees(rads);
+
+		return this.toDegrees(rads);
 	}
 
 	/**
@@ -5841,7 +6107,7 @@ class CMGame {
 	 *
 	 * @param {number} slope - The slope (allowing infinite values)
 	 * @param {number|string} [direction=1] - Direction from origin that answers can be pulled
-	 *    from. Choices are 1 or "right" or right of the y-axis, "left" for left.
+	 *    from. Choices are 1 or "right" or right of the y-axis, -1 or "left" for left (0 for both).
 	 * @returns {number|array}
 	 */
 	slopeToRadians(slope, direction=1) {
@@ -5877,8 +6143,9 @@ class CMGame {
 			case 1:
 				return theta;
 			case "left":
-			case 2:
+			case -1:
 				return CMGame.mod( theta + Math.PI, 0, Math.TAU );
+			case 0:
 			default:
 				return [theta, CMGame.mod( theta + Math.PI, 0, Math.TAU )].sort();
 		}
@@ -5969,9 +6236,11 @@ class CMGame {
 		return parseInt(binString, 2);
 	}
 
-	/**
+		/**
 	 * Set the stage, with number of circles in a Venn
 	 * diagram. Currently only relates to game type "venn".
+	 * For best results, use a canvas in a 4:3 ratio (e.g.,
+	 * width of 640 and height of 480).
 	 * @param {number} [numSets=0] - Number of circle sets in initial diagram
 	 * @param {boolean} [variation=0] - Allows us to include
 	 *   different shapes of standard diagrams.
@@ -5989,6 +6258,7 @@ class CMGame {
 		let fontSize = Math.floor(this.width / 16);
 		this.ctx.save();
 		this.ctx.font = `italic ${fontSize}px Times New Roman, serif`;
+		let radius = 0;
 
 		/**
 		 * Note: since sprites are drawn in order of creation,
@@ -5997,363 +6267,376 @@ class CMGame {
 		switch(numSets) {
 			case 0:
 			default:
-				this.vennRegions.set("I", new VennRegion(
+				this.vennRegions.set("I", new CMVennRegion(
 					this,
 					"",
 					0
 				));
 				break;
 			case 1:
-				this.vennRegions.set("I", new VennRegion(
+				this.vennRegions.set("I", new CMVennRegion(
 					this,
 					"0",
 					0
 				));
 
-				this.vennRegions.set("II", new VennRegion(
+				this.vennRegions.set("II", new CMVennRegion(
 					this,
 					"1",
 					0
 				));
 
-				this.vennSets.set("A", new VennSet(
+				radius = Math.min(this.width, this.height) * (7 / 20);
+
+				this.vennSets.set("A", new CMVennSet(
 					this,
-					320,
-					240,
-					168,
+					.5 * this.width,
+					.5 * this.height,
+					radius,
 					{
 						text: "A",
-						x: 320 + .75 * 168,
-						y: 240 + 168
+						x: .5 * this.width + .75 * radius,
+						y: .5 * this.height + radius
 					}
 				));
 				break;
 			case 2:
 				if(variation === 1) {
-					this.vennRegions.set("I", new VennRegion(
+					this.vennRegions.set("I", new CMVennRegion(
 						this,
 						"0S0", // U \ B
 						1
 					));
 
-					this.vennRegions.set("II", new VennRegion(
+					this.vennRegions.set("II", new CMVennRegion(
 						this,
 						"0S1", // B \ A
 						1
 					));
 
-					this.vennRegions.set("III", new VennRegion(
+					this.vennRegions.set("III", new CMVennRegion(
 						this,
 						"1S1", // A = A && B
 						1
 					));
 
-					this.vennSets.set("A", new VennSet(
+					radius = Math.round(this.height * (9 / 40));
+					this.vennSets.set("A", new CMVennSet(
 						this,
-						320,
-						288,
-						108,
+						Math.round(.5 * this.width),
+						Math.round(.6 * this.height),
+						radius,
 						{
 							text: "A",
-							x: 320 + .65 * 108,
-							y: 288 + .95 * 108
+							x: Math.round(.5 * this.width + .65 * radius),
+							y: Math.round(.6 * this.height + .95 * radius)
 						}
 					));
 
-					this.vennSets.set("B", new VennSet(
+					radius = .4 * this.height;
+					this.vennSets.set("B", new CMVennSet(
 						this,
-						320,
-						240,
-						192,
+						.5 * this.width,
+						.5 * this.height,
+						radius,
 						{
 							text: "B",
-							x: 320 + .65 * 192,
-							y: 240 + .9 * 192
+							x: .5 * this.width + .65 * radius,
+							y: .5 * this.height + .9 * radius
 						}
 					));
 				}
 				else {
-					this.vennRegions.set("I", new VennRegion(
+					this.vennRegions.set("I", new CMVennRegion(
 						this,
 						"00",
 						0
 					));
 
-					this.vennRegions.set("II", new VennRegion(
+					this.vennRegions.set("II", new CMVennRegion(
 						this,
 						"10",
 						0
 					));
 
-					this.vennRegions.set("III", new VennRegion(
+					this.vennRegions.set("III", new CMVennRegion(
 						this,
 						"01",
 						0
 					));
 
-					this.vennRegions.set("IV", new VennRegion(
+					this.vennRegions.set("IV", new CMVennRegion(
 						this,
 						"11",
 						0
 					));
 
-					this.vennSets.set("A", new VennSet(
+					radius = Math.min(this.width, this.height) * (7 / 20);
+
+					this.vennSets.set("A", new CMVennSet(
 						this,
-						240,
-						240,
-						168,
+						.5 * this.width - (radius / 2.1),
+						.5 * this.height,
+						radius,
 						{
 							text: "A",
-							x: 240 - .75 * 168 - this.ctx.measureText("A").width,
-							y: 240 + 168
+							x: .5 * this.width - (radius / 2.1) - .75 * radius - this.ctx.measureText("A").width,
+							y: .5 * this.height + radius
 						}
 					));
 
-					this.vennSets.set("B", new VennSet(
+					this.vennSets.set("B", new CMVennSet(
 						this,
-						400,
-						240,
-						168,
+						.5 * this.width + (radius / 2.1),
+						.5 * this.height,
+						radius,
 						{
 							text: "B",
-							x: 400 + .75 * 168,
-							y: 240 + 168
+							x: .5 * this.width + (radius / 2.1) + .75 * radius,
+							y: .5 * this.height + radius
 						}
 					));
 				}
 				break;
 			case 3:
 				if(variation === 1) { // 3 sets as subsets of each other
-					this.vennRegions.set("I", new VennRegion(
+					this.vennRegions.set("I", new CMVennRegion(
 						this,
 						"0S0S0", // U \ C
 						1
 					));
 
-					this.vennRegions.set("II", new VennRegion(
+					this.vennRegions.set("II", new CMVennRegion(
 						this,
 						"0S0S1", // C \ B
 						1
 					));
 
-					this.vennRegions.set("III", new VennRegion(
+					this.vennRegions.set("III", new CMVennRegion(
 						this,
 						"0S1S1", // B \ A, necessarily is contained in C
 						1
 					));
 
-					this.vennRegions.set("IV", new VennRegion(
+					this.vennRegions.set("IV", new CMVennRegion(
 						this,
 						"1S1S1", // A, necessarily is contained in B and C
 						1
 					));
 					
-					this.vennSets.set("A", new VennSet(
+					radius = this.height / 6;
+					this.vennSets.set("A", new CMVennSet(
 						this,
-						320,
-						292,
-						80,
+						.5 * this.width,
+						(73 / 120) * this.height,
+						radius,
 						{
 							text: "A",
-							x: 320 + .6 * 80,
-							y: 292 + 80
+							x: .5 * this.width + .6 * radius,
+							y: (73 / 120) * this.height + radius
 						}
 					));
 
-					this.vennSets.set("B", new VennSet(
+					radius = 0.28125 * this.height;
+					this.vennSets.set("B", new CMVennSet(
 						this,
-						320,
-						268,
-						135,
+						.5 * this.width,
+						(67 / 120) * this.height,
+						radius,
 						{
 							text: "B",
-							x: 320 + .8 * 135,
-							y: 268 + .75 * 135
+							x: .5 * this.width + .8 * radius,
+							y: (67 / 120) * this.height + .75 * radius
 						}
 					));
-					
-					this.vennSets.set("C", new VennSet(
+
+					radius = .4 * this.height;
+					this.vennSets.set("C", new CMVennSet(
 						this,
-						320,
-						240,
-						192,
+						.5 * this.width,
+						.5 * this.height,
+						radius,
 						{
 							text: "C",
-							x: 320 + .9 * 192,
-							y: 240 + .55 * 192
+							x: .5 * this.width + .9 * radius,
+							y: .5 * this.height + .55 * radius
 						}
 					));
 
 				}
 				else
 				if(variation === 2) { // 3 sets in a "T" shape
-					this.vennRegions.set("I", new VennRegion(
+					this.vennRegions.set("I", new CMVennRegion(
 						this,
 						"000", // Complement of all sets
 						2
 					));
 
-					this.vennRegions.set("II", new VennRegion(
+					this.vennRegions.set("II", new CMVennRegion(
 						this,
 						"100",
 						2
 					));
 
-					this.vennRegions.set("III", new VennRegion(
+					this.vennRegions.set("III", new CMVennRegion(
 						this,
 						"010",
 						2
 					));
 					
-					this.vennRegions.set("IV", new VennRegion(
+					this.vennRegions.set("IV", new CMVennRegion(
 						this,
 						"001",
 						2
 					));
 
-					this.vennRegions.set("V", new VennRegion(
+					this.vennRegions.set("V", new CMVennRegion(
 						this,
 						"110",
 						2
 					));
 					
-					this.vennRegions.set("VI", new VennRegion(
+					this.vennRegions.set("VI", new CMVennRegion(
 						this,
 						"101",
 						2
 					));
 					
-					this.vennRegions.set("VII", new VennRegion(
+					this.vennRegions.set("VII", new CMVennRegion(
 						this,
 						"011",
 						2
 					));
 					
-					this.vennRegions.set("VIII", new VennRegion(
+					this.vennRegions.set("VIII", new CMVennRegion(
 						this,
 						"111", // Intersection of all sets A, B, C
 						2
 					));
 
-					this.vennSets.set("A", new VennSet(
+					radius = .3 * Math.min(this.width, this.height);
+
+					this.vennSets.set("A", new CMVennSet(
 						this,
-						256,
-						168,
-						144,
+						.4 * this.width,
+						.35 * this.height,
+						radius,
 						{
 							text: "A",
-							x: 256 - .775 * 144 - this.ctx.measureText("A").width,
-							y: 168 - .75 * 144
+							x: .4 * this.width - .775 * radius - this.ctx.measureText("A").width,
+							y: .35 * this.height - .75 * radius
 						}
 					));
 
-					this.vennSets.set("B", new VennSet(
+					this.vennSets.set("B", new CMVennSet(
 						this,
-						384,
-						168,
-						144,
+						.8 * Math.min(this.width, this.height),
+						.35 * this.height,
+						radius,
 						{
 							text: "B",
-							x: 384 + .775 * 144,
-							y: 168 - .75 * 144
+							x: .6 * this.width + .775 * radius,
+							y: .35 * this.height - .75 * radius
 						}
 					));	
 
-					this.vennSets.set("C", new VennSet(
+					this.vennSets.set("C", new CMVennSet(
 						this,
-						320,
-						300,
-						144,
+						.5 * this.width,
+						0.625 * this.height,
+						radius,
 						{
 							text: "C",
-							x: 320 + .6 * 144,
-							y: 300 + .9 * 144
+							x: .5 * this.width + .6 * radius,
+							y: 0.625 * this.height + .9 * radius
 						}
 					));
 				}
 				else { // default - variation 0; C on top, A, B on bottom
 
-					this.vennRegions.set("I", new VennRegion(
+					this.vennRegions.set("I", new CMVennRegion(
 						this,
 						"000", // Complement of all sets
 						0
 					));
 
-					this.vennRegions.set("II", new VennRegion(
+					this.vennRegions.set("II", new CMVennRegion(
 						this,
 						"100",
 						0
 					));
 
-					this.vennRegions.set("III", new VennRegion(
+					this.vennRegions.set("III", new CMVennRegion(
 						this,
 						"010",
 						0
 					));
 					
-					this.vennRegions.set("IV", new VennRegion(
+					this.vennRegions.set("IV", new CMVennRegion(
 						this,
 						"001",
 						0
 					));
 
-					this.vennRegions.set("V", new VennRegion(
+					this.vennRegions.set("V", new CMVennRegion(
 						this,
 						"110",
 						0
 					));
 					
-					this.vennRegions.set("VI", new VennRegion(
+					this.vennRegions.set("VI", new CMVennRegion(
 						this,
 						"101",
 						0
 					));
 					
-					this.vennRegions.set("VII", new VennRegion(
+					this.vennRegions.set("VII", new CMVennRegion(
 						this,
 						"011",
 						0
 					));
 					
-					this.vennRegions.set("VIII", new VennRegion(
+					this.vennRegions.set("VIII", new CMVennRegion(
 						this,
 						"111", // Intersection of all sets A, B, C
 						0
 					));
 
-					this.vennSets.set("A", new VennSet(
+					radius = .3 * Math.min(this.width, this.height);
+
+					this.vennSets.set("A", new CMVennSet(
 						this,
-						256,
-						300,
-						144,
+						.4 * this.width,
+						0.625 * this.height,
+						radius,
 						{
 							text: "A",
-							x: 256 - .75 * 144 - this.ctx.measureText("A").width,
-							y: 300 + 144
+							x: .4 * this.width - .75 * radius - this.ctx.measureText("A").width,
+							y: 0.625 * this.height + radius
 						}
 					));
 
-					this.vennSets.set("B", new VennSet(
+					this.vennSets.set("B", new CMVennSet(
 						this,
-						384,
-						300,
-						144,
+						.6 * this.width,
+						0.625 * this.height,
+						radius,
 						{
 							text: "B",
-							x: 384 + .75 * 144,
-							y: 300 + 144
+							x: .6 * this.width + .75 * radius,
+							y: 0.625 * this.height + radius
 						}
-					));	
+					));
 
-					this.vennSets.set("C", new VennSet(
+					this.vennSets.set("C", new CMVennSet(
 						this,
-						320,
-						168,
-						144,
+						.5 * this.width,
+						.35 * this.height,
+						radius,
 						{
 							text: "C",
-							x: 320 + .75 * 144,
-							y: 168 - .75 * 144
+							x: .5 * this.width + .75 * radius,
+							y: .35 * this.height - .75 * radius
 						}
 					));
 				}
@@ -6707,7 +6990,7 @@ class CMGame {
 				}
 
 				if(doodleEnabledState) {
-					this.doodleOptions.enabled = true;
+					self.doodleOptions.enabled = true;
 				}
 
 				resolve();
@@ -6850,7 +7133,7 @@ class CMGame {
 				}
 
 				if(doodleEnabledState) {
-					this.doodleOptions.enabled = true;
+					self.doodleOptions.enabled = true;
 				}
 
 				resolve(true);
@@ -6868,7 +7151,7 @@ class CMGame {
 				}
 
 				if(doodleEnabledState) {
-					this.doodleOptions.enabled = true;
+					self.doodleOptions.enabled = true;
 				}
 
 				resolve(false);
@@ -7014,7 +7297,7 @@ class CMGame {
 				}
 
 				if(doodleEnabledState) {
-					this.doodleOptions.enabled = true;
+					self.doodleOptions.enabled = true;
 				}
 
 				resolve(self.alertInput.value);
@@ -7032,7 +7315,7 @@ class CMGame {
 				}
 
 				if(doodleEnabledState) {
-					this.doodleOptions.enabled = true;
+					self.doodleOptions.enabled = true;
 				}
 
 				resolve(null);
@@ -7254,6 +7537,9 @@ CMGame.last = ( arrGument ) => {
  * As the name suggests, this is ONLY for
  * use when the array contents are all
  * primitive, e.g., numbers or strings.
+ * Further, this only detects if the items occur
+ * in sequential, consecutive order. Mainly used
+ * to detect sequences of swipes.
  * @param {array} subArray - The array to check is included
  * @param {array} bigArray - The array to check contains subArr
  * @returns {boolean}
@@ -7394,22 +7680,7 @@ CMGame.PIXELS_FOR_SWIPE = 5;
 // This is used to store/retrieve game data. Do not change this for the same game.
 CMGame.SAVE_PREFIX = "cmgamesave_";
 
-// Create some setters/getters in an IIFE to keep initial variables private
 (function() {
-
-	/**
-	 * CMGame.FPS is animation speed (roughly) in frames per second
-	 * CMGame.FRAME_DELAY is the milliseconds between frames
-	 *
-	 * These are the rough "FPS" and delay between
-	 * frames using requestNextFrame. This is
-	 * the fastest expected animation rate, so these
-	 * should only be changed if you purposely want
-	 * to create a slower game.
-	 *
-	 * CMGame.MAX_FPS and CMGame.MIN_FRAME_DELAY
-	 * are constants for reference. Do not attempt to change them.
-	 */
 	Object.defineProperty(CMGame, "MAX_FPS", {
 		value: 60,
 		writable: false
@@ -7420,85 +7691,61 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 		writable: false
 	});
 
+}());
+
+
+(function() {
 	/**
-	 * Dev may change FPS, in which case FRAME_DELAY
-	 * will update automatically since this is the value used
-	 * to time animations. If you change FRAME_DELAY,
-	 * FPS will not be affected (to avoid infinite loops),
-	 * so you may want to set it yourself with
-	 * newFPS = 1000 / CMGame.FRAME_DELAY
+	 * game.fps is animation speed (roughly) in frames per second
+	 * game.frameDelay is the milliseconds between frames
+	 *
+	 * These are the rough "fps" and delay between
+	 * frames using requestNextFrame. This is
+	 * the fastest expected animation rate, so these
+	 * should only be changed if you purposely want
+	 * to create a slower game or animation.
 	 */
 
-	// "private" variables, only used in getters/setters below
-	let fps = CMGame.MAX_FPS;
-	let frameDelay = CMGame.MIN_FRAME_DELAY;
-	let slowerFrameId = null;
-
-	Object.defineProperty(CMGame, "FPS", {
-
+	Object.defineProperty(CMGame, "fps", {
 		get() {
-			return fps;
+			return this.fps_Private;
 		},
 
 		set(newFPS) {
-			fps = Math.min(newFPS, CMGame.MAX_FPS);
+			this.fps_Private = Math.min(newFPS, CMGame.MAX_FPS);
 
-			if(CMGame.FRAME_DELAY !== 1000 / newFPS) { // Prevent infinite loop since...
-				CMGame.FRAME_DELAY = 1000 / newFPS; // ... triggers FRAME_DELAY setter
+			if(this.frameDelay_Private !== 1000 / this.fps_Private) {
+				this.frameDelay_Private = 1000 / this.fps_Private;
 			}
 		}
 	});
 
-	Object.defineProperty(CMGame, "FRAME_DELAY", {
-
+	Object.defineProperty(CMGame, "frameDelay", {
 		get() {
-			return frameDelay;
+			return this.frameDelay_Private;
 		},
 
 		set(newFrameDelay) {
-			frameDelay = Math.max(newFrameDelay, CMGame.MIN_FRAME_DELAY);
+			let self = this;
+			this.frameDelay_Private = Math.max(newFrameDelay, CMGame.MIN_FRAME_DELAY);
 
+			if(this.fps_Private !== Math.floor(1000 / this.frameDelay_Private)) {
+				this.fps_Private = Math.floor(1000 / this.frameDelay_Private);
+			}
+
+			// Note: cancelNextFrame has same functionality regardless of fps
 			if(frameDelay === CMGame.MIN_FRAME_DELAY) { // return to normal
 				window.requestNextFrame = window.requestAnimationFrame;
-				window.cancelNextFrame = window.cancelAnimationFrame;
 			}
 			else {
 				window.requestNextFrame = function(callback) {
 					setTimeout(function() {
-						slowerFrameId = requestAnimationFrame(callback);
+						self.animFrameId = requestAnimationFrame(callback);
 					}, newFrameDelay);
-				}
-
-				window.cancelNextFrame = function() {
-					cancelAnimationFrame(slowerFrameId);
 				};
 			}
-
-			// This creates an infinite loop & stack overflow. Just stick to setting FPS.
-			/**
-			if(CMGame.FPS !== 1000 / newFrameDelay) { // Prevent infinite loop since...
-				CMGame.FPS = 1000 / newFrameDelay; // ... triggers FPS setter
-
-				if(newFrameDelay === CMGame.MIN_FRAME_DELAY) { // return to normal
-					window.requestNextFrame = window.requestAnimationFrame;
-					window.cancelNextFrame = window.cancelAnimationFrame;
-				}
-				else {
-					window.requestNextFrame = function(callback) {
-						setTimeout(function() {
-							slowerFrameId = requestAnimationFrame(callback);
-						}, newFrameDelay);
-					}
-
-					window.cancelNextFrame = function() {
-						cancelAnimationFrame(slowerFrameId);
-					};
-				}
-			}
-			*/
 		}
 	});
-
 }());
 
 /**
@@ -7518,8 +7765,9 @@ class CMColor {
 	 * with myColor.value
 	 * The individual components of the color can be accessed
 	 * via myColor.r, myColor.g, myColor.b, and myColor.a for alpha/opacity
-	 * @param {number|string} [r=0] - A string defining the entire color, or the number
-	 *   representing r value if the r, g, b components are being entered separately
+	 * @param {number|string} [r=0] - A string defining the entire color, or another
+	 *   CMColor instance (or similar object with r, g, b values), or the number
+	 *   representing r value if the r, g, b components are being entered separately,
 	 * @param {number} [g=0] - The g component
 	 * @param {number} [b=0] - The b component
 	 * @param {number} [a=1] - The alpha/opacity component
@@ -7550,7 +7798,7 @@ class CMColor {
 					this.a = 1;
 				}
 			}
-			else
+			else // rgb or rgba
 			if(colorCode.startsWith("rgb")) {
 				let pieces = colorCode.replace("rgba(", "")
 						.replace("rgb(", "")
@@ -7567,7 +7815,14 @@ class CMColor {
 					this.a = 1;
 			}
 		}
-		else { // not a string, can assume numbers
+		else
+		if(typeof r === "object") { // cloning another CMColor or similar object
+			this.r = r.r;
+			this.g = r.g;
+			this.b = r.b;
+			this.a = typeof r.a === "undefined" ? 1 : r.a;
+		}
+		else { // not a string; we can assume numbers
 			this.r = r;
 			this.g = g;
 			this.b = b;
@@ -7608,7 +7863,7 @@ class CMColor {
 	 * @returns {object} The current CMColor instance
 	 */
 	increaseOpacity(amount=0.1) {
-		this.a = CMGame.clamp(this.a + 0.1, 0, 1);
+		this.a = CMGame.clamp(this.a + amount, 0, 1);
 		return this;
 	}
 
@@ -7619,7 +7874,7 @@ class CMColor {
 	 * @returns {object} The current CMColor instance
 	 */
 	decreaseOpacity(amount=0.1) {
-		this.a = CMGame.clamp(this.a - 0.1, 0, 1);
+		this.a = CMGame.clamp(this.a - amount, 0, 1);
 		return this;
 	}
 }
@@ -7668,7 +7923,7 @@ CMColor.PEACH = "rgb(242, 222, 212)";
 // grayscale colors
 CMColor.WHITE = "rgb(255, 255, 255)";
 CMColor.ALMOST_WHITE = "rgb(250, 250, 250)";
-CMColor.BLACK = "rgb(0, 0, 0)";
+CMColor.BLACK = "rgb(5, 8, 11)";
 CMColor.ALMOST_BLACK = "rgb(15, 23, 33)";
 CMColor.GRAY = "rgb(158, 158, 158)";
 CMColor.LIGHT_GRAY = "rgb(205, 205, 205)";
@@ -8347,20 +8602,25 @@ class CMSprite {
 	 * Note: setting onfadein before calling this method will
 	 * allow similar control, with more accuracy because it is based
 	 * on the actual fader, rather than the expected time.
-	 * For instance, if you  change the FPS while fading, onfadein
+	 * For instance, if you change the fps while fading, onfadein
 	 * will be called after the animation, but the Promise may resolve
 	 * before or after that frame.
 	 *
 	 * Example usage:
 	 * sprite.fadeIn().then(() => { sprite.moveToward(game.center) });
 	 *
-	 * @param {number} [duration=500] Number of milliseconds fade should last
+	 * @param {number} [duration=500] Number of milliseconds (or frames
+	 *   if asFrames is true) of game cycles that fade animation should last
+	 * @param {boolean} [asFrames=false] If true, will treat duration as "# of frames"
 	 * @returns {Promise} A promise resolving after the given duration
 	 */
-	fadeIn(duration=500) {
-		this.velocity.opacity = 1 / (CMGame.FPS * (duration / 1000));
+	fadeIn(duration=500, asFrames=false) {
+		let self = this;
+		let totalFrames = asFrames ? duration : this.fps * (duration / 1000);
+
+		this.velocity.opacity = 1 / totalFrames;
 		return new Promise(function(resolve, reject) {
-			setTimeout(resolve, duration);
+			self.game.setFrameout(resolve, totalFrames);
 		});
 	}
 
@@ -8372,13 +8632,18 @@ class CMSprite {
 	 * Example usage:
 	 * sprite.fadeOut().then(() => sprite.destroy());
 	 * 
-	 * @param {number} [duration=500] Number of milliseconds fade should last
+	 * @param {number} [duration=500] Number of milliseconds (or frames
+	 *   if asFrames is true) of game cycles that fade animation should last
+	 * @param {boolean} [asFrames=false] If true, will treat duration as "# of frames"
 	 * @returns {Promise} A promise resolving after the given duration
 	 */
-	fadeOut(duration=500) {
-		this.velocity.opacity = -1 / (CMGame.FPS * (duration / 1000));
+	fadeOut(duration=500, asFrames=false) {
+		let self = this;
+		let totalFrames = asFrames ? duration : this.fps * (duration / 1000);
+
+		this.velocity.opacity = -1 / totalFrames;
 		return new Promise(function(resolve, reject) {
-			setTimeout(resolve, duration);
+			self.game.setFrameout(resolve, totalFrames);
 		});
 	}
 
@@ -8432,7 +8697,18 @@ class CMSprite {
 			else
 				slope = game.getSlope(startReferencePoint, newPoint);
 
-			theta = game.slopeToRadians(slope, Math.sign(newPoint.x - startReferencePoint.x));
+			// Handle moving vertically
+			if(newPoint.x - startReferencePoint.x === 0) {
+				if(newPoint.y > startReferencePoint.y) {
+					theta = 1.5 * Math.PI;
+				}
+				else { // newPoint.y <= startReferencePoint.y since equality was handled above
+					theta = .5 * Math.PI;
+				}
+			}
+			else {
+				theta = game.slopeToRadians(slope, Math.sign(newPoint.x - startReferencePoint.x));
+			}
 		}
 
 		// Get the (normalized) horizontal and vertical Cartesian distances
@@ -8744,6 +9020,190 @@ class CMSprite {
 						break;
 					case "destroy":
 						if(rectToBound.y > boundingRect.y + boundingRect.height)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleBottom === "function") {
+							this.boundingRuleBottom.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+		}
+
+		if(this.x > this.game.width ||
+				this.y > this.game.height ||
+				this.x + this.width < 0 ||
+				this.y + this.height < 0) {
+			this.onscreen = false;
+		}
+		else {
+			this.hasEnteredScreen = true;
+			this.onscreen = true;
+		}
+	}
+
+	/**
+	 * Manages screen boundaries for "polygon" shape sprite.
+	 * @param {object} [rectToBound=this] - A custom "rectangle" used as a "hit box"
+	 * @param {object} [boundingRect=this.boundingRect]
+	 */
+	boundAsPolygon(rectToBound=this, boundingRect=this.boundingRect) {
+
+		if(this.hasEnteredScreen) {
+			if(rectToBound.x <= 0) { // left wall
+				switch(this.boundingRuleLeft) {
+					case "wrap":
+						if(rectToBound.x + rectToBound.width <= 0) {
+							this.x += this.game.width;
+
+							for(let i = 0, len = this.points.length; i < len; i++) {
+								this.points[i].x += this.game.width;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.x + this.width < 0) {
+								this.x += this.game.width;
+
+								for(let i = 0, len = this.points.length; i < len; i++) {
+									this.points[i].x += this.game.width;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.x = 0;
+						this.velocity.x = Math.abs(this.velocity.x);
+						break;
+					case "fence":
+						this.x = 0;
+						break;
+					case "destroy":
+						if(rectToBound.x + rectToBound.width < 0)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleLeft === "function") {
+							this.boundingRuleLeft.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+			else
+			if(rectToBound.x + rectToBound.width >= this.game.width) { // right wall
+				switch(this.boundingRuleRight) {
+					case "wrap":
+						if(rectToBound.x >= this.game.width) {
+							this.x -= this.game.width;
+							
+							for(let i = 0, len = this.points.length; i < len; i++) {
+								this.points[i].x -= this.game.width;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.x > this.game.width) {
+								this.x -= this.game.width;
+								
+								for(let i = 0, len = this.points.length; i < len; i++) {
+									this.points[i].x -= this.game.width;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.x = this.game.width - rectToBound.width;
+						this.velocity.x = -Math.abs(this.velocity.x);
+						break;
+					case "fence":
+						this.x = this.game.width - rectToBound.width;
+						break;
+					case "destroy":
+						if(rectToBound.x > this.game.width)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleRight === "function") {
+							this.boundingRuleRight.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+			else
+			if(rectToBound.y <= 0) { // top wall
+				switch(this.boundingRuleTop) {
+					case "wrap":
+						if(rectToBound.y + rectToBound.height <= 0) {
+							this.y += this.game.height;
+
+							for(let i = 0, len = this.points.length; i < len; i++) {
+								this.points[i].y += this.game.height;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.y + this.height < 0) {
+								this.y += this.game.height;
+
+								for(let i = 0, len = this.points.length; i < len; i++) {
+									this.points[i].y += this.game.height;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.y = 0;
+						this.velocity.y = Math.abs(this.velocity.y);
+						break;
+					case "fence":
+						this.y = 0;
+						break;
+					case "destroy":
+						if(rectToBound.y + rectToBound.height < 0)
+							this.destroy();
+						break;
+					case "none":
+						break;
+					default:
+						if(typeof this.boundingRuleTop === "function") {
+							this.boundingRuleTop.call(this, rectToBound);
+						}
+						break;
+				}
+			}
+			else
+			if(rectToBound.y + rectToBound.height >= this.game.height) { // bottom wall
+				switch(this.boundingRuleBottom) {
+					case "wrap":
+						if(rectToBound.y >= this.game.height) {
+							this.y -= this.game.height;
+							for(let i = 0, len = this.points.length; i < len; i++) {
+								this.points[i].y -= this.game.height;
+							}
+
+							// For path functions, sprites internal path value may be way off screen
+							while(this.y > this.game.height) {
+								this.y -= this.game.height;
+
+								for(let i = 0, len = this.points.length; i < len; i++) {
+									this.points[i].y -= this.game.height;
+								}
+							}
+						}
+						break;
+					case "bounce":
+						this.y = this.game.height - rectToBound.height;
+						this.velocity.y = -Math.abs(this.velocity.y);
+						break;
+					case "fence":
+						this.y = this.game.height - rectToBound.height;
+						break;
+					case "destroy":
+						if(rectToBound.y > this.game.height)
 							this.destroy();
 						break;
 					case "none":
@@ -9258,8 +9718,7 @@ CMGame.C = (n, r) => {
 
 		return partialSum;
 	};
-
-} ());
+}());
 
 /**
  * Gets the mean average of a list of numbers.
@@ -10452,7 +10911,7 @@ class CMFunction {
  */
 
 /** Manages individual regions within a Venn diagram */
-class VennRegion extends CMSprite {
+class CMVennRegion extends CMSprite {
 
 	/**
 	 * Creates a VennRegion instance.
@@ -10482,7 +10941,7 @@ class VennRegion extends CMSprite {
 			fillStyle: CMColor.BLACK
 		};
 
-		// Use expected font for reference in centering labels
+		// Use expected font for reference in measuring/centering labels below
 		let fontSize = Math.floor(this.game.width / 16);
 		this.game.ctx.font = `italic ${fontSize}px Times New Roman, serif`;
 
@@ -11026,7 +11485,7 @@ class VennRegion extends CMSprite {
 }
 
 /** Manages full circle sets ("A", "B", etc.) in a Venn Diagram */
-class VennSet extends CMSprite {
+class CMVennSet extends CMSprite {
 
 	/**
 	 * Creates a VennSet instance, represented by
@@ -11083,12 +11542,10 @@ class VennSet extends CMSprite {
 		return this.game.distance(this, pointToCheck) <= this.radius;
 	}
 
-	update(frameCount) {}
-
 	draw(ctx) {
 		ctx.save();
 		ctx.strokeStyle = ctx.fillStyle = CMColor.BLACK;
-		ctx.lineWidth = 1.5;
+		ctx.lineWidth = 2;
 		this.game.strokeOval(this.x, this.y, this.radius);
 		if(this.label.active) {
 			let fontSize = Math.floor(this.game.width / 16);
@@ -11272,7 +11729,7 @@ class CMEdge extends CMSprite {
 	 * already be connected).
 	 * @param {CMGame} game - The current CMGame instance
 	 * @param {CMVertex} [vertex1=null] - One adjacent vertex (if directed, this should be the source vertex)
-	 * @param {CMVertex} [vertex2=null] - A different adjacent vertex (if directed, this should be the destination vertex) 
+	 * @param {CMVertex} [vertex2=null] - A different adjacent vertex (if directed, this should be the destination vertex)
 	 * @param {number} [lineWidth=1] - The thickness in pixels to draw this vertex
 	 * @param {string} [fillStyle=CMColor.BLACK] - The color to draw this vertex with
 	 * @param {object} [label] - A plain JS object of options for a label
@@ -11446,12 +11903,9 @@ class CMEdge extends CMSprite {
 
 			angle = this.game.slopeToRadians( this.game.getSlope(this.start, this.end), Math.sign(this.end.x - this.start.x) );
 
-			/**
-			// This has been added into slopeToRadians
-			if(this.end.x < this.start.x) {
-				angle += Math.PI;
+			if(Array.isArray(angle)) {
+				angle = angle[0]; // @todo Verify when [0] is best here
 			}
-			*/
 
 			while(angle >= Math.TAU) {
 				angle -= Math.TAU;
@@ -11462,7 +11916,7 @@ class CMEdge extends CMSprite {
 				oppositeAngle -= Math.TAU;
 			}
 
-			arrowSide = 1.5 * this.width;
+			arrowSide = Math.max(1.5 * this.width, 8); // For small widths, almost disappears
 			arrowHeight = Math.SQRT1_2 * arrowSide;
 			
 			if(this.vertex2) {
@@ -11510,7 +11964,7 @@ class CMEdge extends CMSprite {
 				vBorder.y + arrowSide * Math.sin(arrowRightAngle) // y + r * Math.sin(theta)
 			); // move to right point
 
-			if(this.vertex2.radius) {
+			if(this.vertex2 && this.vertex2.radius) {
 				// Return to point outside circle
 				this.arrowPath.lineTo( vBorder.x, vBorder.y );
 			}
@@ -11642,20 +12096,24 @@ class CMnGon extends CMSprite {
 
 		let arc = Math.TAU / this.n;
 
-		this.path.moveTo(
-			this.x + this.radius * Math.cos( this.rotation ),
-			this.y + this.radius * Math.sin( this.rotation ));
+		let nextX = this.x + this.radius * Math.cos( this.rotation );
+		let nextY = this.y + this.radius * Math.sin( this.rotation );
 
-		for(let i = this.rotation; i <= this.rotation + Math.TAU; i += arc) {
+		this.path.moveTo(nextX, nextY);
+		this.points.push(new CMPoint(nextX, nextY));
 
-			this.path.lineTo(
-				this.x + this.radius * Math.cos(i),
-				this.y + this.radius * Math.sin(i));
+		for(let theta = this.rotation + arc; theta <= this.rotation + Math.TAU; theta += arc) {
 
-			if(i < this.rotation + Math.TAU - arc) // don't double up
-				this.points.push(new CMPoint(this.x + this.radius * Math.cos(i),
-					this.y + this.radius * Math.sin(i)));
+			nextX = this.x + this.radius * Math.cos(theta);
+			nextY = this.y + this.radius * Math.sin(theta);
+
+			this.path.lineTo(nextX, nextY);
+
+			if(theta < this.rotation + Math.TAU - arc) // don't double up
+				this.points.push(new CMPoint(nextX, nextY));
 		}
+
+		this.path.closePath();
 	}
 
 	/**
@@ -11670,6 +12128,9 @@ class CMnGon extends CMSprite {
 			this.rebuildPath();
 			this.previousState = [this.n, this.x, this.y, this.radius, this.rotation].join(";");
 		}
+
+		this.boundAsCircle();
+		this.rebuildPath(); // In case this has been moved by bounding
 	}
 
 	/**
@@ -11738,6 +12199,8 @@ class CMPolygon extends CMSprite {
 			}
 		});
 
+		let self = this;
+
 		this.x = this.left = x;
 		this.y = this.top = y;
 
@@ -11770,6 +12233,54 @@ class CMPolygon extends CMSprite {
 		this.points = points;
 		this.numPoints = points.length;
 
+		//  Stores information about (x, y) values of points as offsets from center
+		this.pointsRelativeToCenter = this.points.map(point => {
+			return {
+				x: point.x - self.center.x,
+				y: point.y - self.center.y
+			};
+		});
+
+		// Similar to pointsRelativeToCenter, but in polar form for convenience in rotating
+		this.polarPointsRelativeToCenter = this.pointsRelativeToCenter.map(
+			point => self.game.toPolar(point));
+
+		let rotn = 0;
+		Object.defineProperty(this, "rotation", {
+			get() {
+				return rotn;
+			},
+
+			set(newValue) {
+				let diff = newValue - rotn;
+
+				rotn = CMGame.mod(newValue, 0, Math.TAU);
+
+				// Take the current polar points, and add the different of the new rotation with the current
+				this.polarPointsRelativeToCenter = this.polarPointsRelativeToCenter.map(
+					point => {
+						return {
+							r: point.r,
+							theta: CMGame.mod(point.theta + diff, 0, Math.TAU)
+						};
+					}
+				);
+
+				this.pointsRelativeToCenter = this.polarPointsRelativeToCenter.map(
+					point => self.game.fromPolar(point));
+
+				this.points = this.pointsRelativeToCenter.map(point => {
+
+					return {
+						x: self.center.x + point.x,
+						y: self.center.y + point.y
+					};
+				});
+
+				this.rebuildPath();
+			}
+		});
+
 		this.fillStyle = opts.fillStyle;
 		this.strokeStyle = opts.strokeStyle;
 		this.lineWidth = opts.lineWidth;
@@ -11779,12 +12290,16 @@ class CMPolygon extends CMSprite {
 		this.rebuildPath();
 	}
 
+	/**
+	 * Update in a single animation frame
+	 * @param {number} frameCount - The current animation frame index
+	 */
 	update(frameCount) {
 		super.update(frameCount);
 
 		if(this.velocity.x !== 0 || this.velocity.y !== 0) {
 
-			for(let i = 0; i < this.numPoints; i++) {
+			for(let i = 0, len = this.points.length; i < len; i++) {
 				this.points[i].x += this.velocity.x;
 				this.points[i].y += this.velocity.y;
 			}
@@ -11793,8 +12308,11 @@ class CMPolygon extends CMSprite {
 			this.top = this.points.reduce((accumulator, currentValue) => Math.min(accumulator, currentValue.y), game.height);
 			this.right = this.points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.x), 0);
 			this.bottom = this.points.reduce((accumulator, currentValue) => Math.max(accumulator, currentValue.y), 0);
-			this.rebuildPath();
+			this.rebuildPath(); // Redefine points before bounding
 		}
+
+		this.boundAsPolygon();
+		this.rebuildPath(); // In case this has been moved by bounding
 	}
 
 	/**
@@ -11803,7 +12321,12 @@ class CMPolygon extends CMSprite {
 	 */
 	rebuildPath() {
 		this.path = new Path2D();
-		for(let i = 0; i < this.numPoints; i++) {
+		this.path.moveTo(
+				this.points[0].x,
+				this.points[0].y
+			);
+
+		for(let i = 1, len = this.points.length; i < len; i++) {
 			this.path.lineTo(
 				this.points[i].x,
 				this.points[i].y
@@ -11815,191 +12338,7 @@ class CMPolygon extends CMSprite {
 	}
 
 	/**
-	 * Manages screen boundaries for "rect" shape sprite.
-	 * @param {object} [rectToBound=this] - A custom "rectangle" used as a "hit box"
-	 * @param {object} [boundingRect=this.boundingRect]
-	 */
-	boundAsRect(rectToBound=this, boundingRect=this.boundingRect) {
-
-		if(this.hasEnteredScreen) {
-			if(rectToBound.x <= 0) { // left wall
-				switch(this.boundingRuleLeft) {
-					case "wrap":
-						if(rectToBound.x + rectToBound.width <= 0) {
-							this.x += this.game.width;
-
-							for(let i = 0; i < this.numPoints; i++) {
-								this.points[i].x += this.game.width;
-							}
-
-							// For path functions, sprites internal path value may be way off screen
-							while(this.x + this.width < 0) {
-								this.x += this.game.width;
-
-								for(let i = 0; i < this.numPoints; i++) {
-									this.points[i].x += this.game.width;
-								}
-							}
-						}
-						break;
-					case "bounce":
-						this.x = 0;
-						this.velocity.x = Math.abs(this.velocity.x);
-						break;
-					case "fence":
-						this.x = 0;
-						break;
-					case "destroy":
-						if(rectToBound.x + rectToBound.width < 0)
-							this.destroy();
-						break;
-					case "none":
-						break;
-					default:
-						if(typeof this.boundingRuleLeft === "function") {
-							this.boundingRuleLeft.call(this, rectToBound);
-						}
-						break;
-				}
-			}
-			else
-			if(rectToBound.x + rectToBound.width >= this.game.width) { // right wall
-				switch(this.boundingRuleRight) {
-					case "wrap":
-						if(rectToBound.x >= this.game.width) {
-							this.x -= this.game.width;
-							
-							for(let i = 0; i < this.numPoints; i++) {
-								this.points[i].x -= this.game.width;
-							}
-
-							// For path functions, sprites internal path value may be way off screen
-							while(this.x > this.game.width) {
-								this.x -= this.game.width;
-								
-								for(let i = 0; i < this.numPoints; i++) {
-									this.points[i].x -= this.game.width;
-								}
-							}
-						}
-						break;
-					case "bounce":
-						this.x = this.game.width - rectToBound.width;
-						this.velocity.x = -Math.abs(this.velocity.x);
-						break;
-					case "fence":
-						this.x = this.game.width - rectToBound.width;
-						break;
-					case "destroy":
-						if(rectToBound.x > this.game.width)
-							this.destroy();
-						break;
-					case "none":
-						break;
-					default:
-						if(typeof this.boundingRuleRight === "function") {
-							this.boundingRuleRight.call(this, rectToBound);
-						}
-						break;
-				}
-			}
-			else
-			if(rectToBound.y <= 0) { // top wall
-				switch(this.boundingRuleTop) {
-					case "wrap":
-						if(rectToBound.y + rectToBound.height <= 0) {
-							this.y += this.game.height;
-
-							for(let i = 0; i < this.numPoints; i++) {
-								this.points[i].y += this.game.height;
-							}
-
-							// For path functions, sprites internal path value may be way off screen
-							while(this.y + this.height < 0) {
-								this.y += this.game.height;
-
-								for(let i = 0; i < this.numPoints; i++) {
-									this.points[i].y += this.game.height;
-								}
-							}
-						}
-						break;
-					case "bounce":
-						this.y = 0;
-						this.velocity.y = Math.abs(this.velocity.y);
-						break;
-					case "fence":
-						this.y = 0;
-						break;
-					case "destroy":
-						if(rectToBound.y + rectToBound.height < 0)
-							this.destroy();
-						break;
-					case "none":
-						break;
-					default:
-						if(typeof this.boundingRuleTop === "function") {
-							this.boundingRuleTop.call(this, rectToBound);
-						}
-						break;
-				}
-			}
-			else
-			if(rectToBound.y + rectToBound.height >= this.game.height) { // bottom wall
-				switch(this.boundingRuleBottom) {
-					case "wrap":
-						if(rectToBound.y >= this.game.height) {
-							this.y -= this.game.height;
-							for(let i = 0; i < this.numPoints; i++) {
-								this.points[i].y -= this.game.height;
-							}
-
-							// For path functions, sprites internal path value may be way off screen
-							while(this.y > this.game.height) {
-								this.y -= this.game.height;
-
-								for(let i = 0; i < this.numPoints; i++) {
-									this.points[i].y -= this.game.height;
-								}
-							}
-						}
-						break;
-					case "bounce":
-						this.y = this.game.height - rectToBound.height;
-						this.velocity.y = -Math.abs(this.velocity.y);
-						break;
-					case "fence":
-						this.y = this.game.height - rectToBound.height;
-						break;
-					case "destroy":
-						if(rectToBound.y > this.game.height)
-							this.destroy();
-						break;
-					case "none":
-						break;
-					default:
-						if(typeof this.boundingRuleBottom === "function") {
-							this.boundingRuleBottom.call(this, rectToBound);
-						}
-						break;
-				}
-			}
-		}
-
-		if(this.x > this.game.width ||
-				this.y > this.game.height ||
-				this.x + this.width < 0 ||
-				this.y + this.height < 0) {
-			this.onscreen = false;
-		}
-		else {
-			this.hasEnteredScreen = true;
-			this.onscreen = true;
-		}
-	}
-
-	/**
-	 * Determines if a given point is in this doodle's fill path. Note:
+	 * Determines if a given point is in this polygon's fill path. Note:
 	 * this may not be verty reliable on complex shapes.
 	 * @param {number|object} xOrPoint - The x value, or point object
 	 * @param {number} [y] - The y value (if xOrPoint is not a point)
@@ -12027,6 +12366,24 @@ class CMPolygon extends CMSprite {
 		}
 	}
 }
+
+// Override the "center" to return the "centroid" - the mean of all point x and y values
+Object.defineProperty(CMPolygon.prototype, "center", {
+	get() {
+		if(!this.points.length) {
+			// no points - center is undefined
+			return;
+		}
+
+		let x = this.points.reduce((xSum, currentPoint) =>
+			xSum + currentPoint.x, 0) / this.points.length;
+
+		let y = this.points.reduce((ySum, currentPoint) =>
+			ySum + currentPoint.y, 0) / this.points.length;
+
+		return new CMPoint(x, y);
+	}
+});
 
 Object.defineProperty(window, "cmboilerplate", {
 	set() {
@@ -12097,7 +12454,9 @@ and press Enter`);
 </body>
 </html>`;
 
-		document.write(`<textarea style='width: 100%; height: 100%'>${boilerplate}</textarea>`);
-		return boilerplate;
+		document.write(`OK. Copy all of the text in the box below. Then paste it into a text file
+			and save it with the extension .html (for instance, name it <strong>myfile.html</strong> ).
+			Then double-click on that file (myfile.html) in that folder to open the page in your browser.
+			<textarea style='width: 100%; height: 100%'>${boilerplate}</textarea>`);
 	}
 });
