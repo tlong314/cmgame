@@ -18,6 +18,10 @@ Math.SQRT3 = Math.SQRT3 || Math.sqrt(3); // Convenience for unit circle, etc.
 Math.SQRT5 = Math.SQRT5 || Math.sqrt(5); // Ditto
 Math.PHI = Math.PHI || .5 * (1 + Math.SQRT5); // Golden ratio
 
+Math.csc = (x) => 1/Math.sin(x);
+Math.sec = (x) => 1/Math.cos(x);
+Math.cot = (x) => 1/Math.tan(x);
+
 // These will be used to control fps speed
 window.requestNextFrame = window.requestAnimationFrame;
 window.cancelNextFrame = window.cancelAnimationFrame;
@@ -387,30 +391,30 @@ CMRandom.range = (min, max) => {
  */
 CMRandom.nonzero = (min, max) => {
 
-	// zero isn't even in this range
+	// zero isn't even in this range. Stop wasting my time...
 	if(min > 0 || max < 0) {
 		return CMRandom.range(min, max);
 	}
 
-	let pick = 0;
+	// We'll shift all "positive choices" left, then add if one of that collection's elements were picked
+	let pick = 0,
+		shift = 0;
 
-	// max is exclusive for integer inputs (but if max = min, return min)
-	if(Number.isInteger(min) && Number.isInteger(max)) {
+	if(Number.isInteger(min) && Number.isInteger(max))
+		shift = 1;
+	else
+		shift = Number.MIN_VALUE;
 
-		// Integers are easy
-		// Basically shift "positive stack" left by 1, then add if one of its elements were picked
-		pick = CMRandom.range(min, max - 1);
-		if(pick >= 0) {
-			pick++;
-		}
-
-		return pick;
-	}
-
-	// at least one of the parameters is a non-integer float value; max is inclusive
-	while(pick === 0) {
+	if(Number.isInteger(min) && Number.isInteger(max - shift)) {
+		// to account for the edge case where max is an integer + Number.MIN_VALUE
 		pick = (min + Math.random() * (max - min));
 	}
+	else {
+		pick = CMRandom.range(min, max - shift);
+	}
+
+	if(pick >= 0)
+		pick += shift;
 
 	return pick;
 };
@@ -1071,6 +1075,8 @@ class CMSwipe {
 		this.offsetX = this.x - this.oldX;
 		this.offsetY = this.y - this.oldY;
 
+		this.angle = this.game.toPolar(new CMPoint(x - oldX, y - oldY)).theta;
+
 		this.direction = this.getDirection(oldX, oldY, x, y); // "left", "up", "down", "right"
 		this.direction8 = this.getDirection8(oldX, oldY, x, y); // "left", "up", "upleft", "downright" , etc.
 
@@ -1106,7 +1112,7 @@ class CMSwipe {
 	 * @returns {string}
 	 */
 	getDirection(oldX, oldY, x, y) {
-		let angle = this.game.toPolar(new CMPoint(x - oldX, y - oldY)).theta;
+		let angle = this.angle;
 
 		if(angle >= 1.75 * Math.PI || angle < .25 * Math.PI) {
 			this.direction = "right";
@@ -1139,7 +1145,7 @@ class CMSwipe {
 	 * @returns {string}
 	 */
 	getDirection8(oldX, oldY, x, y) {
-		let angle = this.game.toPolar(new CMPoint(x - oldX, y - oldY)).theta;
+		let angle = this.angle;
 		let octant = Math.PI / 8;
 
 		if(angle >= 15 * octant || angle < 1 * octant) {
@@ -1202,6 +1208,7 @@ class CMGame {
 	 *   false to draw nothing. Defaults to drawing all values on tick marks.
 	 * @param {function} [options.tickLabelIfX] - Similar to options.tickLabelIf, but only for x-axis values. Defaults to options.tickLabelIf.
 	 * @param {function} [options.tickLabelIfY] - Similar to options.tickLabelIf, but only for y-axis values. Defaults to options.tickLabelIf.
+	 * @param {function} [options.tickLabelIfOrigin] - Similar to tickLabelIfX with specific designation to 0, which is by default not drawn.
 	 * @param {number} [options.tickFontSize] - Preferred font size (in pixels) of font displaying tick values 
 	 * @param {boolean} [options.soundOn] - true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 	 * @param {boolean} [options.musicOn] - true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
@@ -1219,6 +1226,13 @@ class CMGame {
 	 * @param {object|string} [options.backgroundCanvas] - An HTML element (or CSS selector for that element) to be used as the output canvas element for the game's background. If this option is not present, we assume there is no background canvas. Default is null.
 	 * @param {object|string} [options.pressElement:]An HTML element (or CSS selector for that element) defining the element to be used for mouse/touch events. Defaults to the game's canvas (as expected). This option should only be used if you need touch/mouse events handled outside the actual game.
 	 * @param {string} [options.tickStyle] - A color string for the Cartesian grid tick marks on the axes. Defaults to CMColor.DARK_GRAY.
+	 * @param {string} [options.tickStyleX] - A color string for the Cartesian grid tick marks on the x axis. Defaults to determined `tickStyle` value.
+	 * @param {string} [options.tickStyleY] - A color string for the Cartesian grid tick marks on the y axis. Defaults to determined `tickStyle` value.
+	 * @param {string} [options.tickStyleOrigin] - A color string for the Cartesian grid tick mark for the centered origin (e.g., for charts with no y-axis). Defaults to CMColor.NONE.
+	 * @param {string} [options.tickLabelStyle] - A color string for the Cartesian grid tick labels on the axes. Defaults to CMColor.DARK_GRAY.
+	 * @param {string} [options.tickLabelStyleX] - A color string for the Cartesian grid tick labels on the x axis. Defaults to determined `tickLabelStyle` value.
+	 * @param {string} [options.tickLabelStyleY] - A color string for the Cartesian grid tick labels on the y axis. Defaults to determined `tickLabelStyle` value.
+	 * @param {string} [options.tickLabelStyleOrigin] - A color string for the Cartesian grid tick label representing the point (0, 0)
 	 * @param {string} [options.xAxisStyle] - A color string for the line defining the x-axis. Defaults to CMColor.GRAY.
 	 * @param {string} [options.yAxisStyle] - A color string for the line defining the y-axis. Defaults to CMColor.GRAY.
 	 * @param {string} [options.gridStyle] - A color string for the Cartesian grid graph lines. Defaults to CMColor.LIGHT_GRAY.
@@ -1367,7 +1381,16 @@ class CMGame {
 		this.gridStyle = CMColor.LIGHT_GRAY;
 		this.xAxisStyle = CMColor.GRAY;
 		this.yAxisStyle = CMColor.GRAY;
+
+		this.tickStyleX = CMColor.DARK_GRAY;
+		this.tickStyleY = CMColor.DARK_GRAY;
 		this.tickStyle = CMColor.DARK_GRAY;
+		this.tickStyleOrigin = options.tickStyleOrigin || CMColor.NONE;
+		this.tickLabelStyleX = CMColor.DARK_GRAY;
+		this.tickLabelStyleY = CMColor.DARK_GRAY;
+		this.tickLabelStyle = CMColor.DARK_GRAY;
+		this.tickLabelStyleOrigin = CMColor.NONE;
+
 		this.gridlineWidth = 1;
 
 		if(typeof options.tickFontSize === "number") {
@@ -1377,6 +1400,7 @@ class CMGame {
 		this.tickLabelIf = null;
 		this.tickLabelIfX = null;
 		this.tickLabelIfY = null;
+		this.tickLabelIfOrigin = null;
 
 		if(typeof options.tickLabelIf === "function") {
 			this.tickLabelIf = options.tickLabelIf;
@@ -1429,12 +1453,23 @@ class CMGame {
 			this.tickLabelIfY = this.tickLabelIf;
 		}
 
+		if(typeof options.tickLabelIfOrigin === "function") {
+			this.tickLabelIfOrigin = options.tickLabelIfOrigin;
+		}
+		else
+		if(typeof options.tickLabelIfOrigin === "boolean") {
+			this.tickLabelIfOrigin = function(input) { return options.tickLabelIfOrigin; };
+		}
+		else { // Default to not showing the origin label (this usually looks cleaner)
+			this.tickLabelIfOrigin = () => false;
+		}
+
 		if(typeof options.gridStyle !== "undefined") {
 			this.gridStyle = options.gridStyle;
 		}
 
 		if(typeof options.gridlineWidth !== "undefined") {
-			this.gridStyle = options.gridlineWidth;
+			this.gridlineWidth = options.gridlineWidth;
 		}
 
 		if(typeof options.xAxisStyle !== "undefined") {
@@ -1448,6 +1483,18 @@ class CMGame {
 		if(typeof options.tickStyle !== "undefined") {
 			this.tickStyle = options.tickStyle;
 		}
+
+		this.tickStyleX = options.tickStyleX || this.tickStyle;
+		this.tickStyleY = options.tickStyleY || this.tickStyle;
+
+		this.tickLabelStyleOrigin = options.tickLabelStyleOrigin || CMColor.NONE;
+
+		if(typeof options.tickLabelStyle !== "undefined") {
+			this.tickLabelStyle = options.tickLabelStyle;
+		}
+
+		this.tickLabelStyleX = options.tickLabelStyleX || this.tickLabelStyle;
+		this.tickLabelStyleY = options.tickLabelStyleY || this.tickLabelStyle;
 
 		this.fullscreen = false;
 		if(typeof options.fullscreen !== "undefined") {
@@ -1610,6 +1657,8 @@ class CMGame {
 			this.backgroundCtx = null;
 		}
 
+		this.devicePixelRatio = window.devicePixelRatio || 1;
+
 		// store initial <canvas> dimensions for screen resizing
 		this.canvasReferenceWidth = options.width || 640;
 		this.canvasReferenceHeight = options.height || 480;
@@ -1619,6 +1668,11 @@ class CMGame {
 		this.canvas.style.width = this.width + "px";
 		this.canvas.style.height = this.height + "px"
 
+		/**
+		 * Consider multiplying by devicePixelRatio here, as the output looks nicer (but
+		 * values become complicated- for instance, drawStringsCentered would need
+		 * to be modified, as text is no longer centered)
+		 */
 		this.canvas.width = this.width;
 		this.canvas.height = this.height;
 
@@ -1626,18 +1680,11 @@ class CMGame {
 			this.backgroundCanvas.style.width = this.width + "px";
 			this.backgroundCanvas.style.height = this.height + "px"
 
-			this.backgroundCanvas.width = this.width;
-			this.backgroundCanvas.height = this.height;
+			this.backgroundCanvas.width = this.width * this.devicePixelRatio;
+			this.backgroundCanvas.height = this.height * this.devicePixelRatio;
 		}
 
-		/**
-		 * Create an offscreen canvas for drawing optimization,
-		 * and attempt to improve grainy/blurry images by
-		 * accounting for current device's pixel ratio.
-		 * See https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio
-		 */
-		this.devicePixelRatio = window.devicePixelRatio || 1;
-
+		/** Create an offscreen canvas for drawing optimization */
 		this.offscreenCanvas = document.createElement("canvas");
 		this.offscreenCtx = this.offscreenCanvas.getContext("2d");
 
@@ -1789,7 +1836,7 @@ class CMGame {
 
 		// This property is only really used here, and is used to pause game on browser tab change etc.
 		this.unpausedWhenVisible = true;
-		window.addEventListener("visibilitychange", (e) => {
+		window.addEventListener("visibilitychange", e => {
 			if(document.visibilityState === "visible") {
 				if(self.unpausedWhenVisible) {
 					self.unpause();
@@ -1957,9 +2004,9 @@ class CMGame {
 				}
 
 				this.ondraw(ctx);
-				
+
 				if(this.recordingVideo) {
-					this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+					this.screenVideoCtx.clearRect(0, 0,
 						this.screenVideoCanvas.width, this.screenVideoCanvas.height);
 
 					this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
@@ -2036,7 +2083,7 @@ class CMGame {
 					ctx.fillStyle = CMColor.BLACK;
 					let fontSize = Math.floor(this.width / 16);
 					ctx.font = `italic ${fontSize}px Times New Roman, serif`;
-					ctx.fillText("U", this.canvas.width - fontSize * 1.5, fontSize * 1.25);
+					ctx.fillText("U", this.width - fontSize * 1.5, fontSize * 1.25);
 
 					for(let sprite of this.sprites) {
 						sprite.onbeforedraw(ctx);
@@ -2054,7 +2101,7 @@ class CMGame {
 					this.ondraw(ctx);
 
 					if(this.recordingVideo) {
-						this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+						this.screenVideoCtx.clearRect(0, 0,
 							this.screenVideoCanvas.width, this.screenVideoCanvas.height);
 
 						this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
@@ -2134,7 +2181,7 @@ class CMGame {
 					this.ondraw(ctx);
 
 					if(this.recordingVideo) {
-						this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+						this.screenVideoCtx.clearRect(0, 0,
 							this.screenVideoCanvas.width, this.screenVideoCanvas.height);
 
 						this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
@@ -2257,12 +2304,50 @@ class CMGame {
 
 					ctx.font = tickFontSize + "px Arial, sans-serif";
 					ctx.textBaseline = "middle";
-					if(this.tickStyle && this.tickStyle !== CMColor.NONE) {
-						ctx.strokeStyle = ctx.fillStyle = this.tickStyle;
 
+					if(this.tickStyleOrigin && this.tickStyleOrigin !== CMColor.NONE) {
+						let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
+						ctx.strokeStyle = this.tickStyleOrigin;
+
+						this.drawLine(this.origin.x, this.origin.y - halfTickLength,
+							this.origin.x, this.origin.y + halfTickLength);
+					}
+
+					if(this.tickLabelStyleOrigin && this.tickLabelStyleOrigin !== CMColor.NONE) {
+						let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
+
+						ctx.fillStyle = this.tickLabelStyleOrigin;
+
+						let nLabel = this.tickLabelIfOrigin(0);
+						let oOffsetX = halfTickLength;
+
+						// No y-axis; we can center the origin label
+						if(!this.yAxisStyle || this.yAxisStyle === CMColor.NONE) {
+							oOffsetX = 0;
+						}
+
+						if(typeof nLabel === "string")
+							ctx.fillText(nLabel,
+								this.origin.x + oOffsetX - .5 * ctx.measureText(nLabel).width,
+								this.origin.y + halfTickLength + .75 * tickFontSize);
+						else
+						if(typeof nLabel === "number") // Note: this includes zero
+							ctx.fillText("" + nLabel,
+								this.origin.x + oOffsetX - .5 * ctx.measureText(nLabel + "").width,
+								this.origin.y + halfTickLength + .75 * tickFontSize);
+						else
+						if(nLabel) // boolean, etc., so just write the expected #
+							ctx.fillText("0",
+								this.origin.x + oOffsetX - .5 * ctx.measureText("0").width,
+								this.origin.y + halfTickLength + .75 * tickFontSize);
+					}
+
+					if(this.tickStyle && this.tickStyle !== CMColor.NONE) {
 						let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
 
 						// vertical lines on x-axis, center to left
+						ctx.strokeStyle = this.tickStyleX;
+						ctx.fillStyle = this.tickLabelStyleX;
 						for(let i = this.origin.x - this.tickDistance, n = -incrementer;
 								i > 0;
 								i -= this.tickDistance, n -= incrementer) {
@@ -2276,7 +2361,18 @@ class CMGame {
 									i - .5 * ctx.measureText(nLabel).width,
 									this.origin.y + halfTickLength + .75 * tickFontSize);
 							else
-							if(nLabel)
+							if(typeof nLabel === "number") {
+								if(nLabel < 0)
+									ctx.fillText("" + nLabel,
+										i - ctx.measureText("" + nLabel).width + ctx.measureText("-").width,
+										this.origin.y + halfTickLength + .75 * tickFontSize);
+								else
+									ctx.fillText(nLabel,
+										i - .5 * ctx.measureText("" + nLabel).width,
+										this.origin.y + halfTickLength + .75 * tickFontSize);
+							}
+							else
+							if(nLabel) // boolean, etc., so just write the expected (negative) #
 								ctx.fillText("" + n,
 									i - ctx.measureText("" + n).width + ctx.measureText("-").width,
 									this.origin.y + halfTickLength + .75 * tickFontSize);
@@ -2296,6 +2392,17 @@ class CMGame {
 									i - .5 * ctx.measureText(nLabel).width,
 									this.origin.y + halfTickLength + .75 * tickFontSize);
 							else
+							if(typeof nLabel === "number") {
+								if(nLabel < 0)
+									ctx.fillText("" + nLabel,
+										i - ctx.measureText("" + nLabel).width + ctx.measureText("-").width,
+										this.origin.y + halfTickLength + .75 * tickFontSize);
+								else
+									ctx.fillText(nLabel,
+										i - .5 * ctx.measureText("" + nLabel).width,
+										this.origin.y + halfTickLength + .75 * tickFontSize);
+							}
+							else // boolean, etc., so just write the expected (positive) #
 							if(nLabel)
 								ctx.fillText("" + n,
 									i - .5 * ctx.measureText("" + n).width,
@@ -2303,6 +2410,8 @@ class CMGame {
 						}
 
 						// horizontal lines on y-axis, center to top
+						ctx.strokeStyle = this.tickStyleY;
+						ctx.fillStyle = this.tickLabelStyleY;
 						for(let i = this.origin.y - this.tickDistance, n = incrementer;
 								i > 0;
 								i -= this.tickDistance, n += incrementer) {
@@ -2314,6 +2423,11 @@ class CMGame {
 							if(typeof nLabel === "string")
 								ctx.fillText(nLabel,
 									this.origin.x - halfTickLength - 1.25 * ctx.measureText(nLabel).width,
+									i);
+							else
+							if(typeof nLabel === "number")
+								ctx.fillText("" + nLabel,
+									this.origin.x - halfTickLength - 1.25 * ctx.measureText("" + nLabel).width,
 									i);
 							else
 							if(nLabel)
@@ -2334,6 +2448,11 @@ class CMGame {
 							if(typeof nLabel === "string")
 								ctx.fillText(nLabel,
 									this.origin.x - halfTickLength - 1.25 * ctx.measureText(nLabel).width,
+									i);
+							else
+							if(typeof nLabel === "number")
+								ctx.fillText("" + nLabel,
+									this.origin.x - halfTickLength - 1.25 * ctx.measureText("" + nLabel).width,
 									i);
 							else
 							if(nLabel)
@@ -2378,7 +2497,7 @@ class CMGame {
 					this.ondraw(ctx);
 
 					if(this.recordingVideo) {
-						this.screenVideoCtx.clearRect(game.canvas, 0, 0,
+						this.screenVideoCtx.clearRect(0, 0,
 							this.screenVideoCanvas.width, this.screenVideoCanvas.height);
 
 						this.screenVideoCtx.drawImage(game.canvas, this.screenVideoDetails.x, this.screenVideoDetails.y,
@@ -2462,38 +2581,40 @@ class CMGame {
 		this.recordingVideo = false;
 		this.screenVideoDetails = null;
 
-		// Base output calculations on ideal MP4 resolution of 1920x1080
-		let videoWidthScalar = 1920 / this.width;
-		let videoHeightScalar = 1080 / this.height;
+		// 1920 x 1080 looks great but causes a lot of slowdown
+		const PREFERRED_VIDEO_WIDTH = 1920;
+		const PREFERRED_VIDEO_HEIGHT = 1080;
+
+		// Base output calculations on ideal MP4 resolution
+		let videoWidthScalar = PREFERRED_VIDEO_WIDTH / this.width;
+		let videoHeightScalar = PREFERRED_VIDEO_HEIGHT / this.height;
 
 		if(videoWidthScalar > videoHeightScalar) {
 			this.screenVideoDetails = {
-				x: Math.max((1920 - this.width * videoHeightScalar) / 2, 0),
-				y: Math.max((1080 - this.height * videoHeightScalar) / 2, 0),
+				x: Math.max((PREFERRED_VIDEO_WIDTH - this.width * videoHeightScalar) / 2, 0),
+				y: Math.max((PREFERRED_VIDEO_HEIGHT - this.height * videoHeightScalar) / 2, 0),
 				width: this.width * videoHeightScalar,
 				height: this.height * videoHeightScalar
 			};
 		}
 		else {
 			this.screenVideoDetails = {
-				x: Math.max((1920 - this.width * videoWidthScalar) / 2, 0),
-				y: Math.max((1080 - this.height * videoWidthScalar) / 2, 0),
+				x: Math.max((PREFERRED_VIDEO_WIDTH - this.width * videoWidthScalar) / 2, 0),
+				y: Math.max((PREFERRED_VIDEO_HEIGHT - this.height * videoWidthScalar) / 2, 0),
 				width: this.width * videoWidthScalar,
 				height: this.height * videoWidthScalar
 			};
 		}
 
-		if(!this.screenVideoCanvas) {
-			this.screenVideoCanvas = document.createElement("canvas");
+		this.screenVideoCanvas = document.createElement("canvas");
 
-			// Aim for resolution of 1920x1080 for ideal MP4 output
-			this.screenVideoCanvas.width = 1920;
-			this.screenVideoCanvas.height = 1080;
-			this.screenVideoCanvas.style.width = 1920 + "px";
-			this.screenVideoCanvas.style.height = 1080 + "px";
+		// Aim for resolution of for ideal MP4 output without
+		this.screenVideoCanvas.width = PREFERRED_VIDEO_WIDTH;
+		this.screenVideoCanvas.height = PREFERRED_VIDEO_HEIGHT;
+		this.screenVideoCanvas.style.width = PREFERRED_VIDEO_WIDTH + "px";
+		this.screenVideoCanvas.style.height = PREFERRED_VIDEO_HEIGHT + "px";
 
-			this.screenVideoCtx = this.screenVideoCanvas.getContext("2d", {alpha: false});
-		}
+		this.screenVideoCtx = this.screenVideoCanvas.getContext("2d", {alpha: false});
 
 		this.alertOverlay = document.createElement("div");
 		this.alertOverlay.classList = "cm-overlay";
@@ -2799,7 +2920,7 @@ class CMGame {
 	 * video source string.
 	 * @param {number|object} [options={}] - A plain JS object of options. If undefined,
 	 *   defaults are used. If a number, defaults are used except for duration, which is
-	 *   set to that number.
+	 *   set to that number (of milliseconds).
 	 * @param {number} [options.start=0] - Number of milliseconds to wait before starting capture
 	 * @param {number|string} [options.duration=5000] - Number of milliseconds to capture, or
 	 *   "indefinite" to continue recording until stopScreenVideo is called. This value can
@@ -2842,9 +2963,6 @@ class CMGame {
 						opts[key] = options[key];
 					}
 				}
-				break;
-			case "undefined":
-			default:
 				break;
 		}
 
@@ -2912,8 +3030,10 @@ class CMGame {
 			self.videoRecorder.onstart = function() {
 
 				/**
-				 * Stop recording only after requested time.
-				 * May not be accurate down to the exact second.
+				 * Stop recording only after requested time. Because recording
+				 * video causes some slowdown, we use setFrameout to record
+				 * the expected amount of time, where the speed can be edited
+				 * later in a video editor.
 				 */
 				if(opts.duration !== "indefinite") { // Set duration to "indefinite" if you will stop manually
 
@@ -3218,12 +3338,50 @@ class CMGame {
 
 		ctx.font = tickFontSize + "px Arial, sans-serif";
 		ctx.textBaseline = "middle";
-		if(this.tickStyle && this.tickStyle !== CMColor.NONE) {
-			ctx.strokeStyle = ctx.fillStyle = this.tickStyle;
 
+		if(this.tickStyleOrigin && this.tickStyleOrigin !== CMColor.NONE) {
+			let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
+			ctx.strokeStyle = this.tickStyleOrigin;
+
+			this.drawLine(this.origin.x, this.origin.y - halfTickLength,
+				this.origin.x, this.origin.y + halfTickLength);
+		}
+
+		if(this.tickLabelStyleOrigin && this.tickLabelStyleOrigin !== CMColor.NONE) {
+			let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
+
+			ctx.fillStyle = this.tickLabelStyleOrigin;
+
+			let oOffsetX = halfTickLength;
+
+			// No y-axis; we can center the origin label
+			if(!this.yAxisStyle || this.yAxisStyle === CMColor.NONE) {
+				oOffsetX = 0;
+			}
+
+			let nLabel = this.tickLabelIfOrigin(0);
+			if(typeof nLabel === "string")
+				ctx.fillText(nLabel,
+					this.origin.x + oOffsetX - .5 * ctx.measureText(nLabel).width,
+					this.origin.y + halfTickLength + .75 * tickFontSize);
+			else
+			if(typeof nLabel === "number") // Note: this includes zero
+				ctx.fillText("" + nLabel,
+					this.origin.x + oOffsetX - .5 * ctx.measureText(nLabel + "").width,
+					this.origin.y + halfTickLength + .75 * tickFontSize);
+			else
+			if(nLabel) // boolean, etc., so just write the expected #
+				ctx.fillText("0",
+					this.origin.x + oOffsetX - .5 * ctx.measureText("0").width,
+					this.origin.y + halfTickLength + .75 * tickFontSize);
+		}
+
+		if(this.tickStyle && this.tickStyle !== CMColor.NONE) {
 			let halfTickLength = Math.max(Math.min(5, .25 * this.tickDistance), 3);
 
 			// vertical lines on x-axis, center to left
+			ctx.strokeStyle = this.tickStyleX;
+			ctx.fillStyle = this.tickLabelStyleX;
 			for(let i = this.origin.x - this.tickDistance, n = -incrementer;
 					i > 0;
 					i -= this.tickDistance, n -= incrementer) {
@@ -3236,6 +3394,17 @@ class CMGame {
 					ctx.fillText(nLabel,
 						i - .5 * ctx.measureText(nLabel).width,
 						this.origin.y + halfTickLength + .75 * tickFontSize);
+				else
+				if(typeof nLabel === "number") {
+					if(nLabel < 0)
+						ctx.fillText("" + nLabel,
+						i - ctx.measureText("" + nLabel).width + ctx.measureText("-").width,
+						this.origin.y + halfTickLength + .75 * tickFontSize);
+					else
+						ctx.fillText(nLabel,
+							i - .5 * ctx.measureText("" + nLabel).width,
+							this.origin.y + halfTickLength + .75 * tickFontSize);
+				}
 				else
 				if(nLabel)
 					ctx.fillText("" + n,
@@ -3257,6 +3426,17 @@ class CMGame {
 						i - .5 * ctx.measureText(nLabel).width,
 						this.origin.y + halfTickLength + .75 * tickFontSize);
 				else
+				if(typeof nLabel === "number") {
+					if(nLabel < 0)
+						ctx.fillText("" + nLabel,
+							i - ctx.measureText("" + nLabel).width + ctx.measureText("-").width,
+							this.origin.y + halfTickLength + .75 * tickFontSize);
+					else
+						ctx.fillText(nLabel,
+							i - .5 * ctx.measureText("" + nLabel).width,
+							this.origin.y + halfTickLength + .75 * tickFontSize);
+				}
+				else // boolean, etc., so just write the expected #
 				if(nLabel)
 					ctx.fillText("" + n,
 						i - .5 * ctx.measureText("" + n).width,
@@ -3264,6 +3444,8 @@ class CMGame {
 			}
 
 			// horizontal lines on y-axis, center to top
+			ctx.strokeStyle = this.tickStyleY;
+			ctx.fillStyle = this.tickLabelStyleY;
 			for(let i = this.origin.y - this.tickDistance, n = incrementer;
 					i > 0;
 					i -= this.tickDistance, n += incrementer) {
@@ -3275,6 +3457,11 @@ class CMGame {
 				if(typeof nLabel === "string")
 					ctx.fillText(nLabel,
 						this.origin.x - halfTickLength - 1.25 * ctx.measureText(nLabel).width,
+						i);
+				else
+				if(typeof nLabel === "number")
+					ctx.fillText(nLabel,
+						this.origin.x - halfTickLength - 1.25 * ctx.measureText("" + nLabel).width,
 						i);
 				else
 				if(nLabel)
@@ -3295,6 +3482,11 @@ class CMGame {
 				if(typeof nLabel === "string")
 					ctx.fillText(nLabel,
 						this.origin.x - halfTickLength - 1.25 * ctx.measureText(nLabel).width,
+						i);
+				else
+				if(typeof nLabel === "number")
+					ctx.fillText(nLabel,
+						this.origin.x - halfTickLength - 1.25 * ctx.measureText("" + nLabel).width,
 						i);
 				else
 				if(nLabel)
@@ -5360,7 +5552,8 @@ class CMGame {
 			fill: true,
 			stroke: false,
 			fillStyles: [],
-			strokeStyles: []
+			strokeStyles: [],
+			offsets: []
 		};
 
 		let opts = {};
@@ -7187,7 +7380,7 @@ class CMGame {
 	}
 
 	/**
-	 * Creates a "confirm" dialog, similar to window.confirm,
+	 * Creates a "prompt" dialog, similar to window.prompt,
 	 * and halts current game processes without actually
 	 * blocking the JS main thread.
 	 * Rather than blocking and returning entered text,
@@ -8579,7 +8772,7 @@ class CMSprite {
 		 * Since this engine only truly supports 2D games,
 		 * z can be handled separately from path
 		 */
-		if(this.velocity.z && this.acceleration.z) {
+		if(this.acceleration.z) {
 			this.velocity.z += this.acceleration.z;
 		}
 
@@ -9266,7 +9459,10 @@ class CMSprite {
 		}
 
 		if(this.image) {
-			ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+			if(this.shape === "circle")
+				ctx.drawImage(this.image, this.x - this.radius, this.y - this.radius, this.width, this.height);
+			else
+				ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
 		}
 		else
 		if(this.shape === "circle") {
@@ -9422,7 +9618,10 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @param {number} newVal - The new "bottom" y value
 		 */
 		set(newVal) {
-			this.y = newVal - this.height;
+			if(this.shape === "circle")
+				this.y = newVal - this.radius;
+			else
+				this.y = newVal - this.height;
 		},
 
 		/**
@@ -9430,7 +9629,10 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @returns {number}
 		 */
 		get() {
-			return this.y + this.height;
+			if(this.shape === "circle")
+				return this.y + this.radius;
+			else
+				return this.y + this.height;
 		}
 	},
 	
@@ -9441,7 +9643,10 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @param {number} newVal - The new "right" x value
 		 */
 		set(newVal) {
-			this.x = newVal - this.width;
+			if(this.shape === "circle")
+				this.x = newVal - this.radius;
+			else
+				this.x = newVal - this.width;
 		},
 
 		/**
@@ -9449,23 +9654,24 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @returns {number}
 		 */
 		get() {
-			return this.x + this.width;
+			if(this.shape === "circle")
+				return this.x + this.radius;
+			else
+				return this.x + this.width;
 		}
 	},
 
-	/**
-	 * The "left" and "top" value are provided as conveniences,
-	 * even though they are essentially redundant (as aliases
-	 * for "x" and "y", respectively).
-	 */
 	left: {
 
 		/**
-		 * Setting sprite's left value essentially just redefines x
+		 * Setting sprite's left value redefines x
 		 * @param {number} newVal - The new "left" x value
 		 */
 		set(newVal) {
-			this.x = newVal;
+			if(this.shape === "circle")
+				this.x = newVal + this.radius;
+			else
+				this.x = newVal;
 		},
 
 		/**
@@ -9473,18 +9679,24 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @returns {number}
 		 */
 		get() {
-			return this.x;
+			if(this.shape === "circle")
+				return this.x - this.radius;
+			else
+				return this.x;
 		}
 	},
 
 	top: {
 
 		/**
-		 * Setting sprite's top value essentially just redefines y
+		 * Setting sprite's top value redefines y
 		 * @param {number} newVal - The new "top" y value
 		 */
 		set(newVal) {
-			this.y = newVal;
+			if(this.shape === "circle")
+				this.y = newVal - this.radius;
+			else
+				this.y = newVal;
 		},
 
 		/**
@@ -9492,7 +9704,10 @@ Object.defineProperties(CMSprite.prototype, {
 		 * @returns {number}
 		 */
 		get() {
-			return this.y;
+			if(this.shape === "circle")
+				return this.y - this.radius;
+			else
+				return this.y;
 		}
 	}
 });
@@ -10420,6 +10635,8 @@ class CMFunction {
 	drawPolar(ctx) {
 		let game = this.game;
 		let canvas = game.canvas;
+		ctx.lineWidth = this.lineWidth;
+		ctx.strokeStyle = this.strokeStyle;
 
 		let initialPoint = game.fromPolar({
 				r: this.realToScreenOf(0),
@@ -10509,6 +10726,8 @@ class CMFunction {
 		let finalI = Math.min(game.height, game.height - this.game.yToScreen( this.end.y, this.origin) );
 
 		// Draw the current graph
+		ctx.lineWidth = this.lineWidth;
+		ctx.strokeStyle = this.strokeStyle;
 		this.path = new Path2D();
 		this.path.moveTo(this.realToScreenOf( initialScreenRealY ), game.height - initialI);
 
@@ -10568,6 +10787,8 @@ class CMFunction {
 		let finalI = Math.min(canvas.width, this.game.xToScreen( this.end.x, this.origin) );
 
 		// Draw the current graph
+		ctx.lineWidth = this.lineWidth;
+		ctx.strokeStyle = this.strokeStyle;
 		this.path = new Path2D();
 		this.path.moveTo(initialI, this.realToScreenOf( initialScreenRealX ) );
 
@@ -10950,7 +11171,7 @@ class CMVennRegion extends CMSprite {
 		this.regionCode = regionCode;
 		this.variation = variation;
 		this.filled = false;
-		this.fillStyle = "red"; // Since regions are created when diagram is, dev can set fill color later
+		this.fillStyle = "red"; // Since regions are created when diagram is, dev can/should set fill color later
 		this.path = new Path2D();
 
 		this.label = {
@@ -11521,6 +11742,8 @@ class CMVennSet extends CMSprite {
 
 		this.path = null;
 		this.complementPath = null;
+		this.strokeStyle = CMColor.BLACK;
+		this.lineWidth = 2;
 
 		this.label = {
 			text: "",
@@ -11564,9 +11787,13 @@ class CMVennSet extends CMSprite {
 
 	draw(ctx) {
 		ctx.save();
-		ctx.strokeStyle = ctx.fillStyle = CMColor.BLACK;
-		ctx.lineWidth = 2;
-		this.game.strokeOval(this.x, this.y, this.radius);
+		ctx.strokeStyle = this.strokeStyle;
+
+		if(this.lineWidth > 0) {
+			ctx.lineWidth = this.lineWidth;
+			this.game.strokeOval(this.x, this.y, this.radius);
+		}
+
 		if(this.label.active) {
 			let fontSize = Math.floor(this.game.width / 16);
 			ctx.font = `italic ${fontSize}px Times New Roman, serif`;
