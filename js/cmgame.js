@@ -1897,10 +1897,23 @@ class CMGame {
 				}
 			}
 
-			this.startBtn.addEventListener("click", e => {
-				e.preventDefault();
-				self.start();
-			}, false);
+			// Accept multiple inputs, e.g., ".start-buttons"
+			if(typeof options.startBtn === "string" &&
+					document.querySelectorAll(options.startBtn).length > 1) {
+
+				document.querySelectorAll(options.startBtn).forEach(elm => {
+						elm.addEventListener("click", e => {
+							e.preventDefault();
+							self.start();
+						}, false);
+				});
+			}
+			else {
+				this.startBtn.addEventListener("click", e => {
+					e.preventDefault();
+					self.start();
+				}, false);
+			}
 		}
 
 		this.enterFullscreenBtn = null;
@@ -2508,7 +2521,7 @@ class CMGame {
 				break;
 		}
 
-		this.doodleOptions = {};
+		this.doodleOptions = { enabled: false };
 		if(options.doodleOptions) {
 			this.doodleOptions = options.doodleOptions;
 
@@ -3266,7 +3279,8 @@ class CMGame {
 			sprite.update(frameCount); // Note: this is where "destroy" occurs, shifting i
 			sprite.onupdate(frameCount);
 
-			if(this.sprites.length < cap) { // sprites[i] was removed; jump back 1
+			// sprites[i] was removed; jump back until all "destroyed" sprites are acounted for
+			while(this.sprites.length < cap) {
 				i--;
 				cap--;
 			}
@@ -3563,7 +3577,7 @@ class CMGame {
 			this.draw();
 		}
 
-		return this;		
+		return this;
 	}
 
 	/**
@@ -3645,7 +3659,7 @@ class CMGame {
 			// Without any length in the path, nothing will be drawn
 			if(doodles[i].points.length === 1) {
 				doodles[i].addPoint(doodles[i].startPoint.x + 0.5,
-						doodles[i].startPoint.y + 0.5);
+					doodles[i].startPoint.y + 0.5);
 			}
 
 			spritePaths.push(doodles[i].path);
@@ -3914,14 +3928,17 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeFunctions(...funcs) {
-		let self = this,
-			funcArr = funcs;
+		let funcArr = funcs;
 
 		if(arguments.length === 1 && Array.isArray(arguments[0])) {
 			funcArr = arguments[0];
 		}
 
-		funcArr.forEach(func => self.removeFunction(func));
+		let len = funcArr.length;
+		while(len--) {
+			this.removeFunction(funcArr[len]);
+		}
+
 		return this;
 	}
 
@@ -3997,14 +4014,17 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeSprites(...sprites) {
-		let self = this,
-			spriteArr = sprites;
+		let spriteArr = sprites;
 
 		if(arguments.length === 1 && Array.isArray(arguments[0])) {
 			spriteArr = arguments[0];
 		}
 
-		spriteArr.forEach(sprite => self.removeSprite(sprite));
+		let len = spriteArr.length;
+		while(len--) {
+			this.removeSprite(spriteArr[len]);
+		}
+
 		return this;
 	}
 
@@ -6915,14 +6935,17 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeVertices(...vertices) {
-		let self = this,
-			vertexArr = vertices;
+		let vertexArr = vertices;
 
 		if(arguments.length === 1 && Array.isArray(arguments[0])) {
 			vertexArr = arguments[0];
 		}
 
-		vertexArr.forEach(vertex => self.removeVertex(vertex));
+		let len = vertexArr.length;
+		while(len--) {
+			this.removeVertex(vertexArr[len]);
+		}
+
 		return this;
 	}
 
@@ -6977,14 +7000,17 @@ class CMGame {
 	 * @returns {object} The current CMGame instance
 	 */
 	removeEdges(...edges) {
-		let self = this,
-			edgeArr = edges;
+		let edgeArr = edges;
 
 		if(arguments.length === 1 && Array.isArray(arguments[0])) {
 			edgeArr = arguments[0];
 		}
 
-		edgeArr.forEach(edge => self.removeEdge(edge));
+		let len = edgeArr.length;
+		while(len--) {
+			this.removeEdge(edgeArr[len]);
+		}
+
 		return this;
 	}
 
@@ -7674,9 +7700,9 @@ CMGame.pickFrom = (arr) => {
 CMGame.pluckFrom = (arr, item) => {
 	if(Array.isArray(arr)) {
 		if(item)
-			return arr.splice(arr.indexOf(item), 1);
+			return arr.splice(arr.indexOf(item), 1)[0];
 
-		return arr.splice(CMRandom.range(0, arr.length), 1);
+		return arr.splice(CMRandom.range(0, arr.length), 1)[0];
 	}
 	else
 	if(arr instanceof Map) {
@@ -7721,8 +7747,10 @@ CMGame.pluckFrom = (arr, item) => {
  */
 CMGame.shuffle = (arr) => {
 
+	// JSON.parse( JSON.stringify(arr) ); only works for primitive objects, so we need to rebuild
+
 	// Create copy to pluck from
-	let tempArray = []; // Only works for primitive objects: JSON.parse( JSON.stringify(arr) );
+	let tempArray = [];
 	for(let i = 0; i < arr.length; i++) {
 		tempArray.push(arr[i]);
 	}
@@ -8464,12 +8492,14 @@ class CMSprite {
 		this.pathFunctionOffset = null;
 		this.pathFunctionFollow = "end";
 		this.image = null;
-		this.fillStyle = "black";
+		this.fillStyle = CMColor.BLACK;
+		this.strokeStyle = CMColor.NONE;
 
 		if(typeof drawRule === "string" ||
 			drawRule instanceof CanvasGradient ||
 			drawRule instanceof CanvasPattern) {
 			this.fillStyle = drawRule;
+			this.strokeStyle = drawRule;
 		}
 		else
 		if(drawRule instanceof CMImage ||
@@ -8833,7 +8863,7 @@ class CMSprite {
 	 */
 	fadeIn(duration=500, asFrames=false) {
 		let self = this;
-		let totalFrames = asFrames ? duration : this.fps * (duration / 1000);
+		let totalFrames = asFrames ? duration : this.game.fps * (duration / 1000);
 
 		this.velocity.opacity = 1 / totalFrames;
 		return new Promise(function(resolve, reject) {
@@ -8856,7 +8886,7 @@ class CMSprite {
 	 */
 	fadeOut(duration=500, asFrames=false) {
 		let self = this;
-		let totalFrames = asFrames ? duration : this.fps * (duration / 1000);
+		let totalFrames = asFrames ? duration : this.game.fps * (duration / 1000);
 
 		this.velocity.opacity = -1 / totalFrames;
 		return new Promise(function(resolve, reject) {
@@ -8868,9 +8898,9 @@ class CMSprite {
 	 * Sets the sprite's current course toward
 	 * a specific onscreen point (note: these points
 	 * are based on pixels, not real graph values).
-	 * @param {object|string} newPoint - The point to move towards as an object (must have x
-	 *   and y number values), or the angle to move, written as a string ending with "rad" or "deg",
-	 *   for radians or degrees, respectively
+	 * @param {object|string} newPoint - The point to move towards, as an object (must have x
+	 *   and y number values), or the angle to move written as a string ending with "rad" or "deg"
+	 *   (for radians or degrees, respectively)
 	 * @param {number} [desiredSpeed=1] The velocity to move in the new direction.
 	 *   Note: this is not necessarily velocity of x or y coordinates, but really a polar radius.
 	 * @param {number} [startReferencePoint=this.center] - The starting point used to calculate this directional slope
@@ -8963,7 +8993,7 @@ class CMSprite {
 	 */
 	boundAsCircle(boundingRect=this.boundingRect) {
 		if(this.hasEnteredScreen) {
-			if(this.x < this.radius) { // left wall
+			if(this.x - this.radius < this.boundingRect.x) { // left wall
 				switch(this.boundingRuleLeft) {
 					case "wrap":
 						if(this.x + this.radius < boundingRect.x) {
@@ -8996,7 +9026,7 @@ class CMSprite {
 				}
 			}
 
-			if(this.x + this.radius > boundingRect.width) { // right wall		
+			if(this.x + this.radius > boundingRect.x + boundingRect.width) { // right wall		
 				switch(this.boundingRuleRight) {
 					case "wrap":
 						if(this.x - this.radius > boundingRect.width) {
@@ -9062,7 +9092,7 @@ class CMSprite {
 				}
 			}
 
-			if(this.y + this.radius > boundingRect.height) { // bottom wall
+			if(this.y + this.radius > boundingRect.y + boundingRect.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
 						if(this.y - this.radius > boundingRect.height) {
@@ -9096,8 +9126,8 @@ class CMSprite {
 			}
 		}
 
-		if(this.x - this.radius > boundingRect.width ||
-				this.y - this.radius > boundingRect.height ||
+		if(this.x - this.radius > this.game.width ||
+				this.y - this.radius > this.game.height ||
 				this.x + this.radius < 0 ||
 				this.y + this.radius < 0) {
 			this.onscreen = false;
@@ -9465,18 +9495,29 @@ class CMSprite {
 				ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
 		}
 		else
-		if(this.shape === "circle") {
-			ctx.fillStyle = this.fillStyle;
-			this.game.fillOval(this.x, this.y, this.radius);
-		}
-		else
-		if(this.shape === "line") {
-			ctx.lineWidth = this.width;
-			this.game.drawLine(this.start, this.end);
-		}
-		else { // "rect"
-			ctx.fillStyle = this.fillStyle;
-			ctx.fillRect(this.x, this.y, this.width, this.height);
+		switch(this.shape) {
+			case "circle": {
+				ctx.fillStyle = this.fillStyle;
+				ctx.strokeStyle = this.strokeStyle;
+				ctx.beginPath();
+				ctx.arc(this.x, this.y, this.radius, 0, Math.TAU, false);
+				ctx.fill();
+				ctx.stroke();
+				break;
+			}
+			case "line": {
+				ctx.lineWidth = this.width;
+				ctx.strokeStyle = this.strokeStyle;
+				this.game.drawLine(this.start, this.end);
+				break;
+			}
+			default: { // "rect"
+				ctx.fillStyle = this.fillStyle;
+				ctx.strokeStyle = this.strokeStyle;
+				ctx.fillRect(this.x, this.y, this.width, this.height);
+				ctx.strokeRect(this.x, this.y, this.width, this.height);
+				break;
+			}
 		}
 	}
 
@@ -9855,7 +9896,8 @@ CMGame.factorial = (n) => {
 };
 
 /**
- * Get C(n, r) ("n choose r") value for a given n
+ * Get P(n, r) ("n permute r") value for a given n.
+ * Sometimes written nPr (with n and r as subscripts).
  * @param {number} n - The number of elements to "permute" from
  * @param {number} r - The number of elements to permute
  * @returns {number}
@@ -9869,6 +9911,7 @@ CMGame.P = (n, r) => {
 
 /**
  * Get C(n, r) ("n choose r") value for a given n
+ * Sometimes written nCr (with n and r as subscripts).
  * @param {number} n - The number of elements to "choose" from
  * @param {number} r - The number of elements to choose
  * @returns {number}
@@ -10026,7 +10069,7 @@ CMGame.clamp = (entry, bound, upperBound) => {
  *
  * @param {number} entry - The number being mapped into this interval
  * @param {number} bound - The lower bound. If upperBound is not provided,
- *   this becomes the upper bound, and the lower bound is set to 0.
+ *   this becomes the upper bound, and the lower bound is assumed to be 0.
  * @param {number} [upperBound] - The upper bound if provided
  * @returns {number}
  */
