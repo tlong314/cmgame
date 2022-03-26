@@ -108,17 +108,19 @@
 body, canvas, div:not(#cmWrapper) {
 	-moz-outline-style: none;
 
+	/*
+	in *{} This actually produces a bug in iOS that makes textareas uneditable
+	*/
 	-moz-user-select: none;
 	-webkit-user-select: none;
 	-ms-user-select: none;
 	-khtml-user-select: none;
-
-	-webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+	user-select: none;
 
 	outline: none;
 	outline-style: none;
 
-	user-select: none;
+	-webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 	tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
@@ -184,7 +186,6 @@ body, canvas, div:not(#cmWrapper) {
 #cmLoadingProgress[value] {
 	/* Reset the default appearance */
 	-webkit-appearance: none;
-	-moz-appearance: none;
 	appearance: none;
 
 	border: none;
@@ -210,8 +211,6 @@ body, canvas, div:not(#cmWrapper) {
 		rgba(255, 255, 255, .25), 
 		rgba(0, 0, 0, .25)),
 
-	/* -webkit-linear-gradient(right, rgb(0, 240, 0), rgb(0, 185, 0), rgb(0, 136, 0)); */
-	/* -webkit-linear-gradient(right, rgb(80, 60, 180), rgb(0, 250, 235), rgb(142, 227, 252), rgb(0, 250, 235));*/
 	-webkit-linear-gradient(right, rgb(180, 160, 240), rgb(142, 227, 252));
 
 	border-radius: 2px; 
@@ -326,8 +325,19 @@ h5 + h6 {
 
 /* Allow click on canvas, buttons, links, just not containing wrapper or text */
 /* If another element must allow pointer events, add class "cm-pointer-events" */
-#cmWrapper *:not(button):not(a):(.cm-pointer-events) {
+#cmWrapper *:not(button):not(a):not(.cm-pointer-events) {
 	pointer-events: none;
+}
+
+/* Ran into some bugs with the not() syntax */
+html body #cmWrapper canvas,
+html body #cmWrapper button,
+html body #cmWrapper input,
+html body #cmWrapper select,
+html body #cmWrapper textarea,
+html body #cmWrapper a,
+html body #cmWrapper .cm-pointer-events {
+	pointer-events: auto !important;
 }
 
 #cmBackgroundCanvas {
@@ -376,7 +386,7 @@ article, section {
 	background: rgb(255, 255, 255);
 }
 
-p {
+p, details {
 	max-width: 600px;
 	margin: 2em auto;
 	padding: 0 7.5vw;
@@ -634,7 +644,7 @@ button .cm-play-small {
 }
 
 .cm-tan {
-	background-color: rgb(242, 245, 235);
+	background-color: rgb(242, 228, 205);
 }
 
 .cm-white {
@@ -755,7 +765,7 @@ button .cm-play-small {
 }
 
 .cm-text-tan {
-	color: rgb(242, 245, 235);
+	color: rgb(242, 228, 205);
 }
 
 .cm-text-white {
@@ -835,6 +845,7 @@ button .cm-play-small {
     line-height: 24px;
 
 	margin-bottom: 32px;
+	padding: 0 5px;
 }
 
 #cmAlert button {
@@ -845,11 +856,15 @@ button .cm-play-small {
 	min-width: 70px;
 	min-height: 30px;
 	bottom: 10px;
-	box-shadow: 1px 1px 3px rgba(0, 15, 33, 0.55);
+	box-shadow: 3px 3px 5px rgba(33, 33, 33, 0.333);
 }
 
 #cmAlert button:nth-of-type(2) {
 	margin-left: 8px;
+}
+
+#cmAlert button:active {
+	box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.85);
 }
 
 .cm-footer {
@@ -871,7 +886,68 @@ button .cm-play-small {
 @media (max-height: 800px) {
 	#cmLoading {
 		font-size: 16px;
-	}	
+	}
+}
+
+/* Try to fit entire intro page onto tiny old mobile screens */
+@media (max-height: 667px) {
+	h1 {
+		padding-top: 0.25em;
+		padding-bottom: 0.25em;
+	}
+
+	h2 {
+		padding-top: 0.33em;
+		padding-bottom: 0.33em;	
+	}
+
+	h1 + h2 {
+		padding-top: 0.11em;
+	}
+
+	h3 {
+		padding-top: 0.4em;
+		padding-bottom: 0.4em;
+	}
+
+	h2 + h3 {
+		padding-top: 0.09em;
+	}
+
+	h4 {
+		padding-top: 0.45em;
+		padding-bottom: 0.45em;
+	}
+
+	h3 + h4 {
+		padding-top: 0.12em;
+	}
+
+	h5 {
+		padding-top: 0.45em;
+		padding-bottom: 0.45em;
+	}
+
+	h4 + h5 {
+		padding-top: 0.12em;
+	}
+
+	h6 {
+		padding-top: 0.45em;
+		padding-bottom: 0.45em;	
+	}
+
+	h5 + h6 {
+		padding-top: 0.12em;
+	}
+
+	p:first-of-type {
+		margin-top: 5px;		
+	}
+
+	p, details {
+		margin: 1em auto;
+	}
 }
 
 @media (max-width: 400px) {
@@ -905,6 +981,27 @@ button .cm-play-small {
 	.cm-gradient-dark, html.cm-gradient-dark body {
 		/* Keep it a little dark at the top for when extra margin is added above canvas */
 		background: linear-gradient(180deg, rgb(255 255 255 / 20%) 0%, rgb(255 255 255 / 96%) 20%, rgb(255 255 255 / 0%));
+	}
+}
+
+@media (max-width: 500px) {
+	h1 {
+		padding-top: .335em;
+		padding-bottom: .335em;
+	}
+
+	p:not(#cmAlert p), details {
+		max-width: calc(100vw - 2 * 3.75vw);
+		margin: 1em auto;
+		padding: 0 3.75vw;
+	}
+
+	#cmTitle p:first-of-type {
+		margin-top: 0em;
+	}
+
+	p:not(.cm-center-text) {
+		text-indent: .375em;
 	}
 }
 
