@@ -18,9 +18,9 @@ Math.SQRT3 = Math.SQRT3 || Math.sqrt(3); // Convenience for unit circle, etc.
 Math.SQRT5 = Math.SQRT5 || Math.sqrt(5); // Ditto
 Math.PHI = Math.PHI || .5 * (1 + Math.SQRT5); // Golden ratio
 
-Math.csc = (x) => 1/Math.sin(x);
-Math.sec = (x) => 1/Math.cos(x);
-Math.cot = (x) => 1/Math.tan(x);
+Math.csc = x => 1/Math.sin(x);
+Math.sec = x => 1/Math.cos(x);
+Math.cot = x => 1/Math.tan(x);
 
 // These will be used to control fps speed
 window.requestNextFrame = window.requestAnimationFrame;
@@ -32,7 +32,7 @@ window.documentBody = null;
  * Some style guides suggest not using "optional" HTML tags,
  * including the <body> tag, but this can lead to unexpected
  * results when trying to bind handlers to dynamically added
- * elements (something we do a lot of in this script).
+ * elements (something we do a lot in this script).
  *
  * If no <body> is present, we create a temporary one
  * while the handlers bind, and remove any extra
@@ -794,7 +794,7 @@ class CMDoodle {
 		this.pathLeft = new Path2D();
 		this.pathRight = new Path2D();
 
-		game.currentDoodle = this;
+		// game.currentDoodle = this; // Moved to within game. Superfluous here
 	}
 
 	/**
@@ -825,10 +825,11 @@ class CMDoodle {
 			point = xOrPoint;
 		}
 
-		// Do not add point twice in a row
+		// Do not add same point twice in a row
 		if(!this.points[this.points.length - 1].isPoint(this)) {
 			this.points.push(new CMPoint(point));
 			this.path.lineTo(point.x, point.y);
+			this.rebuildPath();
 			this.rebuildFilledPaths();
 		}
 	}
@@ -1012,8 +1013,9 @@ class CMDoodle {
 	 * Draws doodle (and filled areas) for current frame
 	 * @param {object} ctx - The current game's drawing context
 	 */
-	draw(ctx) {
+	draw(ctx=this.game.offscreenCtx) {
 		ctx.save();
+
 		if(this.pathLeft) {
 			ctx.fillStyle = this.fillStyleLeft;
 			ctx.fill(this.pathLeft);
@@ -1048,8 +1050,9 @@ class CMDoodle {
 		else
 		if(this.points.length === 1) { // Single point does not show up in stroke
 			ctx.fillStyle = this.strokeStyle;
-			ctx.fillRect(this.points[0].x, this.points[0].y, .5 * this.lineWidth, .5 * this.lineWidth);
+			ctx.fillRect(this.points[0].x, this.points[0].y, Math.max(.5 * this.lineWidth, 1), Math.max(.5 * this.lineWidth, 1));
 		}
+
 		ctx.restore();
 	}
 }
@@ -2650,6 +2653,12 @@ class CMGame {
 		this.alertOKButton.className = "cm-dark_green cm-text-white";
 		this.alertOKButton.setAttribute("id", "cmAlertOKBtn");
 		this.alertOKButton.innerText = "OK";
+		this.alertInput.onkeydown = function(e) {
+			if(e.keyCode === 13) {
+				e.preventDefault();
+				self.alertOKButton.click();
+			}			
+		};
 
 		this.alertCancelButton = document.createElement("button");
 		this.alertCancelButton.className = "cm-gray cm-text-white";
@@ -2661,6 +2670,8 @@ class CMGame {
 		header.appendChild(h3);
 		this.alertElement.appendChild(header);
 		this.alertElement.appendChild(this.alertMessage);
+		
+		this.alertOverlay.onkeydown = function() {};
 
 		p2.appendChild(this.alertInput);
 		p2.appendChild(this.alertOKButton);
@@ -2785,10 +2796,12 @@ class CMGame {
 
 				// Most reliable form for complicated backgrounds - use a background canvas
 				if(self.backgroundCanvas) {
+
+					// Note: this does not currently account for the background canvas having its own CSS background-image
 					self.screenshotCtx.drawImage(self.backgroundCanvas,
 									0, 0,
 									self.screenshotCanvas.width,
-									self.screenshotCanvas.height);				
+									self.screenshotCanvas.height);
 				}
 				else
 				if(bgImg && bgImg !== "none") { // Attempt to copy background image
@@ -3291,7 +3304,7 @@ class CMGame {
 
 	/**
 	 * Draws game screen in current frame
-	 * @param {CanvasRenderingContext2D} ctx - The drawing context
+	 * @param {CanvasRenderingContext2D} [ctx=this.offscreenCtx] - The drawing context
 	 */
 	draw(ctx=this.offscreenCtx) {
 		ctx.clearRect(0, 0, this.width, this.height);
@@ -4869,14 +4882,14 @@ class CMGame {
 		if(this.multiTouch) {
 			for(let i = 0; i < e.changedTouches.length; i++) {
 				this.pressEnd(
-					(e.changedTouches[i].clientX - this.wrapper.offsetLeft) / this.screenScalar,
-					(e.changedTouches[i].clientY - this.wrapper.offsetTop) / this.screenScalar);
+					(e.changedTouches[i].clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+					(e.changedTouches[i].clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 			}
 		}
 		else {
 			this.pressEnd(
-				(e.changedTouches[0].clientX - this.wrapper.offsetLeft) / this.screenScalar,
-				(e.changedTouches[0].clientY - this.wrapper.offsetTop) / this.screenScalar);
+				(e.changedTouches[0].clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+				(e.changedTouches[0].clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 		}
 	}
 
@@ -4950,8 +4963,8 @@ class CMGame {
 		this.onmouseup(e);
 
 		this.pressEnd(
-			(e.clientX - this.wrapper.offsetLeft) / this.screenScalar,
-			(e.clientY - this.wrapper.offsetTop) / this.screenScalar);
+			(e.clientX - this.wrapper.offsetLeft + document.scrollingElement.scrollLeft) / this.screenScalar,
+			(e.clientY - this.wrapper.offsetTop + document.scrollingElement.scrollTop) / this.screenScalar);
 	}
 
 	/**
@@ -5327,11 +5340,11 @@ class CMGame {
 		}
 
 		this.offscreenCtx.beginPath();
-		this.offscreenCtx.moveTo(x+r, y);
-		this.offscreenCtx.arcTo(x+w, y,   x+w, y+h, r);
-		this.offscreenCtx.arcTo(x+w, y+h, x,   y+h, r);
-		this.offscreenCtx.arcTo(x,   y+h, x,   y,   r);
-		this.offscreenCtx.arcTo(x,   y,   x+w, y,   r);
+		this.offscreenCtx.moveTo(x + r, y);
+		this.offscreenCtx.arcTo(x + w, y, x + w, y + h, r);
+		this.offscreenCtx.arcTo(x + w, y + h, x, y + h, r);
+		this.offscreenCtx.arcTo(x, y + h, x, y, r);
+		this.offscreenCtx.arcTo(x, y, x + w, y, r);
 		this.offscreenCtx.closePath();
 		this.offscreenCtx.fill();
 	}
@@ -5348,7 +5361,7 @@ class CMGame {
 	 */
 	strokeRoundedRect(x, y, w, h, r) {
 
-		// Radius is too big, reduce to half the width or height
+		// Radius is too big, reduce to half the width or height0
 		if (w < 2 * r) {
 			r = .5 * w;
 		}
@@ -5358,11 +5371,11 @@ class CMGame {
 		}
 
 		this.offscreenCtx.beginPath();
-		this.offscreenCtx.moveTo(x+r, y);
-		this.offscreenCtx.arcTo(x+w, y,   x+w, y+h, r);
-		this.offscreenCtx.arcTo(x+w, y+h, x,   y+h, r);
-		this.offscreenCtx.arcTo(x,   y+h, x,   y,   r);
-		this.offscreenCtx.arcTo(x,   y,   x+w, y,   r);
+		this.offscreenCtx.moveTo(x + r, y);
+		this.offscreenCtx.arcTo(x + w, y, x + w, y + h, r);
+		this.offscreenCtx.arcTo(x + w, y + h, x, y + h, r);
+		this.offscreenCtx.arcTo(x, y+h, x, y, r);
+		this.offscreenCtx.arcTo(x, y, x + w, y, r);
 		this.offscreenCtx.closePath();
 		this.offscreenCtx.stroke();
 	}
@@ -5582,7 +5595,8 @@ class CMGame {
 		}
 
 		// Allow dev to pass in multi-line strings
-		if(Array.isArray(fonts) && Array.isArray(fonts[0])) {
+		if((Array.isArray(fonts) && Array.isArray(fonts[0])) ) { // ||
+				// (Array.isArray(strings) && Array.isArray(strings[0]))) { // @todo Work this in
 			let maxX = x;
 			let maxY = y;
 
@@ -6051,11 +6065,22 @@ class CMGame {
 				!Number.isFinite(newScale) ||
 				Number.isNaN(newScale)) {
 
-			console.error("zoom() must take a positive integer or float value as its argument. Set to 1 for 100%.");
+			console.error(`zoom() must take a positive integer
+				or float value as its argument. Set to 1 for 100%.`);
 			return this;
 		}
 
 		let oldScale = this.zoomLevel;
+
+		// Account for any (non-unzoomed) values changed after initialization but before zooming
+		if(oldScale === 1) {
+			this.unzoomedTickDistance = this.tickDistance;
+			this.unzoomedGridlineDistance = this.gridlineDistance;
+			this.unzoomedOrigin.x = this.origin.x;
+			this.unzoomedOrigin.y = this.origin.y;
+			this.unzoomedGraphScalar = this.graphScalar;
+		}
+
 		this.onbeforezoom(newScale, oldScale);
 
 		this.zoomLevel = newScale;
@@ -6066,11 +6091,9 @@ class CMGame {
 
 		// reset zoom to default of 100% before applying new scale
 		this.origin.x =
-			this.origin.x =
 			this.unzoomedOrigin.x;
 
 		this.origin.y =
-			this.origin.y =
 			this.unzoomedOrigin.y;
 
 		for(let func of this.functions) {
@@ -6101,7 +6124,7 @@ class CMGame {
 		let alpha = (centralPoint.x - this.origin.x) / newScale;
 		let beta = (centralPoint.y - this.origin.y) / newScale;
 
-		// Recenter the new "origin"
+		// Re-center the new "origin"
 		this.origin.x = this.origin.x - alpha;
 		this.origin.y = this.origin.y - beta;
 
@@ -7137,6 +7160,10 @@ class CMGame {
 		this.alertMessage.innerHTML = msg;
 		this.alertCancelButton.style.display = "none";
 		this.alertInput.style.display = "none";
+		this.alertInput.addEventListener("blur", function(e) {
+			// Mitigate bug in some mobile browsers that shifts document when keyboard opens
+			document.documentElement.scrollTop = CMGame.documentScrollTop;
+		}, false);
 
 		this.alertElement.querySelector("h3").innerText =
 			options.headerText ||
@@ -7437,6 +7464,9 @@ class CMGame {
 		if(doodleEnabledState) {
 			this.doodleOptions.enabled = false;
 		}
+
+		// Record document's fixed position before mobile keyboard moves it around
+		CMGame.documentScrollTop = document.documentElement.scrollTop || 0;
 
 		this.alertMessage.innerHTML = msg;
 		this.alertInput.placeholder = options.placeholder || "";
@@ -7837,6 +7867,9 @@ CMGame.running_iOS = !!(/ipad|iphone|ipod/gi.test(navigator.userAgent) ||
 	window.navigator.platform.match(/ipad|iphone|ipod/gi)) &&
 	!window.MSStream;
 
+// For working with screen repositioning from mobile keyboards
+CMGame.documentScrollTop = document.documentElement.scrollTop || 0;
+
 // Do our best to get largest possible dimensions (fullscreen)
 if(CMGame.running_iOS) { // No fullscreen for iPhone, so just get available dimensions
 	CMGame.screenWidth = window.screen.availWidth;
@@ -8124,6 +8157,9 @@ class CMColor {
 	}
 }
 
+/**
+ * Gets the rgba() string for the stored color
+ */
 Object.defineProperty(CMColor.prototype, "value", {
 	get() {
 		return `rgba(${this.r}, ${this.g}, ${this.b}, ${this.a})`;
@@ -8224,16 +8260,26 @@ Object.defineProperty(CMGame.prototype, "font", {
 });
 
 Object.defineProperty(CMGame.prototype, "graphScalar", {
-
 	get() {
 		return this.graphScalar_Private;
 	},
 
 	set(newVal) {
-		let oldVal = this.graphScalar_Private;
+		let oldVal = this.graphScalar_Private || 120;
 		this.graphScalar_Private = newVal;
+
+		// this.tickDistance = this.tickDistance * newVal / oldVal;
+		// this.gridlineDistance = this.gridlineDistance * newVal / oldVal;
+
+		this.unzoomedGraphScalar = newVal * this.zoomLevel;
+
+		// this.unzoomedTickDistance = this.tickDistance * this.zoomLevel;
+		// this.unzoomedGridlineDistance = this.gridlineDistance * this.zoomLevel;
+
 		for(let func of this.functions) {
 			func.updateBounds(oldVal);
+			func.buildGraphPath(this.offscreenCtx);
+			func.drawGraphPath(this.offscreenCtx);
 		}
 	}
 });
@@ -9029,24 +9075,24 @@ class CMSprite {
 			if(this.x + this.radius > boundingRect.x + boundingRect.width) { // right wall		
 				switch(this.boundingRuleRight) {
 					case "wrap":
-						if(this.x - this.radius > boundingRect.width) {
+						if(this.x - this.radius > boundingRect.x + boundingRect.width) {
 							this.x = -this.radius + (this.x - this.radius - boundingRect.width);
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.x - this.radius > boundingRect.width) {
+							while(this.x - this.radius > boundingRect.x + boundingRect.width) {
 								this.x -= boundingRect.width;
 							}
 						}
 						break;
 					case "bounce":
-						this.x = boundingRect.width - this.radius;
+						this.x = boundingRect.x + boundingRect.width - this.radius;
 						this.velocity.x = -Math.abs(this.velocity.x);
 						break;
 					case "fence":
-						this.x = boundingRect.width - this.radius;
+						this.x = boundingRect.x + boundingRect.width - this.radius;
 						break;
 					case "destroy":
-						if(this.x - this.radius > boundingRect.width)
+						if(this.x - this.radius > boundingRect.x + boundingRect.width)
 							this.destroy();
 						break;
 					case "none":
@@ -9095,24 +9141,24 @@ class CMSprite {
 			if(this.y + this.radius > boundingRect.y + boundingRect.height) { // bottom wall
 				switch(this.boundingRuleBottom) {
 					case "wrap":
-						if(this.y - this.radius > boundingRect.height) {
+						if(this.y - this.radius > boundingRect.y + boundingRect.height) {
 							this.y = -this.radius + (this.y - this.radius - boundingRect.height);
 
 							// For path functions, sprites internal path value may be way off screen
-							while(this.y - this.radius > boundingRect.height) {
+							while(this.y - this.radius > boundingRect.y + boundingRect.height) {
 								this.y -= boundingRect.height;
 							}
 						}
 						break;
 					case "bounce":
-						this.y = boundingRect.height - this.radius;
+						this.y = boundingRect.y + boundingRect.height - this.radius;
 						this.velocity.y = -Math.abs(this.velocity.y);
 						break;
 					case "fence":
-						this.y = boundingRect.height - this.radius;
+						this.y = boundingRect.y + boundingRect.height - this.radius;
 						break;
 					case "destroy":
-						if(this.y - this.radius > boundingRect.height)
+						if(this.y - this.radius > boundingRect.y + boundingRect.height)
 							this.destroy();
 						break;
 					case "none":
@@ -9354,7 +9400,7 @@ class CMSprite {
 							// For path functions, sprites internal path value may be way off screen
 							while(this.x > this.game.width) {
 								this.x -= this.game.width;
-								
+
 								for(let i = 0, len = this.points.length; i < len; i++) {
 									this.points[i].x -= this.game.width;
 								}
@@ -10429,7 +10475,7 @@ class CMFunction {
 		this.unzoomedEnd = new CMPoint(this.end);
 
 		// Define pathAbove and pathBelow
-		this.buildGraphPath(this.game.ctx);
+		this.buildGraphPath(this.game.offscreenCtx);
 		if(this.fixed) {
 			this.draw = this.drawGraphPath;
 		}
@@ -10470,9 +10516,9 @@ class CMFunction {
 	/**
 	 * For optimization, prebuilds the drawing path
 	 * when dev knows it will not change. (options.fixed=true)
-	 * @param {CanvasRenderingContext2D} ctx - The game's drawing context
+	 * @param {CanvasRenderingContext2D} [ctx=this.game.offscreenCtx] - The game's drawing context
 	 */
-	buildGraphPath(ctx) {
+	buildGraphPath(ctx=this.game.offscreenCtx) {
 		let game = this.game;
 		let canvas = game.canvas;
 		let initialI;
@@ -10614,7 +10660,7 @@ class CMFunction {
 	 * stored Path2D. If this CMFunction instance
 	 * is fixed, this function replaces the draw() method
 	 * as an optimization.
-	 * @param {CanvasRenderingContext2D} ctx - The game's drawing context
+	 * @param {CanvasRenderingContext2D} [ctx=this.game.offscreenCtx] - The game's drawing context
 	 */
 	drawGraphPath(ctx=this.game.offscreenCtx) {
 		ctx.lineWidth = this.lineWidth;
@@ -11922,7 +11968,7 @@ class CMVertex extends CMSprite {
 	 * @param {number} [y=0] - The screen y for this vertex's center
 	 * @param {number} [radius=10] - The radius for this vertex, drawn as a circle
 	 * @param {string} fillStyle - The color to draw this vertex with
-	 * @param {object} [label] - A plain JS object of options for a label
+	 * @param {object} [label] - A plain JS object of options for a label; any values here will override defaults
 	 * @param {string} [label.text] - A string label for this vertex
 	 * @param {number} [label.x] - The x position for this label
 	 * @param {number} [label.y] - The y position for this label
@@ -11939,11 +11985,11 @@ class CMVertex extends CMSprite {
 
 		this.label = {
 			text: "",
-			x: 0,
-			y: 0,
+			x: x + 20,
+			y: y + 20,
 			active: false,
 			fillStyle: this.fillStyle,
-			font: (.5 * radius) + "px Times New Roman, serif"
+			font: Math.max(12, (.5 * radius)) + "px Times New Roman, serif"
 		};
 
 		if(label) {
