@@ -6,7 +6,7 @@
  * but also available to use, free, under the MIT license.
  *
  * @author Tim S. Long, PhD
- * @copyright 2021 Tim S. Long, PhD
+ * @copyright 2022 Tim S. Long, PhD
  * @license MIT
  */
 
@@ -22,9 +22,9 @@ Math.csc = x => 1/Math.sin(x);
 Math.sec = x => 1/Math.cos(x);
 Math.cot = x => 1/Math.tan(x);
 
-// These will be used to control fps speed
-window.requestNextFrame = window.requestAnimationFrame;
-window.cancelNextFrame = window.cancelAnimationFrame;
+// These will be overridden to control fps speed
+window.requestNextFrame = window.requestAnimationFrame.bind(window);
+window.cancelNextFrame = window.cancelAnimationFrame.bind(window);
 
 window.documentBody = null;
 
@@ -826,7 +826,7 @@ class CMDoodle {
 		}
 
 		// Do not add same point twice in a row
-		if(!this.points[this.points.length - 1].isPoint(this)) {
+		if(!this.points[this.points.length - 1].isPoint(point)) {
 			this.points.push(new CMPoint(point));
 			this.path.lineTo(point.x, point.y);
 			this.rebuildPath();
@@ -1192,7 +1192,7 @@ class CMGame {
 	/**
 	 * Creates a CMGame instance. This essentially creates the current game.
 	 * @param {object} [options] - A plain JS object of options. All are optional, including this object.
-	 * @param {object|string} [options.startBtn] - An HTML element (or CSS selector for that element) that will be used to start the game (or an array of any combination). Defaults to null, and game starts on first user interaction.
+	 * @param {object|string} [options.startBtn] - An HTML element (or CSS selector for that element) that will be used to start the game, or an array of any combination of elements and selectors. Defaults to null, and game starts on first user interaction.
 	 * @param {boolean} [options.options.fullscreen] - If true, the game will attempt to enter fullscreen browser mode on first user interaction (this does not necessarily change the canvas size itself; it only performs browser-specific actions like removing the address bar). Results vary by browser. Default is false.
 	 * @param {string} [options.orientation] - A string, desired orientation when entering fullscreen. Only makes sense when fullscreen features are being used. Examples: "portrait", "landscape"
 	 * @param {object|string} [options.enterFullscreenBtn] - An HTML element (or CSS selector for that element) to be used to enter fullscreen when user clicks. Default is null.
@@ -1207,11 +1207,11 @@ class CMGame {
 	 * @param {number} [options.gridlineDistance] - How many pixels apart graph gridlines should be (vertically or horizontally). Default is 20.
 	 * @param {number} [options.graphScalar] - How much real numbers are scaled into the number of pixels on screen. For instance, if this is 30, then there will be 30 pixels between the point (0, 0) and the point (1, 0). Note: if your graphScalar and tickDistance do not match, this may be confusing to the user. Try to keep one a multiple of the other.
 	 * @param {number} [options.tickFontSize] - Font size to draw tick marks. Default is based on tickDistance.
-	 * @param {function} [options.tickLabelIf] - A function to check, taking current tick value as only parameter, returning true if label should be drawn or custom string to draw, or
-	 *   false to draw nothing. Defaults to drawing all values on tick marks.
-	 * @param {function} [options.tickLabelIfX] - Similar to options.tickLabelIf, but only for x-axis values. Defaults to options.tickLabelIf.
-	 * @param {function} [options.tickLabelIfY] - Similar to options.tickLabelIf, but only for y-axis values. Defaults to options.tickLabelIf.
-	 * @param {function} [options.tickLabelIfOrigin] - Similar to tickLabelIfX with specific designation to 0, which is by default not drawn.
+	 * @param {function|boolean} [options.tickLabelIf] - A function to check, taking current tick value as only parameter, returning true if label should be drawn or custom string to draw, or
+	 *   false to draw nothing. A boolean can be provided as shorthand for a function always returning that boolean. Defaults to drawing all values on tick marks.
+	 * @param {function|boolean} [options.tickLabelIfX] - Similar to options.tickLabelIf, but only for x-axis values. Defaults to options.tickLabelIf.
+	 * @param {function|boolean} [options.tickLabelIfY] - Similar to options.tickLabelIf, but only for y-axis values. Defaults to options.tickLabelIf.
+	 * @param {function|boolean} [options.tickLabelIfOrigin] - Similar to tickLabelIfX with specific designation to 0, which is by default not drawn.
 	 * @param {number} [options.tickFontSize] - Preferred font size (in pixels) of font displaying tick values 
 	 * @param {boolean} [options.soundOn] - true to allow sound effects to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
 	 * @param {boolean} [options.musicOn] - true to allow music (generally longer sound files) to play, false to mute them. Defaults to false. Note: most browsers require user interaction before playing sound (having a start button to click is an easy way to overcome this).
@@ -1269,9 +1269,9 @@ class CMGame {
 	 *   property "direction" which maps arrow keys and standard ASDW keys to "left", "down", "right", "up"
 	 * @param {function} [options.onkeyup] - Callback to perform when keyboard key is released. Argument is key event, with additional
 	 *   property "direction" which maps arrow keys and standard ASDW keys to "left", "down", "right", "up"
-	 * @param {function} [options.onbeforestart] - Callback to perform just before .start() actions are applied (like hiding elements and starting animations)
-	 * @param {function} [options.onstart] - Callback to perform just as game starts (elements are hidden, first animation frame has been requested)
-	 * @param {function} [options.onbeforeupdate] - Callback to perform just before state is updated for current animation frame
+	 * @param {function} [options.onbeforestart] - Callback to perform just before .start() actions are applied (like hiding elements and starting animations). Pressed button that triggered start is passed as the single (optional) parameter.
+	 * @param {function} [options.onstart] - Callback to perform just as game starts (elements are hidden, first animation frame has been requested). Pressed button that triggered start is passed as the single (optional) parameter.
+	 * @param {function} [options.onbeforeupdate] - Callback to perform just before state is updated for current animation frame.
 	 * @param {function} [options.onupdate] - Callback to perform at the end of each update() call for this CMGame instance
 	 * @param {function} [options.onbeforedraw] - Callback to perform just before a frame is drawn, but immediately after previous is cleared
 	 * @param {function} [options.ondraw] - Callback to perform at the end of each draw() call for this CMGame instance
@@ -1342,7 +1342,7 @@ class CMGame {
 		 * to the CMGame constructor options.
 		 */
 		if(typeof options.overrideStyles === "undefined") {
-			if(![... document.styleSheets].find(stylesheet => stylesheet.href.match("cmgame.css") ) ) {
+			if(![... document.styleSheets].find(stylesheet => stylesheet?.href?.match("cmgame.css") ) ) {
 				let cmgStylesheet = document.createElement("link");
 				cmgStylesheet.rel = "stylesheet";
 				cmgStylesheet.type = "text/css";
@@ -1697,6 +1697,9 @@ class CMGame {
 		this.offscreenCanvas.width = Math.floor(this.canvas.width * this.devicePixelRatio);
 		this.offscreenCanvas.height = Math.floor(this.canvas.height * this.devicePixelRatio);
 
+		this.spriteWorkCanvas = document.createElement("canvas");
+		this.spriteWorkCtx = this.spriteWorkCanvas.getContext("2d");
+
 		// store origin an center as CMPoints in case we wish to check for instance this.origin.isPoint( this.center );
 		this.origin = null;
 		if(Array.isArray(options.origin)) {
@@ -1881,7 +1884,7 @@ class CMGame {
 				else {
 					btn.addEventListener("click", e => {
 						e.preventDefault();
-						self.start();
+						self.start(btn);
 					}, false);
 				}
 			});
@@ -1907,14 +1910,14 @@ class CMGame {
 				document.querySelectorAll(options.startBtn).forEach(elm => {
 						elm.addEventListener("click", e => {
 							e.preventDefault();
-							self.start();
+							self.start(elm);
 						}, false);
 				});
 			}
 			else {
 				this.startBtn.addEventListener("click", e => {
 					e.preventDefault();
-					self.start();
+					self.start(self.startBtn);
 				}, false);
 			}
 		}
@@ -2269,30 +2272,33 @@ class CMGame {
 					if(this.gridStyle && this.gridStyle !== CMColor.NONE) {
 						ctx.strokeStyle = this.gridStyle;
 						ctx.lineWidth = this.gridlineWidth;
+						ctx.beginPath();
 
 						// vertical lines, center to left
 						for(let i = this.origin.x; i > 0; i -= this.gridlineDistance) {
-							this.drawLine(i, 0,
-								i, this.canvas.height);
+							ctx.moveTo(i, 0);
+							ctx.lineTo(i, this.canvas.height);
 						}
 
 						// vertical lines, center to right
 						for(let i = this.origin.x; i < this.width; i += this.gridlineDistance) {
-							this.drawLine(i, 0,
-								i, this.canvas.height);
+							ctx.moveTo(i, 0);
+							ctx.lineTo(i, this.canvas.height);
 						}
 
 						// horizontal lines, center to top
 						for(let i = this.origin.y; i > 0; i -= this.gridlineDistance) {
-							this.drawLine(0, i,
-								this.canvas.width, i);
+							ctx.moveTo(0, i);
+							ctx.lineTo(this.canvas.width, i);
 						}
 
 						// horizontal lines, center to bottom
 						for(let i = this.origin.y; i < this.height; i += this.gridlineDistance) {
-							this.drawLine(0, i,
-								this.canvas.width, i);
+							ctx.moveTo(0, i);
+							ctx.lineTo(this.canvas.width, i);
 						}
+
+						ctx.stroke();
 					}
 
 					// Draw x and y axes
@@ -2680,6 +2686,34 @@ class CMGame {
 		this.alertOverlay.style.display = "none";
 		documentBody.appendChild(this.alertOverlay);
 
+		this.awaitingAnimFrame = false; // Required to manage cancelling delayed animations
+		window.requestNextFrame = function(callback) {
+			self.awaitingAnimFrame = true;
+			setTimeout(function() {
+				if(!self.paused)
+					self.animFrameId = requestAnimationFrame(callback);
+
+				self.awaitingAnimFrame = false;
+			}, CMGame.MIN_FRAME_DELAY);
+		};
+
+		let tryToCancelFrame = function(frameRequestId) {
+			if(self.awaitingAnimFrame) {
+				return setTimeout(function() {
+					tryToCancelFrame(frameRequestId);
+				}, 20);
+			}
+
+			return window.cancelAnimationFrame(frameRequestId);
+		};
+
+		window.cancelNextFrame = function(frameRequestId) {
+			if(frameRequestId === null)
+				return;
+
+			return tryToCancelFrame(frameRequestId);
+		};
+
 		if(typeof this.onload === "function") {
 			this.onload();
 		}
@@ -2804,7 +2838,7 @@ class CMGame {
 									self.screenshotCanvas.height);
 				}
 				else
-				if(bgImg && bgImg !== "none") { // Attempt to copy background image
+				if(bgImg && bgImg.startsWith("url")) { // Attempt to copy background image - need url, not linear-gradient, "none", etc.
 
 					// background-image has a defined source. Load it and draw it
 					let bgImgSrc = bgImg.replace("url(", "").replace(")", "");
@@ -3156,15 +3190,21 @@ class CMGame {
 		}
 	}
 
-	/** Start current game processes, animations, etc. */
-	start() {
+	/**
+	 * Start current game processes, animations, etc.
+	 * Note: the startBtn parameter is not used in this method, but is passed to
+	 * onbeforestart and onstart as the only argument, for instance to start
+	 * on different difficulty level based on which button was clicked.
+	 * @param {object} [startBtn] - Whatever HTML element was pressed to start the game
+	 */
+	start(startBtn) {
 		let self = this;
 		if(this.started) { // Prevent double calls
-			return;
+			return this;
 		}
 
 		if(typeof this.onbeforestart === "function") {
-			this.onbeforestart();
+			this.onbeforestart(startBtn);
 		}
 
 		if(Array.isArray( this.hideOnStart ) ) {
@@ -3181,22 +3221,26 @@ class CMGame {
 
 		this.started = true;
 		this.paused = false;
-		this.animFrameId = requestNextFrame(self.runCycle);
 
-		if(typeof this.onstart === "function") {
-			try {
-				self.onstart(self);
-			}
-			catch(e) {
-				console.error(e);
-				console.log(`CMGame engine says: Chaining on creation may lead to an initialization error ` +
-					`if your onstart() method references the current game instance. ` +
-					`Try separating the .start() call from initialization. For instance,
+		// First frame is runs immediately, then onstart() is called
+		this.animFrameId = requestAnimationFrame(function() {
+			self.runCycle();
 
-	const game = new CMGame();
-	game.start();`);
+			if(typeof self.onstart === "function") {
+				try {
+					self.onstart(startBtn);
+				}
+				catch(e) {
+					console.error(e);
+					console.log(`CMGame engine says: Chaining on creation may lead to an initialization error ` +
+						`if your onstart() method references the current game instance. ` +
+						`Try separating the .start() call from initialization. For instance,
+
+					const game = new CMGame();
+					game.start();`);
+				}
 			}
-		}
+		});
 
 		return this;
 	}
@@ -3218,7 +3262,8 @@ class CMGame {
 			this.paused = false;
 
 			if(this.animFrameId === null)
-				this.animFrameId = requestNextFrame(self.runCycle);
+				// this.animFrameId =
+				requestNextFrame(self.runCycle);
 		}
 
 		return this;
@@ -3314,30 +3359,33 @@ class CMGame {
 		if(this.gridStyle && this.gridStyle !== CMColor.NONE) {
 			ctx.strokeStyle = this.gridStyle;
 			ctx.lineWidth = this.gridlineWidth;
+			ctx.beginPath();
 
 			// vertical lines, center to left
 			for(let i = this.origin.x; i > 0; i -= this.gridlineDistance) {
-				this.drawLine(i, 0,
-					i, this.canvas.height);
+				ctx.moveTo(i, 0);
+				ctx.lineTo(i, this.canvas.height);
 			}
 
 			// vertical lines, center to right
 			for(let i = this.origin.x; i < this.width; i += this.gridlineDistance) {
-				this.drawLine(i, 0,
-					i, this.canvas.height);
+				ctx.moveTo(i, 0);
+				ctx.lineTo(i, this.canvas.height);
 			}
 
 			// horizontal lines, center to top
 			for(let i = this.origin.y; i > 0; i -= this.gridlineDistance) {
-				this.drawLine(0, i,
-					this.canvas.width, i);
+				ctx.moveTo(0, i);
+				ctx.lineTo(this.canvas.width, i);
 			}
 
 			// horizontal lines, center to bottom
 			for(let i = this.origin.y; i < this.height; i += this.gridlineDistance) {
-				this.drawLine(0, i,
-					this.canvas.width, i);
+				ctx.moveTo(0, i);
+				ctx.lineTo(this.canvas.width, i);
 			}
+
+			ctx.stroke();
 		}
 
 		// Draw x and y axes
@@ -3742,6 +3790,84 @@ class CMGame {
 		}
 
 		return sprite;
+	}
+
+	/**
+	 * Similar to spriteFromDoodles, but rather
+	 * than storing doodle paths to draw the sprite,
+	 * draws to a canvas and saves that image.
+	 * This may result in much faster drawing process
+	 * for the created sprite, but the initial creation
+	 * takes longer and so is done asynchronously.
+	 * See spriteFromDoodles for parameters.
+	 * @returns {Promise} A Promise resolving with
+	 * the created CMSprite object
+	 */
+	spriteFromDoodlesAsync(doodle, keepDoodle=false) {
+		let tempSprite = this.spriteFromDoodle(doodle, keepDoodle);
+		let aCanvas = document.createElement("canvas");
+		this.spriteWorkCanvas.style.width = (this.spriteWorkCanvas.width = tempSprite.width) + "px";
+
+		this.spriteWorkCtx.save();
+		this.spriteWorkCtx.translate(-tempSprite.x, -tempSprite.y);
+		tempSprite.draw( this.spriteWorkCtx );
+		this.spriteWorkCtx.restore();
+
+		return new Promise(function(resolve, reject) {
+			let img = new Image();
+
+			img.onload = function() {
+				let sprite = new CMSprite(game,
+						0,
+						0,
+						tempSprite.width,
+						tempSprite.height,
+						img);
+
+				resolve(sprite);
+			};
+
+			img.src = this.spriteWorkCanvas.toDataUrl();
+		});
+	}
+
+	/**
+	 * Similar to spriteFromDoodle, but rather
+	 * than storing doodle paths to draw the sprite,
+	 * draws to a canvas and saves that image.
+	 * This may result in much faster drawing process
+	 * for the created sprite, but the initial creation
+	 * takes longer and so is done asynchronously.
+	 * See spriteFromDoodle for parameters.
+	 * @returns {Promise} A Promise resolving with
+	 * the created CMSprite object
+	 */
+	spriteFromDoodleAsync(doodle, keepDoodle=false) {
+		let tempSprite = this.spriteFromDoodle(doodle, keepDoodle);
+		let aCanvas = document.createElement("canvas");
+		this.spriteWorkCanvas.style.width = (this.spriteWorkCanvas.width = tempSprite.width) + "px";
+
+		this.spriteWorkCtx.save();
+		this.spriteWorkCtx.translate(-tempSprite.x, -tempSprite.y);
+		tempSprite.draw( this.spriteWorkCtx );
+		this.spriteWorkCtx.restore();
+
+		return new Promise(function(resolve, reject) {
+			let img = new Image();
+
+			img.onload = function() {
+				let sprite = new CMSprite(game,
+						0,
+						0,
+						tempSprite.width,
+						tempSprite.height,
+						img);
+
+				resolve(sprite);
+			};
+
+			img.src = this.spriteWorkCanvas.toDataUrl();
+		});
 	}
 
 	/**
@@ -4251,7 +4377,8 @@ class CMGame {
 		}
 
 		if(this.started && !this.paused) {
-			this.animFrameId = requestNextFrame(this.runCycle);
+			// this.animFrameId =
+			requestNextFrame(this.runCycle);
 		}
 	}
 
@@ -5211,12 +5338,20 @@ class CMGame {
 	}
 
 	/**
-	 * Check distance between two points
+	 * Check distance between two points or point-like objects. Can also pass
+	 * the point data in as 4 arguments (x1, y1, x2, y2) for points (x1, y1), (x2, y2).
 	 * @param {object} p1 - First point (or any object with x and y values)
 	 * @param {object} p2 - Second point (or any object with x and y values)
+	 * @param {number} x2 - Second point's x-value (if using 4 numbers instead of 2 points)
+	 * @param {number} y2 - Second point's y-value (if using 4 numbers instead of 2 points)
 	 * @returns {number}
 	 */
-	distance(p1, p2) {
+	distance(p1, p2, x2, y2) {
+		if(arguments.length > 2) { // (x1, y1, x2, y2)
+			p1 = new CMPoint(p1, p2);
+			p2 = new CMPoint(x2, y2);
+		}
+		
 		if(typeof p1.z !== "undefined" &&
 				typeof p2.z !== "undefined") {
 			return Math.hypot(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z);
@@ -7969,7 +8104,6 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 		value: 16.7,
 		writable: false
 	});
-
 }());
 
 (function() {
@@ -8012,16 +8146,15 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 			}
 
 			// Note: cancelNextFrame has same functionality regardless of fps
-			if(frameDelay === CMGame.MIN_FRAME_DELAY) { // return to normal
-				window.requestNextFrame = window.requestAnimationFrame;
-			}
-			else {
-				window.requestNextFrame = function(callback) {
-					setTimeout(function() {
+			window.requestNextFrame = function(callback) {
+				self.awaitingAnimFrame = true;
+				setTimeout(function() {
+					if(!self.paused)
 						self.animFrameId = requestAnimationFrame(callback);
-					}, newFrameDelay);
-				};
-			}
+
+					self.awaitingAnimFrame = false;
+				}, newFrameDelay);
+			};
 		}
 	});
 }());
@@ -8188,8 +8321,10 @@ CMColor.GREEN = "rgb(0, 185, 0)";
 CMColor.DARK_GREEN = "rgb(0, 136, 0)";
 
 CMColor.SKY_BLUE = "rgb(142, 227, 252)";
+
 CMColor.LIGHT_BLUE = "rgb(0, 250, 235)";
 CMColor.BLUE = "rgb(1, 97, 251)";
+CMColor.DARK_BLUE = "rgb(2, 8, 66)";
 
 CMColor.BLUE_GREEN = "rgb(0, 168, 153)";
 
@@ -8426,7 +8561,7 @@ class CMSprite {
 	 * @param {number} y - The starting top value, or center y if circular
 	 * @param {number} widthOrRadius - The starting width value, radius if circular, or lineWidth if a line
 	 * @param {number|string} heightOrCircle - The starting height value, or "circle" if circular, or "line"
-	 * @param {object|string|function} [drawRule=null] - An image or default color string or 
+	 * @param {object|string|function} [drawRule=null] - An image or default color string or
 	 *   draw function (taking game's drawing context as its sole parameter). Default is null.
 	 *   When extending the Sprite class, you can set this to null in the constructor's super() call
 	 *   to use the extended classes draw() method.
@@ -8488,7 +8623,9 @@ class CMSprite {
 				this.boundingRect = options.boundingRect;
 			}
 			else {
-				console.warn("CMSprite option 'boundingRect' requires numerical x, y, width, and height properties");
+				console.warn(`CMSprite option
+					'boundingRect' requires numerical
+					 x, y, width, and height properties`);
 			}
 		}
 		else { // boundingRect defaults to entire game
