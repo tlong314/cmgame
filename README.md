@@ -305,7 +305,7 @@ You can also use arrow functions, but remember that these do not have a `this` d
 
 ```javascript
 
-game.ondraw = (ctx) => {
+game.ondraw = ctx => {
   ctx.fillStyle = "red";
   ctx.fillText("Counting: " + game.frameCount, 100, 50); // this.frameCount will throw an error
 };
@@ -318,6 +318,23 @@ If you need these events to occur at a more precise time, you can use:
 
 `onbeforedraw(ctx)` - Occurs just before game's draw(). Useful for drawing dynamic background details.
 
+For events that are handled when player clicks any of your defined "start buttons" (by CMGame's `startBtn` parameter), you can capture this via the `onbeforestart` and `onstart` callbacks.
+
+`onbeforestart(startBtn)` - Occurs after start button is clicked, but before `start` actions are performed (like hiding elements defined by `hideOnStart` argument) and before animation cycle is started.
+
+`onstart(startBtn)` - Occurs immediately after animation cycle is started and first frame has been calculated and drawn.
+
+An example use here will be to provide two separate start buttons for different difficulties, perhaps a button with id "easyStart" and one with id "hardStart"
+
+```javascript
+
+let difficulty = "";
+game.onbeforestart = function(startBtn) {
+  difficulty = startBtn.replace("Start", "");
+};
+
+```
+
 ### Player-triggered Events
 
 For user interaction, you should use these callbacks:
@@ -325,7 +342,7 @@ For user interaction, you should use these callbacks:
 `onkeydown` - Similar to a usual onkeydown handler, with the same Key Event parameter. However, preventDefault() has already been called, and the event parameter has the added property `direction` which is set to "left", "down", "right", or "up" if the key was an arrow key, a numpad key (and game has ignoreNumLock set to true) or the usual ASDW keys. If none of these, direction is set to "".
 
 ```javascript
-game.onkeydown = (e) => {
+game.onkeydown = e => {
   if(e.direction === "up")
     console.log("Jump or something");
   
@@ -367,7 +384,7 @@ This can be used for example, to let the player guide their hero or object aroun
 
 ```javascript
 
-game.onpressmove = (point) {
+game.onpressmove = function(point) {
   hero.x += point.offset.x;
   hero.y += point.offset.y;
 };
@@ -377,7 +394,7 @@ game.onpressmove = (point) {
 
 ```javascript
 
-game.onpressmove = (point) {
+game.onpressmove = function(point) {
   if(hero.containsPoint(point.oldX, point.oldY)) {
     hero.x += point.offset.x;
     hero.y += point.offset.y;
@@ -390,7 +407,7 @@ game.onpressmove = (point) {
 
 ```javascript
 
-game.onpressmove = (point) {
+game.onpressmove = function(point) {
   game.origin.x += point.offset.x;
   game.origin.y += point.offset.y;
 };
@@ -413,7 +430,7 @@ game.onpressmove = (point) {
 
 ```javascript
 
-game.onswipe = (swipe) => {
+game.onswipe = swipe => {
   if(swipe.direction === "left") {
     game.alert("How dare you swipe left on me!");
   }
@@ -425,7 +442,7 @@ game.onswipe = (swipe) => {
 
 let canSwipe = true;
 
-game.onkeydown = game.onswipe = (data) => {
+game.onkeydown = game.onswipe = data => {
   if(canSwipe)
     return;
 
