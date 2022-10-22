@@ -228,6 +228,9 @@ html, body {
 
 	-webkit-perspective: 5000px;
 	perspective: 5000px;
+
+	overscroll-behavior-y: none;
+	overscroll-behavior-x: none;
 }
 
 body {
@@ -623,6 +626,10 @@ button .cm-play-small {
 	background-color: rgb(1, 97, 251);
 }
 
+.cm-dark_blue {
+	background-color: rgb(2, 8, 66);
+}
+
 .cm-blue_green {
 	background-color: rgb(0, 168, 153);
 }
@@ -742,6 +749,10 @@ button .cm-play-small {
 
 .cm-text-blue {
 	color: rgb(1, 97, 251);
+}
+
+.cm-text-dark_blue {
+	color: rgb(2, 8, 66);
 }
 
 .cm-text-blue_green {
