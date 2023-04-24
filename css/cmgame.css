@@ -870,7 +870,7 @@ button .cm-play-small {
 	box-shadow: 3px 3px 5px rgba(33, 33, 33, 0.333);
 }
 
-#cmAlert button:nth-of-type(2) {
+#cmAlert p:last-of-type button:nth-of-type(2) {
 	margin-left: 8px;
 }
 
