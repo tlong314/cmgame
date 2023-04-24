@@ -6,7 +6,11 @@
  * but also available to use, free, under the MIT license.
  *
  * @author Tim S. Long, PhD
+<<<<<<< HEAD
+ * @copyright 2023 Tim S. Long, PhD
+=======
  * @copyright 2022 Tim S. Long, PhD
+>>>>>>> b462b4d33f2b0be2c4eaa30006756773bb541276
  * @license MIT
  */
 
@@ -1877,7 +1881,7 @@ class CMGame {
 
 				// save first reference in case we need it for our fullscreen button
 				if(idx === 0)
-					this.startBtn = btn;
+					self.startBtn = btn;
 
 				if(btn === null)
 					console.error("Cannot use null reference as start button.");
@@ -2092,11 +2096,15 @@ class CMGame {
 
 					// Removed all built-in graph drawing logic from here
 					for(let [id, vregion] of this.vennRegions) {
+						vregion.onbeforedraw(ctx);
 						vregion.draw(ctx);
+						vregion.ondraw(ctx);
 					}
 
 					for(let [name, vset] of this.vennSets) {
+						vset.onbeforedraw(ctx);
 						vset.draw(ctx);
+						vset.ondraw(ctx);
 					}
 
 					ctx.fillStyle = CMColor.BLACK;
@@ -2494,13 +2502,18 @@ class CMGame {
 						.concat( this.getVennSets() )
 						.concat( this.getEdges() )
 						.concat( this.getVertices() )
-						.concat( this.getFunctions() )
-						.concat( this.getSprites() ).slice(0).sort((a, b) => {
+						.concat( this.getFunctions() ).sort((a, b) => {
 								return a.layer - b.layer;
 						});
 
 					for(let i = 0, len = allToDraw.length; i < len; i++) {
+						if(allToDraw[i].onbeforedraw(ctx))
+							allToDraw[i].onbeforedraw(ctx);
+
 						allToDraw[i].draw(ctx);
+
+						if(allToDraw[i].ondraw(ctx))
+							allToDraw[i].ondraw(ctx);
 					}
 
 					for(let sprite of this.sprites) {
@@ -2749,7 +2762,11 @@ class CMGame {
 				this.yAxisStyle = "rgba(255, 65, 65, 0.5)";
 
 			// start game after DOM is loaded and scripts are parsed (to avoid errors)
-			window.addEventListener("load", self.start.bind(self), false);
+			window.addEventListener("load", function() {
+
+				// Note: you can test different start buttons with debugOptions.startBtn
+				self.start(self.startBtn);
+			}, false);
 		}
 	}
 
@@ -7700,6 +7717,7 @@ class CMGame {
 				self.alertOverlay.style.display = "none";
 				self.alertElement.style.left = "";
 				self.alertElement.style.top = "";
+				self.alertInput.placeholder = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -7718,6 +7736,7 @@ class CMGame {
 				self.alertOverlay.style.display = "none";
 				self.alertElement.style.left = "";
 				self.alertElement.style.top = "";
+				self.alertInput.placeholder = "";
 
 				if(!pauseState) {
 					self.unpause();
@@ -12575,15 +12594,25 @@ class CMnGon extends CMSprite {
 		this.path.moveTo(nextX, nextY);
 		this.points.push(new CMPoint(nextX, nextY));
 
-		for(let theta = this.rotation + arc; theta <= this.rotation + Math.TAU; theta += arc) {
-
+		let count = 1;
+		for(let theta = this.rotation + arc;
+			theta <= this.rotation + Math.TAU + arc && this.points.length <= this.n;
+			theta += arc)
+		{
 			nextX = this.x + this.radius * Math.cos(theta);
 			nextY = this.y + this.radius * Math.sin(theta);
 
 			this.path.lineTo(nextX, nextY);
 
-			if(theta < this.rotation + Math.TAU - arc) // don't double up
+			/**
+			 * Connect last-first point but don't double up on # of points.
+			 * Note: Using `* arc` instead of smaller leads to occasional rounding error issues
+			 */
+			if(theta < this.rotation + Math.TAU - .5 * arc)
+			{
 				this.points.push(new CMPoint(nextX, nextY));
+				count++;
+			}
 		}
 
 		this.path.closePath();
@@ -12603,7 +12632,12 @@ class CMnGon extends CMSprite {
 		}
 
 		this.boundAsCircle();
-		this.rebuildPath(); // In case this has been moved by bounding
+
+		// Again, in case this has been moved by the above bounding
+		if([this.n, this.x, this.y, this.radius, this.rotation].join(";") !== this.previousState) {
+			this.rebuildPath();
+			this.previousState = [this.n, this.x, this.y, this.radius, this.rotation].join(";");
+		}
 	}
 
 	/**
