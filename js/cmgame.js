@@ -1187,6 +1187,8 @@ class CMSwipe {
 	}
 }
 
+let previousFrameTime = performance.now();
+
 /** A class to manage all game objects and processes */
 class CMGame {
 	/**
@@ -2701,19 +2703,17 @@ class CMGame {
 		this.awaitingAnimFrame = false; // Required to manage cancelling delayed animations
 		window.requestNextFrame = function(callback) {
 			self.awaitingAnimFrame = true;
-			setTimeout(function() {
-				if(!self.paused)
-					self.animFrameId = requestAnimationFrame(callback);
+			if(!self.paused)
+				self.animFrameId = requestAnimationFrame(callback);
 
-				self.awaitingAnimFrame = false;
-			}, CMGame.MIN_FRAME_DELAY);
+			self.awaitingAnimFrame = false;
 		};
 
 		let tryToCancelFrame = function(frameRequestId) {
 			if(self.awaitingAnimFrame) {
 				return setTimeout(function() {
 					tryToCancelFrame(frameRequestId);
-				}, 20);
+				}, CMGame.MIN_FRAME_DELAY);
 			}
 
 			return window.cancelAnimationFrame(frameRequestId);
@@ -4372,7 +4372,21 @@ class CMGame {
 	 * incrementing (and capping) frameCount,
 	 * and starting next animation frame.
 	 */
-	updateAndDraw() {
+	updateAndDraw() {		
+		let currentFrameTime = performance.now();
+		
+		if(currentFrameTime - previousFrameTime < CMGame.MIN_FRAME_DELAY)
+		{
+			// Skip current frame if web is animating to fast
+			if(this.started && !this.paused) {
+				this.animFrameId = requestNextFrame(this.runCycle);
+			}
+			
+			return;
+		}
+		
+		previousFrameTime = currentFrameTime;
+		
 		this.update(this.frameCount);
 
 		this.offscreenCtx.save();
@@ -8110,7 +8124,6 @@ CMGame.PIXELS_FOR_SWIPE = 5;
 // This is used to store/retrieve game data. Do not change this for the same game.
 CMGame.SAVE_PREFIX = "cmgamesave_";
 
-/*
 (function() {
 	Object.defineProperty(CMGame, "MAX_FPS", {
 		value: 60,
@@ -8118,14 +8131,10 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 	});
 
 	Object.defineProperty(CMGame, "MIN_FRAME_DELAY", {
-		value: 16.7,
+		value: 15, // Note: nonzero can cause weird delays onswipe
 		writable: false
 	});
 }());
-*/
-
-CMGame.MAX_FPS = 60;
-CMGame.MIN_FRAME_DELAY = 16.7;
 
 /**
  * game.fps is animation speed (roughly) in frames per second
@@ -8137,7 +8146,6 @@ CMGame.MIN_FRAME_DELAY = 16.7;
  * should only be changed if you purposely want
  * to create a slower game or animation.
  */
-/*
 (function() {
 
 	Object.defineProperty(CMGame.prototype, "fps", {
@@ -8180,7 +8188,6 @@ CMGame.MIN_FRAME_DELAY = 16.7;
 		}
 	});
 }());
-*/
 
 /**
  * The CMColor class is mainly used to
