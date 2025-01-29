@@ -6,11 +6,7 @@
  * but also available to use, free, under the MIT license.
  *
  * @author Tim S. Long, PhD
-<<<<<<< HEAD
- * @copyright 2023 Tim S. Long, PhD
-=======
- * @copyright 2022 Tim S. Long, PhD
->>>>>>> b462b4d33f2b0be2c4eaa30006756773bb541276
+ * @copyright 2025 Tim S. Long, PhD
  * @license MIT
  */
 
@@ -1545,7 +1541,10 @@ class CMGame {
 		this.animFrameId = null;
 
 		this.frameDelay_Private = CMGame.MIN_FRAME_DELAY;
+		this.frameDelay = this.frameDelayPrivate;
 		this.fps_Private = options.fps || CMGame.MAX_FPS;
+		
+		this.fps = this.fps_Private;
 
 		this.gameOver = false;
 		this.frameCount = 0;
@@ -3279,8 +3278,7 @@ class CMGame {
 			this.paused = false;
 
 			if(this.animFrameId === null)
-				// this.animFrameId =
-				requestNextFrame(self.runCycle);
+				this.animFrameId = requestNextFrame(self.runCycle);
 		}
 
 		return this;
@@ -3316,9 +3314,6 @@ class CMGame {
 	onpressend(point) {}
 	onkeydown(e) {}
 	onkeyup(e) {}
-
-	// Triggered by significant mousemove or touchmove by user
-	onswipe(/* CMSwipe */ cmSwipe) {}
 
 	/**
 	 * Updates game state (and state of components) in current frame
@@ -4394,8 +4389,7 @@ class CMGame {
 		}
 
 		if(this.started && !this.paused) {
-			// this.animFrameId =
-			requestNextFrame(this.runCycle);
+			this.animFrameId = requestNextFrame(this.runCycle);
 		}
 	}
 
@@ -4988,9 +4982,12 @@ class CMGame {
 		}
 		else
 		if(this.distance(this.latestPoint, new CMPoint(x, y)) >= CMGame.PIXELS_FOR_SWIPE) {
-			this.onswipe(
-				new CMSwipe(this, x, y, this.latestPoint.x, this.latestPoint.y)
-			);
+			if(this.onswipe)
+			{
+				this.onswipe(
+					new CMSwipe(this, x, y, this.latestPoint.x, this.latestPoint.y)
+				);
+			}
 
 			oldX = this.latestPoint.x;
 			oldY = this.latestPoint.y;
@@ -8113,6 +8110,7 @@ CMGame.PIXELS_FOR_SWIPE = 5;
 // This is used to store/retrieve game data. Do not change this for the same game.
 CMGame.SAVE_PREFIX = "cmgamesave_";
 
+/*
 (function() {
 	Object.defineProperty(CMGame, "MAX_FPS", {
 		value: 60,
@@ -8124,18 +8122,23 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 		writable: false
 	});
 }());
+*/
 
+CMGame.MAX_FPS = 60;
+CMGame.MIN_FRAME_DELAY = 16.7;
+
+/**
+ * game.fps is animation speed (roughly) in frames per second
+ * game.frameDelay is the milliseconds between frames
+ *
+ * These are the rough "fps" and delay between
+ * frames using requestNextFrame. This is
+ * the fastest expected animation rate, so these
+ * should only be changed if you purposely want
+ * to create a slower game or animation.
+ */
+/*
 (function() {
-	/**
-	 * game.fps is animation speed (roughly) in frames per second
-	 * game.frameDelay is the milliseconds between frames
-	 *
-	 * These are the rough "fps" and delay between
-	 * frames using requestNextFrame. This is
-	 * the fastest expected animation rate, so these
-	 * should only be changed if you purposely want
-	 * to create a slower game or animation.
-	 */
 
 	Object.defineProperty(CMGame.prototype, "fps", {
 		get() {
@@ -8177,6 +8180,7 @@ CMGame.SAVE_PREFIX = "cmgamesave_";
 		}
 	});
 }());
+*/
 
 /**
  * The CMColor class is mainly used to
@@ -10808,7 +10812,7 @@ class CMFunction {
 				this.pathAbove = new Path2D(this.path);
 				this.pathBelow = new Path2D(this.path);
 				break;
-		}		
+		}
 	}
 
 	/**
@@ -10988,6 +10992,7 @@ class CMFunction {
 
 				ctx.stroke(this.path);
 				this.continuous = false;
+				// this.path = new Path2D(); // Removing this causes asymptotes to be drawn
 				this.path.moveTo(this.realToScreenOf(screenGraphY), game.height - i );
 			}
 			else {
@@ -11050,6 +11055,7 @@ class CMFunction {
 
 				ctx.stroke(this.path);
 				this.continuous = false;
+				this.path = new Path2D(); // Removing this causes asymptotes to be drawn
 				this.path.moveTo(i, this.realToScreenOf(screenGraphX) );
 			}
 			else {
