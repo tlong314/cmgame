@@ -3343,8 +3343,8 @@ class CMGame {
 		 * update() call, and if so, decrement the appropriate variables.
 		 */
 		for(let i = 0, cap = this.sprites.length; i < cap; i++) {
-
 			let sprite = this.sprites[i];
+			
 			sprite.onbeforeupdate(frameCount);
 			sprite.update(frameCount); // Note: this is where "destroy" occurs, shifting i
 			sprite.onupdate(frameCount);
@@ -3354,6 +3354,9 @@ class CMGame {
 				i--;
 				cap--;
 			}
+			
+			if(i < 0)
+				break;
 		}
 
 		this.onupdate(frameCount);
@@ -9116,7 +9119,7 @@ class CMSprite {
 	 *   (for radians or degrees, respectively)
 	 * @param {number} [desiredSpeed=1] The velocity to move in the new direction.
 	 *   Note: this is not necessarily velocity of x or y coordinates, but really a polar radius.
-	 * @param {number} [startReferencePoint=this.center] - The starting point used to calculate this directional slope
+	 * @param {object} [startReferencePoint=this.center] - The starting point used to calculate this directional slope
 	 */
 	moveToward(newPoint, desiredSpeed=1, startReferencePoint=this.center) {
 		let xVelocity = desiredSpeed,
